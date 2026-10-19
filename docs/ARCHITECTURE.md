@@ -16,12 +16,16 @@ queries.py  digest.py  web/        READ      what changed, what fits            
   `fetch.py` and returns `models.Result` (`Listing`s with units and bands, or `Snapshot`s of
   unstructured pages). It never touches the database, the queue or criteria.
 - `fetch.py` is the only network access. It enforces politeness per site and per process: at most
-  one request in flight to a given host from one worker, a minimum gap between requests, and one byparr
-  render at a time. Threads inside a worker therefore never multiply the rate one site sees from one IP.
+  one request in flight to a given host from one worker (a lock per host), a minimum gap between
+  request starts (`HW_HOST_GAP`, 0.5 s), and one byparr render at a time. Threads inside a worker
+  therefore never multiply the rate one site sees from one IP.
 - Big sources can opt into chunking (`chunks()`, `fetch_chunk()`, `merge_cache()` on `Adapter`, plus
   `parallel`). The default is a single chunk, so an adapter that doesn't opt in is untouched.
 - An adapter that calls `fetch.rendered()` needs byparr, which only hetzner has. Its tasks go to the
   `byparr` queue (see Fleet).
+- Chunk caches: each chunk gets a copy of the planned cache and hands back the top-level keys it
+  changed; the default `merge_cache()` applies those in chunk order. An adapter whose chunks write
+  into one shared nested key must override `merge_cache()`.
 
 ## Rules (criteria)
 
@@ -32,39 +36,64 @@ everything.
 ## Store (Postgres, SQLAlchemy 2.0, Alembic)
 
 - `orm.py` is the schema: `listings → units → bands`, `snapshots`, `events`, `runs`, `source_state`,
-  `adapter_cache`. Migrations in `alembic/versions/`, applied with `alembic upgrade head` at startup
-  (advisory-locked, so any worker can run it).
-- `db.py` is the write path and the only code that maps `models` ↔ `orm`: `record_listings`,
-  `record_snapshots`, `load_listing`, run and source-state bookkeeping, cache load/save. Change
-  detection (fingerprints → `new` / `changed` / `closed` / `gone` / `reopened` / `page_changed`,
-  `source_failed` / `source_recovered`) lives here and only here.
+  `adapter_cache`, `chunk_results`. Alembic owns all DDL, Procrastinate's included (revision 0002 runs
+  its `SchemaManager.get_schema()`). Workers run `alembic upgrade head` at start under a Postgres
+  advisory lock, so any worker can migrate. A Procrastinate upgrade that ships SQL migrations needs a
+  new revision that applies them; `tests/test_fleet.py::test_procrastinate_schema_is_current` fails
+  until it exists.
+- `mapping.py` is the only `models` ↔ `orm` translation. `db.py` is the write path: `record_listings`,
+  `record_snapshots`, `load_listing`, run and source-state bookkeeping, cache load/save, chunk results.
+  Change detection (fingerprints → `new` / `changed` (detail `before`/`after`) / `closed` / `gone` /
+  `reopened`, `watching` / `page_changed`, `source_failed` / `source_recovered`) lives here and only here.
+- Events from a source's first successful run carry `detail.baseline = true`: they describe what was
+  already listed, not a change, and the digest collapses them.
+- `runner.py` records one run in one transaction: listings, snapshots, cache, `runs` and `source_state`
+  land together or not at all.
 - One database: `housing-watch-db` on hetzner, reachable over the tailnet. `HW_DATABASE_URL`
   (`postgresql+psycopg://...`) everywhere.
 
 ## Fleet (Procrastinate)
 
 The job queue is [Procrastinate](https://procrastinate.readthedocs.io/) on the same Postgres: it
-provides `SKIP LOCKED` claiming, LISTEN/NOTIFY, periodic tasks, `queueing_lock` dedupe, retries and
-stalled-job recovery. Its tables (`procrastinate_*`) are not in `orm.py`.
+provides `SKIP LOCKED` claiming, LISTEN/NOTIFY, periodic tasks, `queueing_lock` dedupe, `lock`
+serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are not in `orm.py`.
 
 - **Workers** are the same image on every host: `python -m housing_watch worker`. `HW_WORKER_NAME`
-  names the worker (the host). Each worker runs a few threads (`HW_WORKER_CONCURRENCY`); politeness
-  is in `fetch.py`, so that is safe.
-- **Queues:** `sources` (any worker) and `byparr` (only workers with `HW_WORKER_CAPS=byparr`, i.e.
-  hetzner). A task that hits `fetch.rendered()` on a worker without byparr fails fast with a typed
-  error and is re-queued on `byparr`.
+  names the worker (the host). Each worker runs `HW_WORKER_CONCURRENCY` threads; politeness is in
+  `fetch.py`, so that is safe.
+- **Queues:** `sources` (every worker), `byparr` (workers whose `HW_WORKER_CAPS` include `byparr`, i.e.
+  hetzner) and `digest` (cap `digest`: the worker with the profile and SMTP credentials, also hetzner).
+  A task that hits `fetch.rendered()` on a worker without `BYPARR_URL` raises `fetch.NeedsByparr`; the
+  retry strategy moves the same job to `byparr`, and `source_state.queue` remembers it so later runs
+  start there.
 - **Tasks:**
-  - `tick` (periodic, every minute, every worker; dedupe via `queueing_lock`): enqueues `source_run`
-    for each source whose `source_state.next_due` has passed, and `digest` at the digest slots or when
-    an urgent event is pending.
-  - `source_run(source)` (`queueing_lock=source`): plans chunks. With one chunk it fetches and
-    records inline. Otherwise it defers `source_chunk` jobs, at most `parallel` at a time, collects
-    their results, then merges, records and saves the cache.
-  - `source_chunk(source, key)`: fetches one chunk and returns the serialized `Result` plus its cache delta.
-  - `digest()`: builds and sends the email (lock `digest`, so only one at a time).
-- **Health:** a failed run increments `source_state.consecutive_failures` and emits `source_failed` on
-  the 2nd and 10th consecutive failure. Workers expose Prometheus metrics on `:9091` (bound to their
-  tailnet IP).
+  - `tick` (periodic, every minute; Procrastinate defers it once per minute fleet-wide): claims sources
+    whose `source_state.next_due` has passed (pushing it a full cycle ahead) and defers `source_run` for
+    each; fails runs left unfinished for `HW_RUN_TIMEOUT_HOURS` (6); re-queues merges that were never
+    deferred; defers `digest(scheduled=True)` at minute 0 of each `HW_DIGEST_HOURS` hour.
+  - `source_run(source)` (`queueing_lock` `run:<source>`, `lock` `source:<source>`): plans chunks with
+    `Adapter.chunks()`. With one chunk it fetches and records inline. Otherwise it writes the plan
+    (keys plus the cache every chunk starts from) to `runs.plan` and defers one `source_chunk` per key;
+    chunk *i* takes `lock` `<source>#<i % parallel>`, so at most `parallel` are in flight.
+  - `source_chunk(source, key, run_id)`: fetches one chunk and writes its serialized `Result` and cache
+    delta (top-level keys it changed) to `chunk_results`. Procrastinate keeps no return values, hence
+    the table. The chunk that completes the set defers `source_merge`. A chunk that fails its last retry
+    writes a failed row, which fails the run: a partial source is never recorded, so `gone` stays right.
+  - `source_merge(source, run_id)`: concatenates the chunks' Results in plan order, folds their deltas
+    with `Adapter.merge_cache()`, records, saves the cache and deletes the chunk rows. No job ever waits
+    on another, so chunked runs cannot starve the worker slots their own chunks need.
+  - `digest(scheduled)` (`lock` `digest`): the scheduled email, or, queued after any run that recorded
+    events, an urgency check (`digest.urgent`) that mails at once when an eligible unit opened.
+  - `retry_stalled` (every 5 min): jobs of workers that stopped heartbeating go back to `todo`.
+    `cleanup` (daily): drops finished jobs (successes after 2 days, failures after a week).
+- **Failures:** an adapter error is a failed run (recorded, not retried); Procrastinate retries only
+  infrastructure trouble and chunk errors. A failed run increments `source_state.consecutive_failures`
+  and emits `source_failed` on the 2nd and 10th consecutive failure; the next success emits
+  `source_recovered`.
+- **Metrics** (`metrics.py`, `:9091`, `HW_METRICS_PORT`): `hw_source_run_seconds` and
+  `hw_source_failures_total` are per worker; `hw_jobs{task,status}`,
+  `hw_source_last_success_timestamp_seconds` and `hw_source_consecutive_failures` are read from the
+  database at scrape time, so every worker reports the same values (aggregate with `max`).
 
 ## Read (queries, digest, web)
 
@@ -73,8 +102,8 @@ stalled-job recovery. Its tables (`procrastinate_*`) are not in `orm.py`.
   It attaches verdicts by calling `criteria` at read time.
 - `digest.py` builds the email from `queries.py`.
 - `web/` is the UI: FastAPI + Jinja2 templates + HTMX, with hand-written CSS (no build step). It is
-  served by the hetzner worker container (`python -m housing_watch serve` = worker + web) on the
-  tailnet only. It is read-only.
+  served by the hetzner worker container (`python -m housing_watch serve` = migrate + worker + web, the
+  web started only when `HW_WEB_PORT` is set) on the tailnet only. It is read-only.
 
 ## Tests
 

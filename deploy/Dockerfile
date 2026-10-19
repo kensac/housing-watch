@@ -18,13 +18,15 @@ ENV UV_PYTHON_PREFERENCE=only-system \
     UV_LINK_MODE=copy
 RUN uv sync --frozen --no-dev --no-cache
 
+COPY alembic ./alembic
 COPY src ./src
 
 ARG GIT_SHA=unknown
 ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONPATH="/app/src" \
-    HW_REVISION=${GIT_SHA} \
-    HW_DB=/data/housing-watch.db
+    HW_REVISION=${GIT_SHA}
 
-VOLUME ["/data"]
-CMD ["python", "-m", "housing_watch", "loop"]
+# State is in Postgres (HW_DATABASE_URL). `serve` on hetzner (worker + web), `worker` everywhere else.
+EXPOSE 9091
+ENTRYPOINT ["python", "-m", "housing_watch"]
+CMD ["serve"]
