@@ -1,8 +1,9 @@
 """Pre-fill paper application PDFs that are a known form, from the applicant file (HW_APPLICANT_FILE).
 
 The applicant file is private JSON that lives only on the host; nothing here stores it or the filled PDF.
-SSN, signatures and dates are never filled: a mailed application is signed by hand, and the SSN is
-optional on these forms. A PDF that is not a known form is not filled at all.
+The applicant's own signature line is signed (their `signature_image`, else their name in a handwriting
+font) and dated today, unless `"sign": false`. The SSN is never filled (optional on these forms). A PDF
+that is not a known form is not filled at all.
 """
 
 from __future__ import annotations
@@ -12,16 +13,25 @@ import json
 import os
 import re
 import time
+from base64 import b64decode
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import NameObject
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 
 from . import fetch
 
 APPLICANT_FILE = os.environ.get("HW_APPLICANT_FILE", "")
+HAND = Path(__file__).parent / "fonts" / "HomemadeApple-Regular.ttf"  # Apache 2.0, fonts/LICENSE.txt
+NY = ZoneInfo("America/New_York")
 _URL = re.compile(r"https?://[^\s;,)'\"]+?(?:\.pdf|[?&]id=[\w-]+)", re.I)
 
 
@@ -177,6 +187,7 @@ class Form:
     name: str
     signature: frozenset[str]  # field names that identify the form (all must be present)
     values: Callable[[dict], dict[str, str]]
+    sign: tuple[str, str] | None = None  # the applicant's (signature field, date field)
 
 
 FORMS = [
@@ -185,6 +196,7 @@ FORMS = [
         frozenset({"First Name", "Last Name", "Birth Date MMDDYYSelf", "Employer Name  AddressSelf", "Text12",
                    "Add together the total annual income amounts from 1A and 2A above", "Yes  HPD Section 8"}),
         _hc2,
+        sign=("Signature", "Date"),
     ),
 ]  # fmt: skip
 
@@ -215,18 +227,51 @@ def _press(page, buttons: dict[str, str]) -> None:
         owner[NameObject("/V")] = want
 
 
+def _sign(page, field: str, a: dict) -> None:
+    """Draw the signature into the signature field's box on this page (if the field is on it)."""
+    box = next((r.get_object()["/Rect"] for r in page.get("/Annots") or [] if r.get_object().get("/T") == field), None)
+    if box is None:
+        return
+    x0, y0, x1, y1 = (float(v) for v in box)
+    buf = io.BytesIO()
+    mb = page.mediabox
+    c = canvas.Canvas(buf, pagesize=(float(mb.width), float(mb.height)))
+    if img := a.get("signature_image"):
+        data = b64decode(img.split(",", 1)[-1])  # base64 PNG, optionally a data: URI
+        c.drawImage(
+            ImageReader(io.BytesIO(data)), x0, y0, x1 - x0, y1 - y0, mask="auto", preserveAspectRatio=True, anchor="sw"
+        )
+    else:
+        if "Hand" not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont("Hand", str(HAND)))
+        name = " ".join(x for x in (a.get("first"), a.get("last")) if x)
+        size = min((y1 - y0) * 0.6, 16.0)
+        while size > 6 and pdfmetrics.stringWidth(name, "Hand", size) > x1 - x0 - 4:
+            size -= 0.5
+        c.setFont("Hand", size)
+        c.drawString(x0 + 2, y0 + (y1 - y0) * 0.25, name)
+    c.save()
+    page.merge_page(PdfReader(buf).pages[0])
+
+
 def fill(pdf: bytes, a: dict) -> bytes | None:
     """The PDF with the applicant's answers filled in (still editable), or None if it is not a known form."""
     form = detect(pdf)
     if form is None:
         return None
     w = PdfWriter(clone_from=PdfReader(io.BytesIO(pdf)))
-    values = form.values(a) | {k: str(v) for k, v in (a.get("fields") or {}).items()}  # raw overrides last
+    values = form.values(a)
+    signing = form.sign and a.get("sign", True)
+    if signing:
+        values[form.sign[1]] = datetime.now(NY).strftime("%m/%d/%Y")
+    values |= {k: str(v) for k, v in (a.get("fields") or {}).items()}  # raw overrides last
     fields = w.get_fields() or {}
     text = {k: v for k, v in values.items() if k in fields and fields[k].get("/FT") != "/Btn"}
     for page in w.pages:
         w.update_page_form_field_values(page, text, auto_regenerate=False)
         _press(page, {k: v for k, v in values.items() if k in fields and fields[k].get("/FT") == "/Btn"})
+        if signing:
+            _sign(page, form.sign[0], a)
     w.set_need_appearances_writer(True)
     out = io.BytesIO()
     w.write(out)
