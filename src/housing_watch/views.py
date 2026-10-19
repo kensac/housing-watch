@@ -28,7 +28,7 @@ COLUMNS = {
     "events": {"verdict": "Verdict", "source": "Source", "mailed": "Mailed"},
 }  # fmt: skip
 DEFAULT_COLUMNS = {
-    "listings": ("verdict", "sizes", "rent", "ami", "status", "deadline", "changed"),
+    "listings": ("verdict", "sizes", "rent", "ami", "status", "changed"),
     "events": ("verdict", "source", "mailed"),
 }
 DEFAULT_SORT = {"listings": "verdict", "events": ""}
