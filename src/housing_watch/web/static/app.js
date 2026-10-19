@@ -23,6 +23,18 @@ document.addEventListener("click", (e) => {
 
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
 
+// The drawer only replaces the URL (shareable ?open=), so the list underneath keeps its rows and scroll.
+// A new list (filters, sort, tabs) starts at the top.
+document.addEventListener("htmx:afterSwap", (e) => {
+  const t = e.detail.target;
+  if (t.id === "drawer") {
+    const a = e.detail.requestConfig.elt;
+    if (a && a.href) history.replaceState(history.state, "", a.href);
+  } else if (t.id === "results" || t.id === "ev-results") {
+    if (t.getBoundingClientRect().top < 0) t.scrollIntoView();
+  }
+});
+
 // Mark the opened row; back/forward restores the drawer from htmx's history cache.
 document.addEventListener("htmx:afterRequest", (e) => {
   const row = e.detail.elt.closest && e.detail.elt.closest("tr.click");

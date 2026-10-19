@@ -30,8 +30,10 @@ def test_search_filters(db):
     assert "b:1" not in keys(Q.search_listings(db, Q.ListingFilters(since="24h")))  # changed 3 days ago
     assert keys(Q.search_listings(db, Q.ListingFilters(sort="title")))[0] == "a:1"
     assert keys(Q.search_listings(db, Q.ListingFilters(sort="-title")))[0] == "b:2"
-    paged = Q.search_listings(db, Q.ListingFilters(per_page=3, page=2, sort="title"))
-    assert (paged.total, paged.pages, keys(paged)) == (4, 2, ["b:2"])
+    first = Q.search_listings(db, Q.ListingFilters(limit=3, sort="title"))
+    assert (first.total, first.next_offset, len(first.items)) == (4, 3, 3)
+    rest = Q.search_listings(db, Q.ListingFilters(limit=3, offset=3, sort="title"))
+    assert (keys(rest), rest.next_offset) == (["b:2"], None)
 
 
 def test_parse_since():

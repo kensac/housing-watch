@@ -18,7 +18,7 @@ def test_pages_render(client):
         ("/", "Eligible &amp; open now"),
         ("/listings", "a 1"),
         ("/listings?verdict=excluded&borough=Bronx&sort=-rent&q=a&size=studio&max_rent=5000&since=7d", "a 2"),
-        ("/listings?max_rent=junk&page=99", "a 1"),
+        ("/listings?max_rent=junk", "a 1"),
         ("/listings?open=a%3A1", "Apply by mail"),
         ("/listings?open=missing", "Listing not found"),
         ("/sources", "TimeoutError: boom"),
@@ -59,3 +59,26 @@ def test_fleet_page(pg, pg_url):
     finally:
         eng.dispose()
     assert r.status_code == 200 and "source_run a" in r.text and "hetzner" in r.text
+
+
+def test_lists_scroll_in_batches(pg):
+    from sqlalchemy.orm import Session
+
+    from seed import L, add_listing, event
+
+    with Session(pg) as s, s.begin():
+        for i in range(250):
+            add_listing(s, L("bulk", f"{i:03}", "Queens"))
+            event(s, f"bulk:{i:03}", "new")
+    c = TestClient(create_app(pg))
+    first = c.get("/listings?sort=title")
+    assert "<strong>250</strong> listings" in first.text and first.text.count('class="click') == 200
+    assert 'hx-get="/listings?sort=title&amp;offset=200"' in first.text and 'hx-trigger="intersect once"' in first.text
+    assert "page=" not in first.text
+    rest = c.get("/listings?sort=title&offset=200", headers=HX)
+    assert "<table" not in rest.text and rest.text.count('class="click') == 50
+    assert "All 250 listings shown" in rest.text and "intersect" not in rest.text
+    ev = c.get("/events")
+    assert "<strong>250</strong> events" in ev.text and 'hx-trigger="intersect once"' in ev.text
+    older = c.get(ev.text.split('class="more-row" hx-get="')[1].split('"')[0].replace("&amp;", "&"), headers=HX)
+    assert older.text.count("<tr>") == 50 and "No older events" in older.text

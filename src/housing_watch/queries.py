@@ -164,16 +164,15 @@ class ListingFilters:
     q: str = ""
     since: str = ""  # changed since, see parse_since
     sort: str = "verdict"
-    page: int = 1
-    per_page: int = 100
+    offset: int = 0  # the list scrolls: each batch starts where the last one ended
+    limit: int = 200
 
 
 @dataclass
 class ListingPage:
     items: list[ListingSummary]
     total: int
-    page: int
-    pages: int
+    next_offset: int | None  # None once the last batch is out
     verdict_counts: dict[str, int]  # over everything matching the other filters, for the verdict tabs
     sources: list[str]
     boroughs: list[str]
@@ -224,14 +223,11 @@ def search_listings(engine: Engine, f: ListingFilters, p: Profile = PROFILE) -> 
     rows = [x for x in base if not f.verdict or x.verdict == f.verdict]
     name = f.sort.lstrip("-")
     rows.sort(key=_sort_key(name), reverse=(name in _NEWEST_FIRST) != f.sort.startswith("-"))
-    per = max(1, min(f.per_page, 500))
-    pages = max(1, -(-len(rows) // per))
-    page = min(max(1, f.page), pages)
+    start, end = max(0, f.offset), max(0, f.offset) + max(1, min(f.limit, 1000))
     return ListingPage(
-        items=rows[(page - 1) * per : page * per],
+        items=rows[start:end],
         total=len(rows),
-        page=page,
-        pages=pages,
+        next_offset=end if end < len(rows) else None,
         verdict_counts=counts,
         sources=sorted({x.source for x in allx}),
         boroughs=sorted({x.borough or "unknown" for x in allx}),
@@ -319,7 +315,7 @@ def listing_detail(engine: Engine, key: str, p: Profile = PROFILE) -> ListingDet
 @dataclass
 class EventPage:
     items: list[EventView]
-    next_before: int | None  # pass as `before` for the next (older) page
+    next_before: int | None  # pass as `before` for the next (older) batch
     type_counts: dict[str, int]
 
 
@@ -339,7 +335,7 @@ def events(
     key: str = "",
     baseline: bool = True,
     before: int | None = None,
-    limit: int = 100,
+    limit: int = 200,
     p: Profile = PROFILE,
 ) -> EventPage:
     conds = []  # every filter but type, which the type counts ignore

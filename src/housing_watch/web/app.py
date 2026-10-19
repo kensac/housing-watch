@@ -68,7 +68,8 @@ def create_app(engine: Engine, profile: Profile = PROFILE) -> FastAPI:
 
     def render(req: Request, name: str, nav: str, partial: str | None = None, **ctx) -> HTMLResponse:
         """The full page, or just `partial` when HTMX asks for it."""
-        hx = req.headers.get("HX-Request") == "true" and req.headers.get("HX-Boosted") != "true"
+        h = req.headers
+        hx = h.get("HX-Request") == "true" and "HX-Boosted" not in h and "HX-History-Restore-Request" not in h
         return tpl.TemplateResponse(req, partial if hx and partial else name, {"nav": nav, "hx": hx, **ctx})
 
     @app.get("/", response_class=HTMLResponse)
@@ -77,13 +78,13 @@ def create_app(engine: Engine, profile: Profile = PROFILE) -> FastAPI:
         return render(req, "overview.html", "overview", o=queries.overview(engine, profile), preview=built)
 
     @app.get("/listings", response_class=HTMLResponse)
-    def listings(req: Request, page: int = 1, open: str = ""):
+    def listings(req: Request, offset: int = 0, open: str = ""):
         qp = {k: req.query_params.get(k, "") for k in LISTING_PARAMS}
         try:
             max_rent = float(qp["max_rent"]) if qp["max_rent"] else None
         except ValueError:
             max_rent = None
-        f = queries.ListingFilters(**{**qp, "max_rent": max_rent, "sort": qp["sort"] or "verdict"}, page=page)
+        f = queries.ListingFilters(**{**qp, "max_rent": max_rent, "sort": qp["sort"] or "verdict"}, offset=offset)
         res = queries.search_listings(engine, f, profile)
         state = {k: v for k, v in qp.items() if v}
 
@@ -91,10 +92,9 @@ def create_app(engine: Engine, profile: Profile = PROFILE) -> FastAPI:
             q = {k: v for k, v in {**state, **kw}.items() if v not in ("", None)}
             return "/listings" + ("?" + urlencode(q) if q else "")
 
-        detail = queries.listing_detail(engine, open, profile) if open else None
-        return render(
-            req, "listings.html", "listings", "_listings_results.html", res=res, f=f, qp=qp, url=url, detail=detail
-        )
+        detail = queries.listing_detail(engine, open, profile) if open and not offset else None
+        partial = "_listing_rows.html" if offset else "_listings_results.html"  # next batch, or a new list
+        return render(req, "listings.html", "listings", partial, res=res, f=f, qp=qp, url=url, detail=detail)
 
     @app.get("/listings/drawer", response_class=HTMLResponse)
     def drawer(req: Request, key: str):

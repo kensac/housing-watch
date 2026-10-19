@@ -11,6 +11,5 @@
   <td class="hide-md muted nowrap">{% if e.notified %}{{ m.t(e.notified) }}{% else %}pending{% endif %}</td>
 </tr>
 {% endfor %}
-{% if page.next_before %}
-<tr class="more-row"><td colspan="6"><button class="btn sm" hx-get="{{ more }}" hx-target="closest tr" hx-swap="outerHTML">Load older events</button></td></tr>
-{% endif %}
+{% if page.next_before %}<tr class="more-row" hx-get="{{ more }}" hx-trigger="intersect once" hx-swap="outerHTML"><td colspan="6" class="muted">Loading older events…</td></tr>
+{% elif before or page.items | length > 40 %}<tr class="more-row end"><td colspan="6" class="muted">No older events</td></tr>{% endif %}
