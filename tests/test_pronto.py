@@ -40,27 +40,34 @@ def test_open_units_plus_waitlist_tiers():
     named = {u.unit_no: u for u in lst.units if u.unit_no}
     assert (named["21N"].size, named["21N"].rent, named["21N"].bands[0]) == ("studio", 2189.0, Band(1, 77303, 168480))
     assert named["55L"].size == "1br"
-    assert any(u.size == "unknown" and u.unit_no is None for u in lst.units)
+    tiers = [(u.size, u.bands[0].income_min) for u in lst.units if u.unit_no is None]
+    # waitlist tiers are sized by the named unit sharing their minimum; the 1-4 person tier stays unknown
+    assert tiers == [("unknown", 117526), ("1br", 85089), ("studio", 77303)]
     assert listing_verdict(lst).verdict == "eligible"
 
 
-def test_waitlist_without_rent_is_possible_and_junk_rows_dropped():
+def test_waitlist_tiers_sized_by_household_range_and_junk_rows_dropped():
     lst = prop(12030)  # Aura
     assert (lst.status, lst.kind, lst.borough) == ("waitlist", "waitlist", "Queens")
     assert len(lst.units) == 2  # two real tiers; the "$100-$150" placeholder rows are gone
-    t = next(u for u in lst.units if u.bands[0].household == 1)
-    assert (t.size, t.rent, t.ami, t.bands[0]) == ("unknown", None, 130, Band(1, 125966, 154440))
+    # 1-3 people is a 1BR and 2-5 a 2BR under HPD occupancy
+    assert [(u.size, u.rent, u.ami, u.bands[0]) for u in lst.units] == [
+        ("1br", None, 130, Band(1, 125966, 154440)),
+        ("2br", None, 130, Band(2, 150035, 176410)),
+    ]
     assert all(b.income_max > 1000 for u in lst.units for b in u.bands)
-    v = listing_verdict(lst)
-    assert v.verdict == "possible" and v.reason == "income fits, size unknown"
-    assert listing_verdict(prop(9672)).verdict == "possible"  # Caesura
+    assert listing_verdict(lst).verdict == "eligible"
+    caesura = prop(9672)  # 1-2 people fits a studio or a 1BR: size stays unknown
+    assert [u.size for u in caesura.units] == ["unknown"]
+    assert listing_verdict(caesura).reason == "income fits, size unknown"
 
 
 def test_waitlists_ruled_out_and_no_bands():
     assert listing_verdict(prop(9678)).reason == "over income (max $71,280)"  # House39 60% AMI
-    assert listing_verdict(prop(10389)).reason == "needs household of 2+"  # Victoria Tower
+    assert listing_verdict(prop(10389)).reason == "2br not wanted"  # Victoria Tower: 2-5 people
     north5 = prop(10912)
     assert north5.units == [] and listing_verdict(north5).verdict == "possible"
+    assert "publishes no unit sizes, rents or income limits" in north5.notes
 
 
 def test_bronx_and_outside_nyc():

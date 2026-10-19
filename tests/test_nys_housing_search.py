@@ -59,6 +59,18 @@ def test_repeated_size_rows_merge_into_one_unit():
     db._fp(cc)  # sortable: no duplicate keys with mixed None/float fields
 
 
+def test_rules_without_income_get_the_ami_cap():
+    # Inwood 405-407 W 206th St prints only "120%" per rule; the card's range is $0-$0
+    r = {**rec("Historic Front Street Development"), "ProjectName": "Inwood", "MinimumIncome": 0, "MaximumIncome": 0}
+    rules = [
+        {"amiCategory": "120%", "householdSize": str(n), "monthlyRent": 3306, "unitSize": "Studio"} for n in (1, 2)
+    ]
+    (u,) = nys.to_listing(r, rules).units
+    assert (u.size, u.ami) == ("studio", 120)
+    assert [(b.household, b.income_min, b.income_max) for b in u.bands] == [(1, None, 142560), (2, None, 162840)]
+    assert listing_verdict(nys.to_listing(r, rules)).reason == "over income (max $142,560)"
+
+
 def test_card_range_kept_when_no_units_table():
     r = rec("Jamie Towers")
     lst = nys.to_listing(r, [])

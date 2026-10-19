@@ -9,9 +9,9 @@ the ad does not cover; floor-plan tiers have no income table and their Bed/rent 
 Ad tables print one row per household size, with the unit size and rent on the middle row of its group,
 so rows are grouped (a new group when the minimum income changes or the household size restarts) and the
 k-th size line goes to the k-th group. An ad whose 1-person cap is below the current 1-person limit for its
-own AMI is on stale limits (One Flushing's "Mayor Eric Adams" ad): its bands are dropped so the tier stays
-"possible" instead of being excluded on numbers the office no longer uses. Ad parses are cached per PDF
-URL (RentCafe gives every upload a new document id) and refreshed weekly.
+own AMI is on stale limits (One Flushing's "Mayor Eric Adams" ad): each maximum is recomputed from today's
+HUD limits at that AMI, and the minimum (set by the unit's rent, which the ad still prints) is kept. Ad
+parses are cached per PDF URL (RentCafe gives every upload a new document id) and refreshed weekly.
 """
 
 from __future__ import annotations
@@ -150,11 +150,11 @@ def parse_site(base: str, home: str, floorplans: str | None, ad_text: str | None
             if stale_limits(units):
                 b1 = next(b for b in units[0].bands if b.household == 1)
                 notes.append(
-                    f"ad uses old income limits (1-person max ${b1.income_max:,} at {units[0].ami}% AMI): confirm"
-                    " current limits with the office"
+                    f"ad uses old income limits (1-person max ${b1.income_max:,} at {units[0].ami}% AMI): maxima"
+                    " shown are today's HUD limits at that AMI, minimums the ad's; confirm with the office"
                 )
                 for u in units:
-                    u.bands = []
+                    u.bands = [Band(b.household, b.income_min, parse.ami_max(u.ami, b.household)) for b in u.bands]
         except ValueError as e:
             notes.append(f"ad table not parsed ({e})")
     elif ad_url:

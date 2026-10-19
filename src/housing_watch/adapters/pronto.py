@@ -2,8 +2,10 @@
 
 The search endpoint lists ~3,200 properties nationwide (mostly PadSplit); only `source == "pronto"` in NYC
 counts. Each building's detail gives named units (rent, AMI, availability) and, for waitlists, income
-bands per household size with no rent or size ("unit information subject to change"), so waitlist tiers
-are size "unknown" and land as "possible". Some waitlists carry placeholder bands ("$100-$150"), dropped.
+bands per household size with no rent or size ("unit information subject to change"). A tier's size is
+taken from a named unit with the same minimum income, else from a household range only one HPD unit type
+allows (1-3 = 1BR, 2-5 = 2BR, 3-7 = 3BR; 1-2 fits a studio or a 1BR, so it stays "unknown"). Some
+waitlists carry placeholder bands ("$100-$150"), dropped; some publish no tiers at all (said in notes).
 Details are re-read only when the building's search record changes, or once a day.
 """
 
@@ -50,13 +52,22 @@ def _real(r: dict) -> bool:
     return float(hi) >= 10_000  # Aura / 8 Court Square carry "$100-$150" placeholder rows
 
 
-def _waitlist_tiers(ranges: list[dict]) -> list[Unit]:
-    """Waitlist bands -> one size-unknown Unit per (AMI, min income) tier."""
+OCCUPANCY = {(1, 3): "1br", (2, 5): "2br", (3, 7): "3br"}  # HPD household ranges unique to one unit type
+
+
+def _waitlist_tiers(ranges: list[dict], named: list[Unit] = ()) -> list[Unit]:
+    """Waitlist bands -> one Unit per (AMI, min income) tier, sized by a named unit or the household range."""
     tiers: dict[tuple, list[dict]] = {}
     for r in ranges:
         if _real(r):
             tiers.setdefault((_pct(r.get("ami_percentage")), parse.whole(r.get("min_income"))), []).append(r)
-    return [Unit(size="unknown", ami=a, bands=_bands(rs)) for (a, _), rs in tiers.items()]
+    by_min = {(u.ami, b.income_min): u.size for u in named for b in u.bands if b.income_min}
+    out = []
+    for (a, lo), rs in tiers.items():
+        bands = _bands(rs)
+        hh = (bands[0].household, bands[-1].household) if bands else None
+        out.append(Unit(size=by_min.get((a, lo)) or OCCUPANCY.get(hh, "unknown"), ami=a, bands=bands))
+    return out
 
 
 def parse_property(detail: dict) -> Listing | None:
@@ -113,7 +124,7 @@ def parse_property(detail: dict) -> Listing | None:
             )
     waitlist = bool(p.get("is_waitlist") or p.get("waitlist_only"))
     if waitlist:
-        units += _waitlist_tiers(p.get("property_income_ranges") or [])
+        units += _waitlist_tiers(p.get("property_income_ranges") or [], units)
     open_units = int(p.get("available_units") or 0) > 0
     status = "open" if open_units else ("waitlist" if waitlist else "closed")
     link = p.get("application_link") or p.get("waitlist_link") or ""
@@ -124,6 +135,8 @@ def parse_property(detail: dict) -> Listing | None:
         how.append(f"paper application: {p['paper_application_url']}")
     if p.get("contact_email"):
         how.append(f"questions: {p['contact_email']}")
+    if not units:
+        how.append("Pronto publishes no unit sizes, rents or income limits for this building")
     blob = f"{p.get('name')} {p.get('description') or ''} {p.get('disclaimer') or ''}"
     return Listing(
         source="pronto",
