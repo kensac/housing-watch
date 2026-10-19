@@ -1,20 +1,22 @@
-"""TF Cornerstone re-rentals: one JS-rendered page, a card per building, a table per AMI band.
+"""TF Cornerstone re-rentals, from the JSON API behind tfc.com's re-rentals page.
 
-Each table row group is one tier (unit type + rent + set-aside) with a row per household size, so bands
-are direct. The page prints no borough, so it comes from the street (all TFC buildings are in Manhattan,
-LIC or Brooklyn). A known site typo repeats "1 Person" on every household row of a tier: a repeated size
-is read as the next size. With no building cards, the section is kept as a Snapshot.
+https://tfc.io/api/affordable-rerentals/ lists every unit (type, rent, AMI %, set-aside) with its income
+range per household size, so no rendering is needed (the page itself is a 5 KB shell, and byparr often
+snapshots it half-loaded). One Listing per building; ext_ids are the address slugs the page-based
+adapter used. The API has no borough, so it comes from the street (all TFC buildings are in Manhattan,
+LIC or Brooklyn). An empty API keeps the page as a Snapshot.
 """
 
 from __future__ import annotations
 
 import re
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Snapshot, Unit
 from . import Adapter
 
 PAGE = "https://tfc.com/about/affordable-re-rentals"
+API = "https://tfc.io/api/affordable-rerentals/"
 APPLY = (
     "Apply: 'Request Application' button on the page (contact form; the prefilled message names 5241 Center "
     "Blvd, edit it), or email AffordableHousingAPPT@TFCornerstone.com for the HC2.0 application PDF and "
@@ -49,54 +51,38 @@ def _set_aside(text: str) -> str | None:
     return None
 
 
-def _tiers(table, ami: int | None) -> list[Unit]:
-    units: list[Unit] = []
-    for tr in table.select("tbody tr"):
-        tds = [re.sub(r"\s+", " ", td.get_text(" ")).strip() for td in tr.find_all("td")]
-        if len(tds) >= 5:  # first row of a tier: type, rent, set-aside, household, income
-            units.append(Unit(size=parse.size(tds[0]), rent=parse.money(tds[1]), ami=ami, set_aside=_set_aside(tds[2])))
-            hh, inc = tds[3], tds[4]
-        elif len(tds) == 2 and units:
-            hh, inc = tds
-        else:
-            continue
-        u = units[-1]
-        sizes = parse.household_range(hh)
-        if not sizes:
-            continue
-        h = sizes[0]
-        if u.bands and h <= u.bands[-1].household:  # site typo: "1 Person" repeated down the tier
-            h = u.bands[-1].household + 1
-        lo, hi = parse.money_range(inc)
-        u.bands.append(Band(h, lo, hi))
-    return units
+def _dollars(x) -> int | None:
+    return int(x) if x else None  # whole dollars, cents dropped ($85,927.55 -> 85,927)
 
 
-def parse_page(html: str, url: str = PAGE) -> Result:
-    s = parse.soup(html)
-    if "Available Re-Rentals" not in parse.text(s):
-        raise RuntimeError(f"{url}: no 'Available Re-Rentals' section (render failed?)")
+def parse_api(data: dict) -> Result:
+    by_addr: dict[str, list[Unit]] = {}
+    for r in data["Data"]:
+        u = Unit(
+            size=parse.size(r["UnitType"]),
+            rent=r.get("MonthlyRent"),
+            ami=r.get("AmiPercent"),
+            set_aside=_set_aside(r.get("SetAside") or ""),
+        )
+        for z in sorted(r.get("Sizes") or [], key=lambda z: z["AffordableReRentalSizeId"]):
+            h = z["HouseholdSize"]
+            if u.bands and h <= u.bands[-1].household:  # site typo: "1 Person" repeated down a tier
+                h = u.bands[-1].household + 1
+            u.bands.append(Band(h, _dollars(z.get("MinIncome")), _dollars(z.get("MaxIncome"))))
+        by_addr.setdefault(r["Property"]["Address"].strip(), []).append(u)
     out = []
-    for card in s.select("div.building-card"):
-        h = card.select_one("h3.heading-2") or card.find("h3")
-        title = re.sub(r"\s+", " ", h.get_text(" ")).strip() if h else ""
-        if not title:
-            continue
-        desc = parse.text(str(card.select_one("div.basic-text") or card))
-        units: list[Unit] = []
-        for block in card.select("div.income-requirements"):
-            h4 = block.find("h4")
-            a = parse.ami(h4.get_text() if h4 else "")
-            for table in block.select("table.income-table"):
-                units += _tiers(table, a)
+    order = {"studio": 0, "1br": 1, "2br": 2, "3br": 3}
+    for addr, units in by_addr.items():
+        units.sort(key=lambda u: (u.ami or 0, order.get(u.size, 9), u.rent or 0))  # the API order is arbitrary
+        ami.stamp(units)
         out.append(
             Listing(
                 source="tf_cornerstone",
-                ext_id=re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-"),
-                title=f"TF Cornerstone {title}",
-                url=f"{url}#available-rerentals",
-                address=title,
-                borough=_borough(title, desc),
+                ext_id=re.sub(r"[^a-z0-9]+", "-", addr.lower()).strip("-"),
+                title=f"TF Cornerstone {addr}",
+                url=f"{PAGE}#available-rerentals",
+                address=addr,
+                borough=_borough(addr, ""),
                 status="open",
                 kind="re-rental",
                 units=units,
@@ -105,8 +91,7 @@ def parse_page(html: str, url: str = PAGE) -> Result:
         )
     if out:
         return Result(listings=out)
-    i = (t := parse.text(s)).find("Available Re-Rentals")
-    return Result(snapshots=[Snapshot(source="tf_cornerstone", ext_id=url, url=url, text=t[i : i + 4000])])
+    return Result(snapshots=[Snapshot(source="tf_cornerstone", ext_id=PAGE, url=PAGE, text="no re-rentals listed")])
 
 
 class TFCornerstone(Adapter):
@@ -117,4 +102,4 @@ class TFCornerstone(Adapter):
     min_listings = 1  # a building, or the snapshot when none are listed
 
     def fetch(self) -> Result:
-        return parse_page(fetch.rendered(PAGE, wait_ms=6000, expect="Available Re-Rentals"))
+        return parse_api(fetch.json(API))
