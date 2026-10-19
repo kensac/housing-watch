@@ -173,3 +173,21 @@ class AdapterCacheRow(Base):
     source: Mapped[str] = mapped_column(Text, primary_key=True)
     value: Mapped[dict] = mapped_column(JSONB, default=dict)
     updated: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
+class SavedViewRow(Base):
+    """A named, saved filter/sort/columns for one UI page. The UI's own config: the only table it writes."""
+
+    __tablename__ = "saved_views"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    page: Mapped[str] = mapped_column(Text)  # listings | events
+    name: Mapped[str] = mapped_column(Text)
+    query: Mapped[dict] = mapped_column(JSONB)  # {"filters": [{"field", "op", "values"}], "q", "sort", "columns"}
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    updated: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    __table_args__ = (
+        Index("saved_views_one_default", "page", unique=True, postgresql_where=text("is_default")),
+        Index("saved_views_page", "page", "position"),
+    )
