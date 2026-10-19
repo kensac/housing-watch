@@ -80,8 +80,7 @@ def test_digest_builds(pg):
 
     with Session(pg) as s, s.begin():
         db.record_listings(s, "t", [L([Unit("studio", 2400, 130, bands=[Band(1, 82557, 154440)])], borough="Queens")])
-    with Session(pg) as s:
-        subject, plain, _, ids = digest.build(s)
+    subject, plain, _, ids = digest.build(pg)
     assert "1 eligible" in subject and "ELIGIBLE" in plain and ids
     assert digest.urgent(pg)
     assert "ELIGIBLE" in digest.send(pg, dry_run=True)

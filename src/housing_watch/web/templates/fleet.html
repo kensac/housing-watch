@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Fleet{% endblock %}
+{% block sub %}<p class="sub">Procrastinate workers and job queues on the shared Postgres{% if fl.available %} · {{ fl.workers | length }} workers{% endif %}</p>{% endblock %}
+{% block content %}
+{% if not fl.available %}
+<div class="card">{{ m.empty("The job queue isn't set up yet", "Procrastinate's tables (procrastinate_jobs, procrastinate_workers) don't exist in this database. A worker creates them when it starts: python -m housing_watch worker.") }}</div>
+{% else %}
+<div class="grid-2">
+  <section class="card">
+    <header class="card-head"><h2>Workers</h2><span class="muted">heartbeat every few seconds; stale after 1m</span></header>
+    {% if fl.workers %}
+    <div class="table-wrap"><table class="tbl">
+      <thead><tr><th>Worker</th><th>Host</th><th class="num">Heartbeat</th><th>Running</th></tr></thead>
+      <tbody>
+      {% for w in fl.workers %}
+      <tr class="{{ 'dim' if w.age > 600 }}">
+        <td class="nowrap"><span class="hb {{ 'ok' if w.age < 60 else ('warn' if w.age < 600 else 'bad') }}"></span>#{{ w.id }}</td>
+        <td>{{ w.host or "—" }}</td>
+        <td class="num nowrap">{{ m.t(w.last_heartbeat) }}</td>
+        <td>{% for d in w.doing %}<span class="tag">{{ d }}</span>{% else %}<span class="muted">idle</span>{% endfor %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}{{ m.empty("No workers registered", "No worker is running. Start one with python -m housing_watch worker on any host.") }}{% endif %}
+  </section>
+
+  <section class="card">
+    <header class="card-head"><h2>Queues</h2><span class="muted">jobs by state</span></header>
+    {% set states = ["todo", "doing", "succeeded", "failed", "cancelled", "aborted"] %}
+    {% if fl.queues %}
+    <div class="table-wrap"><table class="tbl">
+      <thead><tr><th>Queue</th>{% for s in states %}<th class="num">{{ s }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for q, c in fl.queues.items() %}
+      <tr><td><span class="tag">{{ q }}</span></td>
+        {% for s in states %}<td class="num {{ 'bad-text strong' if s == 'failed' and c.get(s) }}{{ ' strong' if s in ['todo', 'doing'] and c.get(s) }}">{{ "{:,}".format(c.get(s, 0)) if c.get(s) else "" }}{% if not c.get(s) %}<span class="muted">0</span>{% endif %}</td>{% endfor %}</tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}{{ m.empty("No jobs yet", "Nothing has been queued. The periodic tick enqueues source runs as they come due.") }}{% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <header class="card-head"><h2>Hosts</h2><span class="muted">from completed source runs</span></header>
+  {% if fl.hosts %}
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr><th>Host</th><th class="num">Last run</th><th class="num">Runs 24h</th><th class="num">Failed 24h</th><th class="num">Sources</th></tr></thead>
+    <tbody>
+    {% for h in fl.hosts %}
+    <tr><td>{{ h.name }}</td><td class="num">{{ m.t(h.last_run) }}</td><td class="num">{{ h.runs_24h }}</td>
+      <td class="num">{% if h.fails_24h %}<span class="bad-text strong">{{ h.fails_24h }}</span>{% else %}<span class="muted">0</span>{% endif %}</td><td class="num">{{ h.sources }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}{{ m.empty("No runs recorded", "Hosts show up here once a worker completes a source run.") }}{% endif %}
+</section>
+
+<section class="card">
+  <header class="card-head"><h2>Recent failures</h2><span class="muted">latest 25 failed jobs</span></header>
+  {% if fl.failures %}
+  <div class="table-wrap"><table class="tbl">
+    <thead><tr><th>Job</th><th>Task</th><th>Queue</th><th class="num">Attempts</th><th>Error</th><th class="num">When</th></tr></thead>
+    <tbody>
+    {% for f in fl.failures %}
+    <tr><td class="muted">#{{ f.id }}</td><td class="nowrap">{{ f.task_name }}{% if f.args and f.args.source %} <a href="/sources">{{ f.args.source }}</a>{% endif %}</td>
+      <td><span class="tag">{{ f.queue_name }}</span></td><td class="num">{{ f.attempts }}</td>
+      <td class="err-cell">{% if f.error %}<span class="err" title="{{ f.error }}">{{ f.error }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="num nowrap">{{ m.t(f.at) }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}{{ m.empty("No failed jobs", "Every job has succeeded or is still running.") }}{% endif %}
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,51 @@
+{%- if not fld %}
+<div class="fb">
+  <input type="search" class="fb-search" data-find=".fb-field" placeholder="Filter by…" autocomplete="off" autofocus>
+  <div class="fb-list">
+    {% for group, fs in groups %}
+    <div class="fb-group"><div class="fb-gl">{{ group }}</div>
+      {% for f in fs %}<button type="button" class="fb-field" data-pick="{{ f.name }}">{{ f.label }}<span class="fb-type">{{ {"text": "text", "number": "number", "time": "date", "bool": "yes/no"}[f.type] }}</span></button>{% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{%- else %}
+{%- set ops = (["in", "nin", "empty", "notempty"] if enum else ["contains", "ncontains", "empty", "notempty"]) if fld.type == "text" else OPS[fld.type] -%}
+{%- set default_op = {"text": "in" if enum else "contains", "number": "le" if fld.money else "eq", "time": "last", "bool": "is"}[fld.type] -%}
+{%- set op = current.op if current else default_op -%}
+{%- set raw = current.raw if current else [] -%}
+<form class="fb fb-form" data-field="{{ fld.name }}" onsubmit="return false">
+  <div class="fb-head">
+    <button type="button" class="icon-btn sm" data-builder-back aria-label="Choose another field">‹</button>
+    <strong>{{ fld.label }}</strong><span class="muted">{{ fld.group }}</span>
+  </div>
+  <select name="op" aria-label="Operator">{% for o in ops %}<option value="{{ o }}" {{ 'selected' if o == op }}>{{ OP_LABEL[o] }}</option>{% endfor %}</select>
+  {% if fld.type == "text" and enum %}
+  <div data-ops="in nin">
+    {% if counts | length > 8 %}<input type="search" class="fb-search" data-find=".fb-values .fb-check" placeholder="Find a value…" autocomplete="off">{% endif %}
+    <div class="fb-values">
+      {% for v, n in counts if v is not none and v != "" %}<label class="fb-check"><input type="checkbox" name="v" value="{{ v }}" {{ 'checked' if v in raw }}><span>{{ v }}</span><span class="cnt">{{ "{:,}".format(n) }}</span></label>
+      {% else %}<p class="muted">No values under the other filters.</p>{% endfor %}
+    </div>
+  </div>
+  {% elif fld.type == "text" %}
+  <div data-ops="contains ncontains"><input type="text" name="v" value="{{ raw[0] if raw else '' }}" placeholder="Text…" autocomplete="off"></div>
+  {% elif fld.type == "number" %}
+  <div data-ops="eq ne lt le gt ge"><input type="number" step="any" name="v" value="{{ raw[0] if raw and op != 'between' else '' }}" placeholder="{{ '$' if fld.money }}0"></div>
+  <div data-ops="between" class="fb-pair"><input type="number" step="any" name="v" value="{{ raw[0] if op == 'between' else '' }}" aria-label="From"><span>and</span><input type="number" step="any" name="v" value="{{ raw[1] if op == 'between' else '' }}" aria-label="To"></div>
+  {% elif fld.type == "time" %}
+  <div data-ops="last" class="fb-presets">
+    {% for v, l in [("1h", "1 hour"), ("24h", "24 hours"), ("3d", "3 days"), ("7d", "7 days"), ("30d", "30 days")] %}<label class="preset"><input type="radio" name="v" value="{{ v }}" {{ 'checked' if op == 'last' and raw and raw[0] == v or (not current and v == '7d') }}><span>{{ l }}</span></label>{% endfor %}
+  </div>
+  <div data-ops="after before"><input type="date" name="v" value="{{ raw[0][:10] if raw and op in ['after', 'before'] else '' }}"></div>
+  <div data-ops="between" class="fb-pair"><input type="date" name="v" value="{{ raw[0][:10] if op == 'between' else '' }}" aria-label="From"><span>and</span><input type="date" name="v" value="{{ raw[1][:10] if op == 'between' else '' }}" aria-label="To"></div>
+  {% elif fld.type == "bool" %}
+  <div data-ops="is" class="fb-presets">{% for v in ["yes", "no"] %}<label class="preset"><input type="radio" name="v" value="{{ v }}" {{ 'checked' if raw and raw[0] == v }}><span>{{ v }}</span></label>{% endfor %}</div>
+  {% endif %}
+  <div class="fb-foot">
+    {% if edit >= 0 %}<button type="button" class="btn sm ghost danger" data-remove>Remove</button>{% endif %}
+    <span class="muted fb-live">Results update as you go</span>
+    <button type="button" class="btn sm primary" data-close-builder>Done</button>
+  </div>
+</form>
+{%- endif %}

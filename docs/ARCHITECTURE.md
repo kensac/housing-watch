@@ -107,10 +107,23 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 - `queries.py` is the read API, returning plain dicts/dataclasses: listing search with filters,
   listing detail with units/bands/events, the per-source health table, event feed, overview counts.
   It attaches verdicts by calling `criteria` at read time.
-- `digest.py` builds the email from `queries.py`.
-- `web/` is the UI: FastAPI + Jinja2 templates + HTMX, with hand-written CSS (no build step). It is
-  served by the hetzner worker container (`python -m housing_watch serve` = migrate + worker + web, the
-  web started only when `HW_WEB_PORT` is set) on the tailnet only. It is read-only.
+  Every listing is judged once per store version and cached in memory, so pages filter in Python.
+- `digest.py` builds the email from `queries.py`: `send(engine, dry_run)` and `urgent(engine)` (an open,
+  eligible listing has a pending new/reopened/changed event). Events with `detail.baseline = true` come from
+  a source's first run; they collapse into one summary line and only their eligible listings are listed.
+- `filters.py` is the generic filter layer: fields are read off the listings/units/bands (and events)
+  columns in `orm.py`, so a new column is filterable with no other change; a filter is
+  `?f=<field>.<op>.<values>` (e.g. `units.rent.le.3000`), parsed into a typed AST and turned into SQL.
+  Unit conditions must hold on one unit, band conditions on one band of it; verdict fields are applied in
+  Python after the SQL prefilter.
+- `web/` is the UI: `web.app.create_app(engine)`, FastAPI + Jinja2 templates + HTMX (vendored in
+  `web/static/`), with hand-written CSS (no build step). List state (filters, search, sort, columns) lives
+  in the query string; lists scroll in batches of 200. It is served by the hetzner worker container
+  (`python -m housing_watch serve` = migrate + worker + web, the web started only when `HW_WEB_PORT` is
+  set) on the tailnet only. The data is read-only from the web; the one table it writes is its own
+  `saved_views` (`views.py`: a filter AST + sort + columns per page, re-validated against the field
+  registry on load), through same-origin POST/PATCH/DELETE. Nothing is seeded: views exist only once saved.
+- `scripts/load_sqlite_dev.py` (dev only) copies an old SQLite store into Postgres to run the UI on real data.
 
 ## Tests
 

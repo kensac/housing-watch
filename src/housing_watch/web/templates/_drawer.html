@@ -1,0 +1,72 @@
+{%- import "_macros.html" as m -%}
+<div class="drawer-backdrop" data-close></div>
+<aside class="drawer" role="dialog" aria-modal="true" aria-label="Listing detail">
+{% if detail is none %}
+  <header class="drawer-head"><div><h2>Listing not found</h2></div><button class="icon-btn" data-close aria-label="Close">{{ m.icon("close") }}</button></header>
+  <div class="drawer-body">{{ m.empty("This listing is not in the store", "It may have been keyed differently by its source. Search for it under Listings.") }}</div>
+{% else %}
+{% set x = detail.summary %}
+  <header class="drawer-head">
+    <div>
+      <div class="drawer-kicker">{{ x.source }} · {{ x.kind }}</div>
+      <h2>{{ x.title }}</h2>
+      <div class="drawer-badges">{{ m.verdict(x.verdict) }}<span class="why-lg">{{ (x.eligible_units ~ " of " ~ x.units ~ " units fit the profile") if x.verdict == "eligible" and x.units else x.reason }}</span>{{ m.status(x.status) }}</div>
+    </div>
+    <div class="drawer-actions">
+      {% if x.url %}<a class="btn primary" href="{{ x.url }}" target="_blank" rel="noopener noreferrer">Open source {{ m.icon("external") }}</a>{% endif %}
+      <button class="icon-btn" data-close aria-label="Close">{{ m.icon("close") }}</button>
+    </div>
+  </header>
+  <div class="drawer-body">
+    <dl class="facts">
+      <div><dt>Address</dt><dd>{{ x.address or "—" }}</dd></div>
+      <div><dt>Borough</dt><dd>{{ x.borough or "unknown" }}</dd></div>
+      <div><dt>Deadline</dt><dd>{{ x.deadline or "—" }}</dd></div>
+      <div><dt>Units</dt><dd>{{ x.eligible_units }} of {{ x.units }} eligible</dd></div>
+      <div><dt>First seen</dt><dd>{{ m.t(x.first_seen) }}</dd></div>
+      <div><dt>Last changed</dt><dd>{{ m.t(x.last_changed) }}</dd></div>
+      <div><dt>Last seen</dt><dd>{{ m.t(detail.last_seen) }}</dd></div>
+      {% if x.gone_since %}<div><dt>Removed</dt><dd>{{ m.t(x.gone_since) }}</dd></div>{% endif %}
+      {% if x.senior_only %}<div><dt>Restriction</dt><dd>senior only</dd></div>{% endif %}
+    </dl>
+
+    <h3>Units <span class="muted">({{ detail.units | length }})</span></h3>
+    {% if detail.units %}
+    <div class="table-wrap">
+    <table class="tbl units">
+      <thead><tr><th>Unit</th><th class="num">Rent</th><th class="num">AMI</th><th class="num">Income band</th><th>Verdict</th></tr></thead>
+      <tbody>
+      {% for u in detail.units %}
+      <tr class="{{ 'dim' if u.verdict == 'excluded' }}">
+        <td class="nowrap"><span class="tag">{{ u.size }}</span>{% if u.unit_no %} #{{ u.unit_no }}{% endif %}{% if u.set_aside %} <span class="tag warn">{{ u.set_aside }}</span>{% endif %}{% if u.available is false %} <span class="tag">rented</span>{% endif %}{% if u.chart_year %} <span class="tag{{ ' warn' if 'limits' in u.reason }}" title="The ad's income caps match HUD's {{ u.chart_year }} chart">{{ u.chart_year }} chart</span>{% endif %}</td>
+        <td class="num">{{ u.rent | money if u.rent else "—" }}</td>
+        <td class="num">{{ (u.ami | string + "%") if u.ami else "—" }}</td>
+        <td class="num bands">{% for h, lo, hi in u.bands %}<span class="band{{ ' me' if h == detail.household }}"><b>{{ h }}p</b> {{ lo | money if lo is not none else "?" }}–{{ hi | money if hi is not none else "?" }}</span>{% else %}<span class="muted">no table</span>{% endfor %}</td>
+        <td>{{ m.verdict(u.verdict) }}{% if u.verdict != "eligible" or "limits" in u.reason %}<span class="why">{{ u.reason }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}<p class="muted">The source publishes no unit details for this listing.</p>{% endif %}
+
+    {% if detail.notes %}
+    <h3>Notes</h3>
+    <div class="notes">{{ detail.notes }}</div>
+    {% endif %}
+
+    <h3>History</h3>
+    {% if detail.events %}
+    <ol class="timeline">
+      {% for e in detail.events %}
+      <li class="tl-{{ e.type }}">
+        <div class="tl-head">{{ m.etype(e) }}<span class="muted">{{ m.t(e.at) }}</span>{% if e.notified %}<span class="muted" title="Included in the digest {{ e.notified | ny }}">· mailed</span>{% endif %}</div>
+        {% if e.detail and e.detail.before %}<div class="tl-detail">before: {{ e.detail.before.status }}{% for u in e.detail.before.units %} · {{ u[0] }}{% if u[2] %} {{ u[2] | money }}{% endif %}{% endfor %}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}<p class="muted">No events recorded for this listing.</p>{% endif %}
+    <p class="key muted">key <code>{{ x.key }}</code></p>
+  </div>
+{% endif %}
+</aside>

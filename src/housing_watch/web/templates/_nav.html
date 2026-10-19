@@ -1,0 +1,17 @@
+{%- import "_macros.html" as m -%}
+<ul id="navlist" hx-boost="true"{% if hx %} hx-swap-oob="true"{% endif %}>
+  {%- for id, label, href in [("overview", "Overview", "/"), ("listings", "Listings", "/listings"), ("sources", "Sources", "/sources"), ("fleet", "Fleet", "/fleet"), ("events", "Events", "/events")] %}
+  <li><a href="{{ href }}" class="{{ 'on' if nav == id and not view }}">{{ m.icon(id) }}<span>{{ label }}</span></a>
+    {%- set mine = saved | selectattr("page", "equalto", id) | list %}
+    {%- if mine %}
+    <ul class="views">
+      {%- for v in mine %}
+      <li><a href="{{ v.url() }}" class="{{ 'on' if view and view.id == v.id }}" title="{{ v.name }}{{ ' (opens by default)' if v.is_default }}">
+        {%- if view and view.id == v.id and modified %}<i class="mod-dot" title="Changed since it was saved"></i>{% endif -%}
+        <span class="vn">{{ v.name }}</span>{% if v.is_default %}<span class="def" aria-label="default">★</span>{% endif %}{% if v.warnings %}<span class="warn-dot" title="{{ v.warnings | join(' ') }}">!</span>{% endif %}<span class="badge">{{ "{:,}".format(v.count) if v.count is not none else "" }}</span></a></li>
+      {%- endfor %}
+    </ul>
+    {%- endif %}
+  </li>
+  {%- endfor %}
+</ul>
