@@ -123,6 +123,10 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   set) on the tailnet only. The data is read-only from the web; the one table it writes is its own
   `saved_views` (`views.py`: a filter AST + sort + columns per page, re-validated against the field
   registry on load), through same-origin POST/PATCH/DELETE. Nothing is seeded: views exist only once saved.
+- `applications.py` recognises known paper application forms by their fillable field names (today HPD's
+  HC2.0 application) and fills them from the applicant file (`HW_APPLICANT_FILE`, private, host-only;
+  never SSN, signatures or dates). The drawer checks a listing's linked PDFs lazily; a download is built
+  per request and never stored.
 - `scripts/load_sqlite_dev.py` (dev only) copies an old SQLite store into Postgres to run the UI on real data.
 
 ## Tests

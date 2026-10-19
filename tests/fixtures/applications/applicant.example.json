@@ -1,0 +1,15 @@
+{
+  "first": "Alex", "middle": "Q", "last": "Example",
+  "address": {"street": "123 Example St", "apt": "4B", "city": "New York", "state": "NY", "zip": "10001"},
+  "phones": {"cell": "212-555-0100"},
+  "email": "alex@example.com",
+  "birth_date": "01/02/95",
+  "language": "English",
+  "nycha": false, "nycha_household": false, "shelter": false,
+  "accommodation": "", "city_employee": false, "students": false,
+  "jobs": [{"employer": "Example Corp, 1 Main St, New York NY", "years": 2, "months": 3,
+            "amount": 2884.62, "how_often": "weekly", "annual": 150000}],
+  "other_income": [],
+  "assets": [{"type": "Checking", "bank": "Example Bank"}],
+  "subsidy": "no"
+}

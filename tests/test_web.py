@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
+from housing_watch import applications
 from housing_watch.web.app import create_app
-from seed import seed, seed_jobs
+from seed import L, add_listing, seed, seed_jobs
 
 HX = {"HX-Request": "true"}
 RESULTS = {**HX, "HX-Target": "results"}
@@ -159,3 +163,26 @@ def test_stale_view_warns(client, pg):
             query={"filters": [{"field": "pets_ok", "op": "is", "values": ["yes"]}]}))  # fmt: skip
     page = client.get(f"/listings?view={vid}")
     assert page.status_code == 200 and "Unknown filter field “pets_ok”" in page.text and "dropped" in page.text
+
+
+def test_application_prefill(pg, monkeypatch, tmp_path):
+    blank = (Path(__file__).parent / "fixtures" / "applications" / "hc2.pdf").read_bytes()
+    monkeypatch.setattr(applications, "blank", lambda url: blank if url.endswith("g1.pdf") else b"%PDF flat")
+    with Session(pg) as s:
+        notes = "Mail only. Application: https://x.example/g1.pdf; flyer https://x.example/flyer.pdf"
+        add_listing(s, L("m", "1", "Queens", notes=notes))
+        s.commit()
+    c = TestClient(create_app(pg))
+    assert "/listings/application/panel?key=m%3A1" in c.get("/listings/drawer?key=m%3A1", headers=HX).text
+    p = c.get("/listings/application/panel?key=m%3A1")
+    assert "HC2.0" in p.text and "not a fillable form" in p.text and "set HW_APPLICANT_FILE" in p.text
+    assert c.get("/listings/application?key=m%3A1").status_code == 404  # no applicant file yet
+    f = tmp_path / "applicant.json"
+    f.write_text((Path(__file__).parent / "fixtures" / "applications" / "applicant.example.json").read_text())
+    monkeypatch.setattr(applications, "APPLICANT_FILE", str(f))
+    assert "Download filled" in c.get("/listings/application/panel?key=m%3A1").text
+    r = c.get("/listings/application?key=m%3A1&n=0")
+    assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and r.content[:4] == b"%PDF"
+    assert "no-store" in r.headers["cache-control"] and "application-1.pdf" in r.headers["content-disposition"]
+    assert c.get("/listings/application?key=m%3A1&n=1").status_code == 422
+    assert c.get("/listings/application?key=m%3A1&n=5").status_code == 404
