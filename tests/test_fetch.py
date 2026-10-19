@@ -72,3 +72,27 @@ def test_rendered_without_byparr_needs_byparr(monkeypatch):
     with pytest.raises(fetch.NeedsByparr):
         fetch.rendered("https://a.example/")
     assert not issubclass(fetch.NeedsByparr, fetch.FetchError)  # adapters skipping a bad page must not eat it
+
+
+def test_render_retries_until_expected_text(monkeypatch):
+    pages = iter(["<html>shell</html>", "<html>shell</html>", "<html>Available Re-Rentals</html>"])
+    waits = []
+
+    class R(Resp):
+        def __init__(self, body):
+            self.body = body
+
+        def json(self):
+            return {"solution": {"status": 200, "response": self.body}}
+
+    def post(*a, json=None, **kw):
+        waits.append(json["waitInSeconds"])
+        return R(next(pages))
+
+    monkeypatch.setattr(fetch, "BYPARR_URL", "http://byparr:8191")
+    monkeypatch.setattr(fetch.httpx, "post", post)
+    assert "Available" in fetch.rendered("https://t.example/", wait_ms=6000, expect="Available Re-Rentals")
+    assert waits == [6, 12, 18]  # longer each try
+    pages = iter(["<html>shell</html>"] * 3)
+    with pytest.raises(fetch.FetchError, match="missing after 3 renders"):
+        fetch.rendered("https://t.example/", expect="Available Re-Rentals")

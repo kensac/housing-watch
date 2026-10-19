@@ -117,4 +117,4 @@ class TFCornerstone(Adapter):
     min_listings = 1  # a building, or the snapshot when none are listed
 
     def fetch(self) -> Result:
-        return parse_page(fetch.rendered(PAGE, wait_ms=6000))
+        return parse_page(fetch.rendered(PAGE, wait_ms=6000, expect="Available Re-Rentals"))
