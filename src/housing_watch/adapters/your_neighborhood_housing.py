@@ -15,6 +15,6 @@ class YourNeighborhoodHousing(GoDaddyPage):
     title = "Your Neighborhood Housing"
     url = "https://yourneighborhoodhousing.com/"
     pages = [url, "https://yourneighborhoodhousing.com/available-listings-1"]
-    every_hours = 12
+    every_hours = 4
     ignore = [*GODADDY_IGNORE, r"hours", r"(mon|tue|wed|thu|fri|sat|sun)[a-z]*", r"closed"]
     min_text = 200

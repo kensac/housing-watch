@@ -191,3 +191,14 @@ class SavedViewRow(Base):
         Index("saved_views_one_default", "page", unique=True, postgresql_where=text("is_default")),
         Index("saved_views_page", "page", "position"),
     )
+
+
+class FleetWorkerRow(Base):
+    """One worker process, by HW_WORKER_NAME (the host): Procrastinate's own workers table has no name."""
+
+    __tablename__ = "fleet_workers"
+    name: Mapped[str] = mapped_column(Text, primary_key=True)
+    queues: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    concurrency: Mapped[int] = mapped_column(Integer)
+    started: Mapped[datetime] = mapped_column(TS)
+    last_seen: Mapped[datetime] = mapped_column(TS)  # heartbeat, every HEARTBEAT seconds while running

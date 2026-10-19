@@ -175,7 +175,7 @@ class MitchellLama(PageAdapter):
     title = "HPD Mitchell-Lama waitlists"
     url = PAGE
     pages = [PAGE]
-    every_hours = 24
+    every_hours = 4
     min_text = 3000
     min_listings = 5  # 16 developments on the Rev 05-21-2026 list
 

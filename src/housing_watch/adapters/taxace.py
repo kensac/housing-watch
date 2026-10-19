@@ -136,7 +136,7 @@ class Taxace(Adapter):
     name = "taxace"
     title = "Taxace NY"
     url = URL
-    every_hours = 6  # first come, first served
+    every_hours = 4  # first come, first served
     min_listings = 1
 
     def fetch(self) -> Result:

@@ -156,7 +156,7 @@ class RelatedAHG(Adapter):
     name = "related_ahg"
     title = "Related Affordable Housing Group"
     url = HOME
-    every_hours = 6  # single first-come units, "no waitlist once filled"
+    every_hours = 4  # single first-come units, "no waitlist once filled"
     min_listings = 1  # a listing per ad, or a snapshot of the home page when it names none
 
     def _pdf(self, url: str) -> dict:

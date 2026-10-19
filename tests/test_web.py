@@ -1,10 +1,11 @@
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from housing_watch import applications
+from housing_watch import applications, tasks
 from housing_watch.web.app import create_app
 from seed import L, add_listing, seed, seed_jobs
 
@@ -67,8 +68,9 @@ def test_empty_store(pg):
 def test_fleet_page(pg, monkeypatch):
     seed(pg)
     seed_jobs(pg)
+    tasks.beat(pg, "gcp-vps", 2, ["sources"], datetime.now(UTC))
     r = TestClient(create_app(pg)).get("/fleet")
-    assert r.status_code == 200 and "source_run a" in r.text and "hetzner" in r.text
+    assert r.status_code == 200 and "gcp-vps" in r.text and "2 slots" in r.text and "hetzner" in r.text
 
 
 def test_lists_scroll_in_batches(pg):

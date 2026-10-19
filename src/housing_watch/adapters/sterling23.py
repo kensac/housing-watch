@@ -129,7 +129,7 @@ class Sterling23(PageAdapter):
     url = URL
     pages = [URL]
     render = True
-    every_hours = 8
+    every_hours = 4
     min_listings = 1
     ignore = [r"please check the captcha\.?"]
 

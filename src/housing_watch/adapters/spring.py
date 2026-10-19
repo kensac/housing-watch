@@ -281,7 +281,7 @@ class Spring(PageAdapter):
     url = URL
     pages = [URL]
     link_re = re.compile(r"/wp-content/uploads/.*\.(png|jpe?g|webp)", re.I)
-    every_hours = 12
+    every_hours = 4
     min_listings = 1
 
     def fetch(self) -> Result:

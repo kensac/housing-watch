@@ -77,7 +77,7 @@ class Clinton(PageAdapter):
     title = "Clinton Management"
     url = URL
     pages = [URL]
-    every_hours = 12
+    every_hours = 4
     min_text = 800
     link_re = re.compile(r"clintonmanagement\.com/(properties|availabilities)/.+", re.I)
     min_listings = 3  # 7 property cards on 2026-10-18

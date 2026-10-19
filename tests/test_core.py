@@ -91,3 +91,10 @@ def test_fingerprint_with_missing_rent(pg):
     lst = L([Unit("studio", 2000.0), Unit("studio", None)], borough="Queens")
     with Session(pg) as s, s.begin():
         assert db.record_listings(s, "t", [lst]) == 1
+
+
+def test_every_source_runs_at_least_every_4_hours():
+    from housing_watch.adapters import load_all
+
+    slow = {name: cls.every_hours for name, cls in load_all().items() if cls.every_hours > 4}
+    assert not slow, slow

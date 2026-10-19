@@ -173,7 +173,7 @@ class Pronto(Adapter):
     name = "pronto"
     title = "Pronto Housing"
     url = "https://prontohousingrentals.com/listings"
-    every_hours = 6
+    every_hours = 4
     min_listings = 10  # ~24 NYC buildings on 2026-10-19
 
     def fetch(self) -> Result:

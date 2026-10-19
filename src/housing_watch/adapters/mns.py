@@ -120,7 +120,7 @@ class MNS(Adapter):
     name = "mns"
     title = "MNS Real Estate (affordable units)"
     url = URL
-    every_hours = 12
+    every_hours = 4
     min_listings = 1  # the page Snapshot is always returned; a failed fetch or layout change raises
 
     def fetch(self) -> Result:

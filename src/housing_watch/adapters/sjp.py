@@ -140,7 +140,7 @@ class Sjp(PageAdapter):
     url = INDEX
     pages = [INDEX]
     link_re = re.compile(r"/apartment-listings/")
-    every_hours = 8
+    every_hours = 4
     min_listings = 1
 
     def fetch(self) -> Result:

@@ -1,7 +1,12 @@
+from datetime import UTC, datetime
+
 import pytest
+from sqlalchemy.orm import Session
 
 from housing_watch import filters as F
 from housing_watch import queries as Q
+from housing_watch import tasks
+from housing_watch.orm import RunRow
 from seed import seed, seed_jobs
 
 
@@ -140,6 +145,13 @@ def test_fleet(db):
     seed_jobs(db)
     f = Q.fleet(db)
     assert f.available and f.queues["sources"] == {"succeeded": 1, "failed": 1, "doing": 1, "todo": 1}
-    (w,) = f.workers  # host: from the newest run among its jobs
-    assert w["host"] == "hetzner" and w["doing"] == ["source_run a"] and w["age"] < 60
+    assert f.workers == []  # nothing has registered in fleet_workers yet
+    t = datetime.now(UTC)
+    tasks.beat(db, "oci", 4, ["sources"], t)
+    tasks.beat(db, "oci", 2, ["sources", "byparr"], t)  # a restart updates the row
+    with Session(db) as s, s.begin():
+        s.add(RunRow(source="c", started=t, workers=["oci"]))  # in flight
+    (w,) = Q.fleet(db).workers
+    assert w["name"] == w["host"] == "oci" and w["queues"] == ["sources", "byparr"] and w["concurrency"] == 2
+    assert w["doing"] == ["c"] and w["age"] < 60
     assert f.failures[0]["error"] == "TimeoutError: boom"

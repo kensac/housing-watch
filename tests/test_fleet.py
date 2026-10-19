@@ -151,7 +151,7 @@ def test_single_chunk_runs_inline(fleet, pg):
     with Session(pg) as s:
         assert db.load_cache(s, "t_plain") == {"n": 1}
         assert s.scalars(select(EventRow.detail)).one() == {"baseline": True}  # first successful run
-        assert s.get(SourceStateRow, "t_plain").next_due > db.utcnow() + timedelta(hours=23)
+        assert s.get(SourceStateRow, "t_plain").next_due > db.utcnow() + timedelta(hours=3)  # the default 4h cadence
 
 
 def test_adapter_error_is_a_failed_run_not_a_retry(fleet, pg):

@@ -179,7 +179,7 @@ class HousingPartnership(Adapter):
     name = "housing_partnership"
     title = "NYC Housing Partnership"
     url = INDEX
-    every_hours = 12
+    every_hours = 4
     min_listings = 3  # ~12 properties are always listed (active or not); fewer = page changed/blocked
 
     def fetch(self) -> Result:

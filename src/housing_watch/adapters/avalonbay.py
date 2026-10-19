@@ -154,7 +154,7 @@ class AvalonBay(Adapter):
     name = "avalonbay"
     title = "AvalonBay NYC affordable programs"
     url = LIST
-    every_hours = 12
+    every_hours = 4
     min_listings = 4  # 6 Manhattan buildings on 2026-10-19
 
     def fetch(self) -> Result:

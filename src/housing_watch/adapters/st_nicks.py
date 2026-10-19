@@ -128,7 +128,7 @@ class StNicks(PageAdapter):
     title = "St. Nicks Alliance"
     url = INDEX
     pages = [INDEX]
-    every_hours = 12
+    every_hours = 4
     min_listings = 1
 
     def fetch(self) -> Result:

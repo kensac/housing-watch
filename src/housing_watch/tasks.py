@@ -19,18 +19,20 @@ import os
 import threading
 import time
 import traceback
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from procrastinate import App, PsycopgConnector, RetryDecision
 from procrastinate.exceptions import AlreadyEnqueued
 from procrastinate.retry import BaseRetryStrategy
-from sqlalchemy import Engine
+from sqlalchemy import Engine, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from . import db, metrics, runner
 from .adapters import load_all
 from .fetch import NeedsByparr
+from .orm import FleetWorkerRow
 
 log = logging.getLogger("housing_watch")
 
@@ -249,5 +251,33 @@ async def cleanup(context, timestamp: int) -> str:
     return "ok"
 
 
+HEARTBEAT = 30  # seconds between fleet_workers updates
+
+
+def beat(eng: Engine, name: str, concurrency: int, worker_queues: list[str], started: datetime) -> None:
+    """Record this worker in fleet_workers (Procrastinate's workers table has no name to show)."""
+    stmt = pg_insert(FleetWorkerRow).values(
+        name=name, queues=worker_queues, concurrency=concurrency, started=started, last_seen=func.now()
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["name"],
+        set_={"queues": stmt.excluded.queues, "concurrency": stmt.excluded.concurrency,
+              "started": stmt.excluded.started, "last_seen": func.now()},
+    )  # fmt: skip
+    with eng.begin() as c:
+        c.execute(stmt)
+
+
+def _heartbeat(name: str, concurrency: int, worker_queues: list[str]) -> None:
+    started = datetime.now(UTC)
+    while True:
+        try:
+            beat(engine(), name, concurrency, worker_queues, started)
+        except Exception as e:  # noqa: BLE001 - the DB being briefly away must not kill the worker
+            log.warning("heartbeat: %s", e)
+        time.sleep(HEARTBEAT)
+
+
 def run_worker(name: str, concurrency: int, worker_queues: list[str]) -> None:
+    threading.Thread(target=_heartbeat, args=(name, concurrency, worker_queues), name="heartbeat", daemon=True).start()
     app.run_worker(name=name, concurrency=concurrency, queues=worker_queues)

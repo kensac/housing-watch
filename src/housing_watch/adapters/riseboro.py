@@ -79,7 +79,7 @@ class RiseBoro(PageAdapter):
     title = "RiseBoro Community Partnership"
     url = URL
     pages = [URL]
-    every_hours = 24
+    every_hours = 4
     min_listings = 1
 
     def fetch(self) -> Result:

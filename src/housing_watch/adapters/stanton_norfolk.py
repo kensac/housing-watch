@@ -211,7 +211,7 @@ class StantonNorfolk(Adapter):
     name = "stanton_norfolk"
     title = "Stanton Norfolk Inc."
     url = HUB
-    every_hours = 12  # open waiting lists, processed in order received
+    every_hours = 4  # open waiting lists, processed in order received
     min_listings = 4  # the hub links five property sites
 
     def _ad(self, url: str) -> str | None:
