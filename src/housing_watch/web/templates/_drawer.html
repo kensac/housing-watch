@@ -38,11 +38,11 @@
       <tbody>
       {% for u in detail.units %}
       <tr class="{{ 'dim' if u.verdict == 'excluded' }}">
-        <td class="nowrap"><span class="tag">{{ u.size }}</span>{% if u.unit_no %} #{{ u.unit_no }}{% endif %}{% if u.set_aside %} <span class="tag warn">{{ u.set_aside }}</span>{% endif %}{% if u.available is false %} <span class="tag">rented</span>{% endif %}</td>
+        <td class="nowrap"><span class="tag">{{ u.size }}</span>{% if u.unit_no %} #{{ u.unit_no }}{% endif %}{% if u.set_aside %} <span class="tag warn">{{ u.set_aside }}</span>{% endif %}{% if u.available is false %} <span class="tag">rented</span>{% endif %}{% if u.chart_year %} <span class="tag{{ ' warn' if 'limits' in u.reason }}" title="The ad's income caps match HUD's {{ u.chart_year }} chart">{{ u.chart_year }} chart</span>{% endif %}</td>
         <td class="num">{{ u.rent | money if u.rent else "—" }}</td>
         <td class="num">{{ (u.ami | string + "%") if u.ami else "—" }}</td>
         <td class="num bands">{% for h, lo, hi in u.bands %}<span class="band{{ ' me' if h == detail.household }}"><b>{{ h }}p</b> {{ lo | money if lo is not none else "?" }}–{{ hi | money if hi is not none else "?" }}</span>{% else %}<span class="muted">no table</span>{% endfor %}</td>
-        <td>{{ m.verdict(u.verdict) }}{% if u.verdict != "eligible" %}<span class="why">{{ u.reason }}</span>{% endif %}</td>
+        <td>{{ m.verdict(u.verdict) }}{% if u.verdict != "eligible" or "limits" in u.reason %}<span class="why">{{ u.reason }}</span>{% endif %}</td>
       </tr>
       {% endfor %}
       </tbody>

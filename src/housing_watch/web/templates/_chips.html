@@ -1,0 +1,9 @@
+{%- set tgt = "#results" if page == "listings" else "#ev-results" -%}
+<div id="chips" class="chips"{% if hx %} hx-swap-oob="true"{% endif %}>
+  {% for c in st.filters %}
+  <span class="chip"><button type="button" class="chip-body" data-edit="{{ loop.index0 }}" data-field="{{ c.field.name }}" title="Edit filter">{{ c.label() }}</button><a class="chip-x" href="{{ drop(loop.index0) }}" hx-get="{{ drop(loop.index0) }}" hx-target="{{ tgt }}" hx-push-url="true" aria-label="Remove filter">×</a></span>
+  {% endfor %}
+  {% if hidden_gone %}<span class="chip quiet" title="Add a “Removed” filter to see listings their source no longer lists">removed hidden</span>{% endif %}
+  {% if st.filters or st.q %}<a class="clear" href="{{ clear_url }}" hx-get="{{ clear_url }}" hx-target="{{ tgt }}" hx-push-url="true">Clear all</a>{% endif %}
+  {% for p in problems %}<div class="banner warn" role="alert">{{ p }}</div>{% endfor %}
+</div>

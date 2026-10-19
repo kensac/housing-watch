@@ -3,12 +3,12 @@
 {% block sub %}<p class="sub">{{ "{:,}".format(o.total) }} listings tracked from {{ o.n_sources }} sources · verdicts computed now against the profile</p>{% endblock %}
 {% block content %}
 <section class="kpis">
-  <a class="kpi" href="/listings?verdict=eligible&status=open">
+  <a class="kpi" href="/listings?f=verdict.in.eligible&f=status.in.open">
     <span class="kpi-lbl">Eligible &amp; open now</span>
     <span class="kpi-val {{ 'good' if o.eligible_open }}">{{ o.eligible_open }}</span>
     <span class="kpi-sub">{{ o.eligible_live }} eligible incl. waitlist &amp; upcoming</span>
   </a>
-  <a class="kpi" href="/events?type=new&baseline=0">
+  <a class="kpi" href="/events?f=type.in.new&f=first_run.is.no">
     <span class="kpi-lbl">New in 24h</span>
     <span class="kpi-val">{{ o.new_24h }}</span>
     <span class="kpi-sub">{{ o.new_7d }} in 7d{% if o.baseline_24h %} · +{{ "{:,}".format(o.baseline_24h) }} from first runs{% endif %} · {{ o.changed_24h }} changed</span>
@@ -27,14 +27,14 @@
 
 <div class="grid-2">
   <section class="card">
-    <header class="card-head"><h2>Eligible now</h2><a href="/listings?verdict=eligible">All eligible →</a></header>
+    <header class="card-head"><h2>Eligible now</h2><a href="/listings?f=verdict.in.eligible">All eligible →</a></header>
     {% if o.eligible_now %}
     <div class="table-wrap">
     <table class="tbl">
       <thead><tr><th>Listing</th><th class="num">Rent</th><th class="hide-sm">Status</th><th class="num hide-sm">Changed</th></tr></thead>
       <tbody>
       {% for x in o.eligible_now %}
-      <tr class="click" onclick="location='/listings?verdict=eligible&open={{ x.key | urlencode }}'">
+      <tr class="click" onclick="location='/listings?f=verdict.in.eligible&open={{ x.key | urlencode }}'">
         <td class="title-cell"><span class="t1">{{ x.title }}</span><span class="t2">{{ x.borough or "borough ?" }} · {{ x.sizes | join(", ") }} · {{ x.source }}</span></td>
         <td class="num">{{ m.rent(x.rent_min, x.rent_max) }}</td>
         <td class="hide-sm">{{ m.status(x.status) }}</td>
@@ -75,8 +75,8 @@
       <tbody>
       {% for v, row in o.matrix.items() %}
       <tr><td>{{ m.verdict(v) }}</td>
-        {% for s in statuses[:-1] %}<td class="num">{% if row[s] %}<a href="/listings?verdict={{ v }}&status={{ s }}">{{ "{:,}".format(row[s]) }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>{% endfor %}
-        <td class="num strong"><a href="/listings?verdict={{ v }}">{{ "{:,}".format(row.values() | sum) }}</a></td></tr>
+        {% for s in statuses[:-1] %}<td class="num">{% if row[s] %}<a href="/listings?f=verdict.in.{{ v }}&f=status.in.{{ s }}">{{ "{:,}".format(row[s]) }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>{% endfor %}
+        <td class="num strong"><a href="/listings?f=verdict.in.{{ v }}">{{ "{:,}".format(row.values() | sum) }}</a></td></tr>
       {% endfor %}
       </tbody>
     </table>

@@ -3,42 +3,7 @@
 {% block sub %}<p class="sub">Every opportunity the sources publish, judged against the profile. Click a row for units, bands and history.</p>{% endblock %}
 {% block mainclass %}fit{% endblock %}
 {% block content %}
-<form id="filters" class="filters" action="/listings" method="get"
-      hx-get="/listings" hx-target="#results" hx-push-url="true" hx-indicator="#results"
-      hx-trigger="change, input changed delay:250ms from:#f-q, search from:#f-q, submit">
-  <div class="seg" role="radiogroup" aria-label="Verdict">
-    {% for v, label in [("", "All"), ("eligible", "Eligible"), ("possible", "Possible"), ("excluded", "Excluded")] %}
-    <label class="{{ 'on' if qp.verdict == v }}"><input type="radio" name="verdict" value="{{ v }}" {{ 'checked' if qp.verdict == v }}>{% if v %}<span class="dot v-{{ v }}"></span>{% endif %}{{ label }} <span class="cnt" id="vc-{{ v or 'all' }}">{{ "{:,}".format(res.verdict_counts[v] if v else res.verdict_counts.values() | sum) }}</span></label>
-    {% endfor %}
-  </div>
-  <div class="filter-row">
-    <input type="search" id="f-q" name="q" value="{{ qp.q }}" placeholder="Search title, address, notes…" autocomplete="off" class="grow">
-    <select name="status" aria-label="Status">
-      <option value="">Listed now</option>
-      {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if qp.status == s }}>{{ "removed" if s == "gone" else s }}</option>{% endfor %}
-    </select>
-    <select name="source" aria-label="Source">
-      <option value="">All sources</option>
-      {% for s in res.sources %}<option {{ 'selected' if qp.source == s }}>{{ s }}</option>{% endfor %}
-    </select>
-    <select name="borough" aria-label="Borough">
-      <option value="">All boroughs</option>
-      {% for b in res.boroughs %}<option {{ 'selected' if qp.borough == b }}>{{ b }}</option>{% endfor %}
-    </select>
-    <select name="size" aria-label="Unit size">
-      <option value="">Any size</option>
-      {% for z in ["studio", "sro", "1br", "2br", "3br", "4br", "unknown"] %}<option {{ 'selected' if qp.size == z }}>{{ z }}</option>{% endfor %}
-    </select>
-    <input type="number" name="max_rent" value="{{ qp.max_rent }}" placeholder="Max rent" min="0" step="50" class="w-rent" aria-label="Max rent">
-    <select name="since" aria-label="Changed since">
-      <option value="">Any time</option>
-      {% for v, l in [("24h", "Changed 24h"), ("7d", "Changed 7d"), ("30d", "Changed 30d")] %}<option value="{{ v }}" {{ 'selected' if qp.since == v }}>{{ l }}</option>{% endfor %}
-    </select>
-    <input type="hidden" name="sort" id="f-sort" value="{{ qp.sort }}">
-    <a class="btn ghost" href="/listings">Reset</a>
-    <noscript><button class="btn">Apply</button></noscript>
-  </div>
-</form>
+{% include "_toolbar.html" %}
 <div id="results" class="card flush grow">{% include "_listings_results.html" %}</div>
 {% endblock %}
 {% block drawer %}{% if request.query_params.get("open") %}{% include "_drawer.html" %}{% endif %}{% endblock %}

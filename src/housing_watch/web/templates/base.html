@@ -12,14 +12,10 @@
 <script src="{{ url_for('static', path='app.js') }}" defer></script>
 </head>
 <body>
-<div class="shell">
+<div class="shell" data-page="{{ nav }}"{% if canonical %} data-canonical="{{ canonical }}"{% endif %}>
   <nav class="nav">
     <a class="brand" href="/"><span class="logo"></span>housing-watch</a>
-    <ul>
-      {%- for id, label, href in [("overview", "Overview", "/"), ("listings", "Listings", "/listings"), ("sources", "Sources", "/sources"), ("fleet", "Fleet", "/fleet"), ("events", "Events", "/events")] %}
-      <li><a href="{{ href }}" class="{{ 'on' if nav == id }}">{{ m.icon(id) }}<span>{{ label }}</span></a></li>
-      {%- endfor %}
-    </ul>
+    {% include "_nav.html" %}
     <div class="profile" title="Eligibility profile (HW_* environment)"><span class="lbl">Profile</span>{{ profile_line }}</div>
   </nav>
   <main class="main {% block mainclass %}{% endblock %}">
@@ -34,5 +30,17 @@
   </main>
 </div>
 <div id="drawer">{% block drawer %}{% endblock %}</div>
+<dialog id="save-dialog" class="dialog">
+  <form hx-post="/views" hx-swap="none">
+    <h2>Save view</h2>
+    <p class="muted">Saves this page's filters, search, sort and columns. It appears in the sidebar under {{ nav | capitalize }}.</p>
+    <input type="hidden" name="page" value="{{ nav }}">
+    <label class="field-lbl">Name<input name="name" required maxlength="80" autocomplete="off" placeholder="e.g. Queens studios under $2,500"></label>
+    <label class="check"><input type="checkbox" name="default" value="1"> Open this view by default</label>
+    <p class="dialog-err bad-text" hidden></p>
+    <div class="dialog-foot"><button type="button" class="btn ghost" data-dialog-close>Cancel</button><button class="btn primary">Save view</button></div>
+  </form>
+</dialog>
+<div id="toast" class="toast" hidden></div>
 </body>
 </html>

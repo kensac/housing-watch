@@ -1,11 +1,11 @@
 {%- import "_macros.html" as m -%}
-{% set total = page.type_counts.get(state.type, 0) if state.type else page.type_counts.values() | sum %}
-<div class="results-bar"><span>{% if total %}<strong>{{ "{:,}".format(total) }}</strong> event{{ "s" if total != 1 }}{% else %}No events{% endif %}</span><span class="muted hide-sm">newest first</span></div>
-{% if page.items %}
+{%- if hx %}{% include "_oob.html" %}{% endif -%}
+<div class="results-bar"><span class="total">{% if ev.total %}<strong>{{ "{:,}".format(ev.total) }}</strong> event{{ "s" if ev.total != 1 }}{% else %}No events{% endif %}</span><span class="muted hide-sm">newest first</span></div>
+{% if ev.items %}
 <div class="table-wrap fill">
 <table class="tbl events">
-  <thead><tr><th class="num">When</th><th>Type</th><th>Subject</th><th class="hide-sm">Verdict</th><th class="hide-sm">Source</th><th class="hide-md">Mailed</th></tr></thead>
+  <thead><tr><th class="num">When</th><th>Type</th><th>Subject</th>{% if "verdict" in st.columns %}<th class="hide-sm">Verdict</th>{% endif %}{% if "source" in st.columns %}<th class="hide-sm">Source</th>{% endif %}{% if "mailed" in st.columns %}<th class="hide-md">Mailed</th>{% endif %}</tr></thead>
   <tbody>{% include "_event_rows.html" %}</tbody>
 </table>
 </div>
-{% else %}{{ m.empty("No events match", "Nothing recorded for these filters yet. Clear them, or wait for the next source run.") }}{% endif %}
+{% else %}{{ m.empty("No events match", "Remove a filter chip, or wait for the next source run.") }}{% endif %}

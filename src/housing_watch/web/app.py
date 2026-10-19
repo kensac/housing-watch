@@ -1,28 +1,31 @@
-"""Read-only web UI: FastAPI + Jinja2, HTMX for partial updates (vendored, static/htmx.min.js, 2.0.4).
+"""Web UI: FastAPI + Jinja2, HTMX for partial updates (vendored, static/htmx.min.js, 2.0.4).
 
-Every page is server-rendered. Filter state lives in the query string, so any view is a shareable URL;
-an HTMX request for the same URL gets only the fragment that changed.
+Every page is server-rendered. List state (filters, search, sort, columns) lives in the query string,
+so any view is a shareable URL; an HTMX request for the same URL gets only the fragment that changed.
+The data is read-only from here; the one table the UI writes is its own `saved_views`, through
+same-origin POST/PATCH/DELETE (tailnet-only and single-user, so there is no login).
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.engine import Engine
 
-from .. import digest, queries
+from .. import digest, queries, views
+from .. import filters as F
 from ..criteria import PROFILE, Profile
 
 HERE = Path(__file__).parent
 NY = ZoneInfo("America/New_York")
-LISTING_PARAMS = ("verdict", "status", "source", "borough", "size", "max_rent", "q", "since", "sort")
+RESULTS = {"listings": "results", "events": "ev-results"}  # HX-Target of a list refresh
 
 
 def _ago(dt: datetime | None) -> str:
@@ -59,18 +62,71 @@ def _profile_line(p: Profile) -> str:
     return out + (f" · not {', '.join(sorted(p.excluded_boroughs))}" if p.excluded_boroughs else "")
 
 
+def _state(req: Request, page: str, engine: Engine):
+    """The list state from the URL, or from a saved view: `?view=N` alone opens view N, and a bare page URL
+    opens the page's default view. Returns (state, active view or None, problems to show)."""
+    qp = req.query_params
+    vid = qp.get("view", "")
+    own = [k for k in qp if k not in ("view", "open", "offset", "before")]
+    view = None
+    if vid.isdigit():
+        view = views.get(engine, int(vid))
+    elif not qp:
+        view = views.default(engine, page)
+    if view and not own:
+        return view.state, view, list(view.warnings)
+    conds, errors = [], []
+    for raw in qp.getlist("f"):
+        try:
+            conds.append(F.parse_one(raw, views.FIELDS[page]))
+        except F.FilterError as e:
+            errors.append(str(e))
+    cols = tuple(c for c in qp.get("cols", "").split(",") if c)
+    st = views.State(page, conds, qp.get("q", ""), qp.get("sort", ""), cols)
+    return st, view, errors + (view.warnings if view else [])
+
+
 def create_app(engine: Engine, profile: Profile = PROFILE) -> FastAPI:
     app = FastAPI(title="housing-watch", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
     tpl = Jinja2Templates(directory=HERE / "templates")
     tpl.env.filters.update(ago=_ago, ny=_ny, money=_money, duration=_duration)
-    tpl.env.globals.update(profile_line=_profile_line(profile), statuses=queries.STATUSES)
+    tpl.env.globals.update(profile_line=_profile_line(profile), statuses=queries.STATUSES, COLUMNS=views.COLUMNS)
 
     def render(req: Request, name: str, nav: str, partial: str | None = None, **ctx) -> HTMLResponse:
-        """The full page, or just `partial` when HTMX asks for it."""
+        """The full page, or just `partial` when HTMX asks for a fragment of it."""
         h = req.headers
         hx = h.get("HX-Request") == "true" and "HX-Boosted" not in h and "HX-History-Restore-Request" not in h
-        return tpl.TemplateResponse(req, partial if hx and partial else name, {"nav": nav, "hx": hx, **ctx})
+        ctx.setdefault("saved", views.with_counts(engine, profile))
+        frag = bool(hx and partial)  # only a fragment carries out-of-band swaps (chips, view bar, nav)
+        return tpl.TemplateResponse(req, partial if frag else name, {"nav": nav, "hx": frag, **ctx})
+
+    def list_ctx(req: Request, page: str) -> dict:
+        st, view, problems = _state(req, page, engine)
+        # keep the view in the URL; "none" stops a bare URL from reopening the page's default view
+        vparam = view.id if view else ("none" if views.default(engine, page) else "")
+
+        def link(filters=None, sort=None, **extra) -> str:
+            fs = st.filters if filters is None else filters
+            return views.State(page, fs, st.q, sort or st.sort, st.columns).url(view=vparam, **extra)
+
+        def verdict_url(v: str) -> str:
+            fs = [c for c in st.filters if c.field.name != "verdict"]
+            return link(fs + ([F.cond(views.FIELDS[page], "verdict", "in", [v])] if v else []))
+
+        on = [c for c in st.filters if c.field.name == "verdict"]
+        return dict(
+            st=st, view=view, problems=problems, page=page, url=link, verdict_url=verdict_url,
+            modified=bool(view) and st.key() != view.state.key(),
+            drop=lambda i: link([c for j, c in enumerate(st.filters) if j != i]),
+            clear_url=views.State(page, [], "", st.sort, st.columns).url(view="none" if vparam else ""),
+            canonical=link(open=req.query_params.get("open", "")),
+            verdict_on=on[0].raw[0] if len(on) == 1 and on[0].op == "in" and len(on[0].raw) == 1 else "",
+            hidden_gone=page == "listings" and queries.hides_gone(st.filters),
+        )  # fmt: skip
+
+    def wants(req: Request, target: str) -> bool:
+        return req.headers.get("HX-Target") == target
 
     @app.get("/", response_class=HTMLResponse)
     def overview(req: Request):
@@ -79,22 +135,12 @@ def create_app(engine: Engine, profile: Profile = PROFILE) -> FastAPI:
 
     @app.get("/listings", response_class=HTMLResponse)
     def listings(req: Request, offset: int = 0, open: str = ""):
-        qp = {k: req.query_params.get(k, "") for k in LISTING_PARAMS}
-        try:
-            max_rent = float(qp["max_rent"]) if qp["max_rent"] else None
-        except ValueError:
-            max_rent = None
-        f = queries.ListingFilters(**{**qp, "max_rent": max_rent, "sort": qp["sort"] or "verdict"}, offset=offset)
-        res = queries.search_listings(engine, f, profile)
-        state = {k: v for k, v in qp.items() if v}
-
-        def url(**kw) -> str:
-            q = {k: v for k, v in {**state, **kw}.items() if v not in ("", None)}
-            return "/listings" + ("?" + urlencode(q) if q else "")
-
+        c = list_ctx(req, "listings")
+        st = c["st"]
+        res = queries.search_listings(engine, queries.ListingQuery(st.filters, st.q, st.sort, offset), profile)
         detail = queries.listing_detail(engine, open, profile) if open and not offset else None
-        partial = "_listing_rows.html" if offset else "_listings_results.html"  # next batch, or a new list
-        return render(req, "listings.html", "listings", partial, res=res, f=f, qp=qp, url=url, detail=detail)
+        partial = "_listing_rows.html" if offset else ("_listings_results.html" if wants(req, "results") else None)
+        return render(req, "listings.html", "listings", partial, res=res, detail=detail, **c)
 
     @app.get("/listings/drawer", response_class=HTMLResponse)
     def drawer(req: Request, key: str):
@@ -112,18 +158,117 @@ def create_app(engine: Engine, profile: Profile = PROFILE) -> FastAPI:
         return render(req, "fleet.html", "fleet", fl=queries.fleet(engine))
 
     @app.get("/events", response_class=HTMLResponse)
-    def events(req: Request, type: str = "", source: str = "", baseline: str = "1", before: int | None = None):
-        page = queries.events(engine, type, source, baseline=baseline != "0", before=before, p=profile)
-        state = {"type": type, "source": source, "baseline": "" if baseline != "0" else "0"}
-        more = "/events?" + urlencode({k: v for k, v in {**state, "before": page.next_before}.items() if v})
-        srcs = sorted({x.source for x in queries.judged(engine, profile)})
-        partial = "_event_rows.html" if before else "_events_table.html"
-        return render(
-            req, "events.html", "events", partial, page=page, state=state, more=more, sources=srcs, before=before
-        )
+    def events(req: Request, before: int | None = None):
+        c = list_ctx(req, "events")
+        st = c["st"]
+        page = queries.events(engine, st.filters, before=before, p=profile)
+        partial = "_event_rows.html" if before else ("_events_table.html" if wants(req, "ev-results") else None)
+        return render(req, "events.html", "events", partial, ev=page, before=before, **c)
+
+    @app.get("/filters/builder", response_class=HTMLResponse)
+    def builder(req: Request, page: str, field: str = "", edit: int = -1):
+        """The "+ Filter" popover: pick a field, then its operator and value (with counts for enums)."""
+        if page not in views.FIELDS:
+            return PlainTextResponse("unknown page", 404)
+        st, _, _ = _state(req, page, engine)
+        fields = views.FIELDS[page]
+        fld = fields.get(field)
+        current = st.filters[edit] if 0 <= edit < len(st.filters) else None
+        ctx = dict(page=page, fld=fld, current=current, edit=edit if current else -1, OPS=F.OPS, OP_LABEL=F.OP_LABEL)
+        ctx["groups"] = [
+            (g, [f for f in fields.values() if f.group == g]) for g in dict.fromkeys(f.group for f in fields.values())
+        ]
+        if fld:
+            others = [c for i, c in enumerate(st.filters) if i != edit]
+            ctx["enum"] = queries.is_enum(engine, fld, profile)
+            if ctx["enum"]:
+                ctx["counts"] = queries.value_counts(engine, page, fld, others, st.q, profile)
+        return tpl.TemplateResponse(req, "_builder.html", ctx)
+
+    # --- saved views: the UI's own config, written only from same-origin requests ---------------------------
+
+    def same_origin(req: Request) -> bool:
+        src = req.headers.get("origin") or req.headers.get("referer") or ""
+        site = req.headers.get("sec-fetch-site", "same-origin")
+        return bool(src) and urlsplit(src).netloc == req.headers.get("host") and site == "same-origin"
+
+    def done(location: str) -> Response:
+        return Response(status_code=204, headers={"HX-Location": location})
+
+    def back(form, page: str) -> str:
+        b = str(form.get("back") or "")
+        return b if b.startswith("/") and not b.startswith("//") else f"/{page}"
+
+    async def guarded(req: Request):
+        """The form (urlencoded body or query string; htmx sends both shapes) of a same-origin request."""
+        if not same_origin(req):
+            return None, PlainTextResponse("cross-origin request refused", 403)
+        body = (await req.body()).decode()
+        return dict(req.query_params) | dict(parse_qsl(body, keep_blank_values=True)), None
+
+    def form_state(form, page: str) -> views.State:
+        """The state to save, from the page URL the request came from."""
+        req_like = Request({"type": "http", "query_string": urlsplit(back(form, page)).query.encode(), "headers": []})
+        return _state(req_like, page, engine)[0]
+
+    @app.post("/views")
+    async def create_view(req: Request):
+        form, err = await guarded(req)
+        if err:
+            return err
+        page = str(form.get("page"))
+        if page not in views.FIELDS:
+            return PlainTextResponse("unknown page", 400)
+        try:
+            v = views.create(engine, form_state(form, page), str(form.get("name", "")), form.get("default") == "1")
+        except views.ViewError as e:
+            return PlainTextResponse(str(e), 400)
+        return done(v.url())
+
+    @app.patch("/views/{view_id}")
+    async def change_view(req: Request, view_id: int):
+        form, err = await guarded(req)
+        if err:
+            return err
+        v = views.get(engine, view_id)
+        if v is None:
+            return PlainTextResponse("no such view", 404)
+        kw: dict = {}
+        if "name" in form:
+            kw["name"] = str(form["name"])
+        if form.get("save") == "1":
+            kw["state"] = form_state(form, v.page)
+        if "default" in form:
+            kw["is_default"] = form["default"] == "1"
+        if form.get("move") in ("-1", "1"):
+            kw["move"] = int(form["move"])
+        try:
+            v = views.change(engine, view_id, **kw)
+        except views.ViewError as e:
+            return PlainTextResponse(str(e), 400)
+        return done(v.url() if "state" in kw else back(form, v.page))
+
+    @app.post("/views/{view_id}/duplicate")
+    async def duplicate_view(req: Request, view_id: int):
+        _, err = await guarded(req)
+        if err:
+            return err
+        v = views.duplicate(engine, view_id)
+        return done(v.url()) if v else PlainTextResponse("no such view", 404)
+
+    @app.delete("/views/{view_id}")
+    async def delete_view(req: Request, view_id: int):
+        form, err = await guarded(req)
+        if err:
+            return err
+        v = views.get(engine, view_id)
+        if v is None or not views.delete(engine, view_id):
+            return PlainTextResponse("no such view", 404)
+        return done(v.state.url())
 
     @app.exception_handler(Exception)
     async def boom(req: Request, exc: Exception):  # the store is down or a query broke: say so, in the layout
-        return tpl.TemplateResponse(req, "error.html", {"nav": "", "hx": False, "error": exc}, status_code=500)
+        ctx = {"nav": "", "hx": False, "error": exc, "saved": []}
+        return tpl.TemplateResponse(req, "error.html", ctx, status_code=500)
 
     return app

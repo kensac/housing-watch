@@ -3,21 +3,6 @@
 {% block sub %}<p class="sub">Every change the store detected, newest first. Events marked “first run” are a source's starting inventory.</p>{% endblock %}
 {% block mainclass %}fit{% endblock %}
 {% block content %}
-<form id="filters" class="filters" action="/events" method="get" hx-get="/events" hx-target="#ev-results" hx-push-url="true" hx-trigger="change">
-  <div class="filter-row">
-    <select name="type" aria-label="Event type">
-      <option value="">All types</option>
-      {% for t, n in page.type_counts | dictsort %}<option value="{{ t }}" {{ 'selected' if state.type == t }}>{{ t | replace("_", " ") }} ({{ "{:,}".format(n) }})</option>{% endfor %}
-      {% if state.type and state.type not in page.type_counts %}<option selected value="{{ state.type }}">{{ state.type }} (0)</option>{% endif %}
-    </select>
-    <select name="source" aria-label="Source">
-      <option value="">All sources</option>
-      {% for s in sources %}<option {{ 'selected' if state.source == s }}>{{ s }}</option>{% endfor %}
-    </select>
-    <label class="check"><input type="checkbox" name="baseline" value="0" {{ 'checked' if state.baseline == "0" }}> Hide first-run events</label>
-    <a class="btn ghost" href="/events">Reset</a>
-    <noscript><button class="btn">Apply</button></noscript>
-  </div>
-</form>
+{% include "_toolbar.html" %}
 <div id="ev-results" class="card flush grow">{% include "_events_table.html" %}</div>
 {% endblock %}

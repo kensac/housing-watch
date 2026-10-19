@@ -15,7 +15,7 @@
   <tbody>
   {% for s in rows %}
   <tr class="{{ 'row-bad' if s.health == 'failing' }}">
-    <td class="title-cell"><a class="t1" href="/listings?source={{ s.source }}">{{ s.source }}</a><span class="t2">{{ s.title or "" }}{% if s.every_hours %} · every {{ s.every_hours | round(1) | string | replace(".0", "") }}h{% endif %}</span>
+    <td class="title-cell"><a class="t1" href="/listings?f=source.in.{{ s.source }}">{{ s.source }}</a><span class="t2">{{ s.title or "" }}{% if s.every_hours %} · every {{ s.every_hours | round(1) | string | replace(".0", "") }}h{% endif %}</span>
       {% if s.last_error %}<span class="err" title="{{ s.last_error }}">{{ s.last_error }}</span>{% endif %}</td>
     <td>{% if s.health == "failing" %}<span class="pill bad">failing</span>{% elif s.health == "ok" %}<span class="pill ok">ok</span>{% else %}<span class="pill v-excluded">never run</span>{% endif %}</td>
     <td class="num">{% if s.consecutive_failures %}<span class="streak" title="failing since {{ s.failing_since | ny }}">{{ s.consecutive_failures }}×</span>{% else %}<span class="muted">0</span>{% endif %}</td>
@@ -23,7 +23,7 @@
     <td class="num nowrap hide-sm">{{ m.t(s.last_attempt) }}</td>
     <td class="num hide-md">{{ s.last_duration | duration }}</td>
     <td class="num">{{ "{:,}".format(s.listings) }}</td>
-    <td class="num hide-sm">{% if s.eligible %}<a class="good-text" href="/listings?source={{ s.source }}&verdict=eligible">{{ s.eligible }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>
+    <td class="num hide-sm">{% if s.eligible %}<a class="good-text" href="/listings?f=source.in.{{ s.source }}&f=verdict.in.eligible">{{ s.eligible }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>
     <td class="num hide-md">{% if s.possible %}{{ s.possible }}{% else %}<span class="muted">0</span>{% endif %}</td>
     <td class="hide-md">{% for w in s.workers %}<span class="tag">{{ w }}</span>{% else %}<span class="muted">—</span>{% endfor %}</td>
     <td class="num nowrap hide-sm">{% if s.next_due %}<time datetime="{{ s.next_due.isoformat() }}" title="{{ s.next_due | ny }}">{{ s.next_due | ago }}</time>{% else %}<span class="muted">—</span>{% endif %}</td>
