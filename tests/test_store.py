@@ -127,3 +127,19 @@ def test_result_json_roundtrip():
     )
     res.listings[0].units[0].bands = [Band(1, 2, 3)]
     assert Result.from_json(res.to_json()) == res
+
+
+def test_digest_collapses_baseline(pg):
+    from sqlalchemy.orm import Session
+
+    from housing_watch import digest
+    from housing_watch.models import Band, Listing, Unit
+
+    good = Listing(
+        "t", "a", "Good", "u", borough="Queens", units=[Unit("studio", 2400, 130, bands=[Band(1, 82557, 154440)])]
+    )
+    meh = Listing("t", "b", "Meh", "u", borough="Queens")
+    with Session(pg) as s, s.begin():
+        db.record_listings(s, "t", [good, meh], baseline=True)
+    out = digest.send(pg, dry_run=True)
+    assert "Good" in out and "Meh" not in out and "1 first-run" in out

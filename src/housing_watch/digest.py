@@ -69,7 +69,7 @@ def build(s: Session) -> tuple[str, str, str, list[int]] | None:
         "recovered": [],
         "closed": [],
     }
-    counts = {"excluded_new": 0, "watching": 0}
+    counts = {"excluded_new": 0, "watching": 0, "baseline": 0}
     seen_keys: set[str] = set()
     for r in reversed(rows):  # newest event per key wins
         if r["key"] and r["key"] in seen_keys:
@@ -77,6 +77,10 @@ def build(s: Session) -> tuple[str, str, str, list[int]] | None:
         if r["key"]:
             seen_keys.add(r["key"])
         typ = r["type"]
+        base = bool((r["detail"] or {}).get("baseline"))  # a source's first run: only eligible ones are listed
+        if base and typ in ("watching", "page_changed"):
+            counts["baseline"] += 1
+            continue
         if typ == "watching":
             counts["watching"] += 1
             continue
@@ -107,6 +111,9 @@ def build(s: Session) -> tuple[str, str, str, list[int]] | None:
         if typ in ("closed", "gone"):
             if v.verdict != EXCLUDED or lr["status"] != "closed":
                 sections["closed"].append((head, "", []))
+            continue
+        if base and v.verdict != ELIGIBLE:
+            counts["baseline"] += 1
             continue
         if v.verdict == ELIGIBLE:
             sections["eligible"].append((head, "", detail))
@@ -146,7 +153,7 @@ def build(s: Session) -> tuple[str, str, str, list[int]] | None:
         htm += ["</ul>"]
     tail = (
         f"Also: {counts['excluded_new']} new listings filtered out (over income, Bronx, 2BR+, set-aside),"
-        f" {counts['watching']} pages now watched."
+        f" {counts['watching']} pages now watched, {counts['baseline']} first-run listings and pages recorded (eligible ones listed above)."
     )
     plain += [tail]
     htm += [f"<p><small>{html.escape(tail)}</small></p>"]
