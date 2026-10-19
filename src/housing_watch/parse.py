@@ -7,6 +7,8 @@ import re
 
 from bs4 import BeautifulSoup
 
+from . import ami as _ami
+
 _SIZE_PATTERNS = [
     (r"\b(sro|single room)\b", "sro"),
     (r"\bstudio|\b0\s*-?\s*(br|bd|bed|bedroom)s?\b|efficiency", "studio"),
@@ -138,32 +140,8 @@ def table_rows(soup_or_html) -> list[list[str]]:
     return out
 
 
-# HUD 2026 NYC 100% AMI by household size (130% of these = the $154,440 / $176,410 / ... seen on every ad).
-AMI100 = {1: 118_800, 2: 135_700, 3: 152_700, 4: 169_600, 5: 183_200, 6: 196_800, 7: 210_400, 8: 224_000}
-
-
-def ami_max(ami_pct: int | None, household: int) -> int | None:
-    """Income cap for a household size at an AMI %, for ads that print one range across several sizes."""
-    if not ami_pct or household not in AMI100:
-        return None
-    return int(round(AMI100[household] * ami_pct / 100 / 10) * 10)  # HUD rounds to $10
-
-
 def bands_from_row(hh_text: str, income_text: str, ami_pct: int | None):
-    """One ad row -> per-household Bands. A row covering several sizes gets each size's cap from AMI."""
-    from .models import Band
-
-    sizes = household_range(hh_text)
+    """One ad row ('1-3 people', '$95,452 - $198,510') -> per-household Bands (ami.bands does the caps)."""
     lo, hi = money_range(income_text)
-    if not sizes:
-        return []
-    if len(sizes) == 1:
-        return [Band(sizes[0], lo, hi)]
-    if not ami_pct and hi and sizes[-1] in AMI100:
-        # no AMI printed: infer the % from the top size's cap, then derive each size's cap from it
-        ami_pct = round(hi / AMI100[sizes[-1]] * 100, 1)
-    out = []
-    for h in sizes:
-        cap = ami_max(ami_pct, h)
-        out.append(Band(h, lo, hi if h == sizes[-1] else cap))
-    return out
+    sizes = household_range(hh_text)
+    return _ami.bands(sizes, lo, hi, ami_pct)[0] if sizes else []

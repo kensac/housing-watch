@@ -18,7 +18,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from ._page import PageAdapter
 
@@ -142,26 +142,16 @@ def _sizes(text: str) -> list[str]:
     return [_size(text)]
 
 
-def _bands(hh: str, income: str, ami: int | None) -> list[Band]:
-    m = _RANGE.search(income)
-    lo, hi = _num(m.group(1)), _num(m.group(2))
-    # money_range ignores numbers under 4 digits, so a "$0" minimum is passed as a placeholder and restored
-    bands = parse.bands_from_row(hh, f"${max(lo, 1000):,} - ${hi:,}", ami)
-    return [Band(b.household, lo, b.income_max) for b in bands]
-
-
-# HUD 100% AMI for NYC, households 1-4: FY2025 (Spring's screenshots are dated 2025-06) and parse's FY2026.
-_AMI100 = [{1: 113_400, 2: 129_600, 3: 145_800, 4: 162_000}, {h: parse.AMI100[h] for h in (1, 2, 3, 4)}]
+def _bands(hh: str, income: str, a: int | None) -> list[Band]:
+    m, sizes = _RANGE.search(income), parse.household_range(hh)
+    return ami.bands(sizes, _num(m.group(1)), _num(m.group(2)), a)[0] if sizes else []
 
 
 def infer_ami(bands: list[Band]) -> int | None:
-    """AMI % from a per-household cap when the label is unreadable: only an exact HUD multiple of 5 counts."""
+    """AMI % from a per-household cap when none is printed: only an exact HUD cap (any chart year) counts."""
     for b in bands:
-        for table in _AMI100:
-            if b.income_max and b.household in table:
-                pct = b.income_max / table[b.household] * 100
-                if abs(pct - round(pct / 5) * 5) < 0.05:
-                    return int(round(pct / 5) * 5)
+        if b.income_max and (m := ami.match(b.income_max, b.household, sizes=[b.household])):
+            return m[2]
     return None
 
 
@@ -222,6 +212,7 @@ def units_from_tsv(tsv: str) -> list[Unit]:
     for u in units:
         if u.ami is None:
             u.ami = infer_ami(u.bands)
+        u.chart_year = ami.year_of(u.bands, u.ami)
         if any(b.income_max is not None and b.income_min is not None and b.income_min > b.income_max for b in u.bands):
             return []
     return units

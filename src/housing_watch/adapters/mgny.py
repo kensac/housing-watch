@@ -3,8 +3,8 @@
 Two table shapes: per-household rows ("Studio | $3,543 | 2 | 1 | $126,412 | $154,440" followed by
 "2 | $126,412 | $176,410" continuation rows) and one row per size spanning several households
 ("1 Bedroom | $3,358 | 1 | 1-3 people | $118,869 - $198,510", AMI in a "130% AMI Units" header row or an
-AMI column). A spanning row whose top cap is not the 2026 cap for its AMI uses older limits, so its AMI is
-inferred from the cap instead (27-15 Astoria Blvd: 1-3 people up to $189,540 = 2025, 1 person $147,420).
+AMI column). A spanning row's top cap may be on an older HUD chart (27-15 Astoria Blvd: 1-3 people up to
+$189,540 = 2025, 1 person $147,420); ami.bands matches it to the right year.
 MGNY drops posts once leased, so every listing is open; applying is the interest form on each page.
 """
 
@@ -13,7 +13,7 @@ from __future__ import annotations
 import html as _html
 import re
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from . import Adapter
 
@@ -27,25 +27,16 @@ def _rents(cell: str) -> list[float]:
 
 
 def _infer_ami(bands: list[Band]) -> int | None:
-    """130 when the 1-person cap is $154,440, etc. (only exact 2026 caps count)."""
+    """130 when the 1-person cap is $154,440 (or 2025's $147,420), etc.: only exact HUD caps count."""
     for b in bands:
-        for pct in range(30, 205, 5):
-            if b.income_max and parse.ami_max(pct, b.household) == b.income_max:
-                return pct
+        if b.income_max and (m := ami.match(b.income_max, b.household, sizes=[b.household])):
+            return m[2]
     return None
 
 
-def _spanning_bands(hh: str, income: str, ami: int | None) -> list[Band]:
-    sizes = parse.household_range(hh)
-    _, hi = parse.money_range(income)
-    if ami and hi and len(sizes) > 1 and abs((parse.ami_max(ami, sizes[-1]) or 0) - hi) > 50:
-        ami = None  # older year's limits: derive each size's cap from the printed top cap, not the 2026 table
-    return parse.bands_from_row(hh, income, ami)
-
-
-def _split_bands(hh: str, lo: str, hi: str, ami: int | None) -> list[Band]:
+def _split_bands(hh: str, lo: str, hi: str, a: int | None) -> list[Band]:
     """Separate min/max columns; a household cell is normally one size but may be a range."""
-    return _spanning_bands(hh, f"{parse.whole(lo) or ''} - {parse.whole(hi) or ''}", ami)
+    return parse.bands_from_row(hh, f"{parse.whole(lo) or ''} - {parse.whole(hi) or ''}", a)
 
 
 def parse_table(desc: str) -> list[Unit]:
@@ -85,7 +76,7 @@ def parse_table(desc: str) -> list[Unit]:
                 if len(rents) > 1 and parse.household_range(cells[cols["hh"]]):
                     pending_rents = rents[1:]  # one row per unit (Jasper: "$3,300.00 $3,500.00")
             else:
-                bands = _spanning_bands(cells[cols["hh"]], cells[cols["income"]], a)
+                bands = parse.bands_from_row(cells[cols["hh"]], cells[cols["income"]], a)
             cur = Unit(
                 size=parse.size(cells[0]),
                 rent=(rents[0] if pending_rents else min(rents)) if rents else None,
@@ -106,6 +97,7 @@ def parse_table(desc: str) -> list[Unit]:
     for u in units:
         if u.ami is None:
             u.ami = _infer_ami(u.bands)
+    ami.stamp(units)
     return units
 
 

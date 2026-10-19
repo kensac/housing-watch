@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from . import ami
 from .models import Listing, Unit
 
 
@@ -48,20 +49,28 @@ def unit_verdict(u: Unit, p: Profile = PROFILE) -> tuple[str, str]:
             return EXCLUDED, f"needs household of {smallest}+"
         return POSSIBLE, "no band for household size"
     if band is None:
-        # no income table: AMI alone can still rule a unit out (2026 HUD 1-person: 125% = $148,500)
-        if u.ami is not None and u.ami <= 125:
-            return EXCLUDED, f"{u.ami}% AMI caps 1 person below ${p.income:,}"
+        # no income table: AMI alone can still rule a unit out (current chart, the most generous)
+        if (c := ami.cap(u.ami, p.household)) and c < p.income:
+            who = "1 person" if p.household == 1 else f"{p.household} people"
+            return EXCLUDED, f"{u.ami}% AMI caps {who} below ${p.income:,}"
         why = "size unknown" if u.size == "unknown" else "no income table"
         return POSSIBLE, why
     lo, hi = band.income_min, band.income_max
+    old = ""
     if hi is not None and p.income > hi:
-        return EXCLUDED, f"over income (max ${hi:,})"
+        # an ad on an older HUD chart: the same AMI % on the current chart decides
+        cur = u.chart_year and u.chart_year < ami.CURRENT_YEAR and ami.current_cap(hi, p.household, u.chart_year, u.ami)
+        if not cur or p.income > cur:
+            return EXCLUDED, f"over income (max ${hi:,})"
+        old = f"on {ami.CURRENT_YEAR} limits (ad prints {u.chart_year} limits: max ${hi:,})"
     if lo is not None and p.income < lo:
         return EXCLUDED, f"under income (min ${lo:,})"
     if u.size == "unknown":
-        return POSSIBLE, "income fits, size unknown"
+        return POSSIBLE, "income fits" + (f" {old}" if old else "") + ", size unknown"
     if hi is None or lo is None:
-        return POSSIBLE, "income range incomplete"
+        return POSSIBLE, "income range incomplete" + (f", fits {old}" if old else "")
+    if old:
+        return ELIGIBLE, f"eligible {old}"
     return ELIGIBLE, f"${lo:,}-${hi:,} for {p.household}"
 
 

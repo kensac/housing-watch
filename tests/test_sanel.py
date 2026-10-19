@@ -60,8 +60,11 @@ def test_old_year_limits_detected():
     # "130%, 1–2 people, $77,303 – $168,480": $168,480 is the 2025 2-person cap, so 1 person is $147,420
     lst = page("queens__sven-unit-21n-jhmw82")
     (u,) = lst.units
-    assert u.size == "studio" and u.bands == [Band(1, 77303, 147420), Band(2, 77303, 168480)]
-    assert listing_verdict(lst).verdict == "excluded" and "2025 chart" in lst.notes
+    assert u.size == "studio" and u.bands == [Band(1, 77303, 147420), Band(2, 77303, 168480)] and u.chart_year == 2025
+    assert (
+        listing_verdict(lst).units[0][2] == "eligible on 2026 limits (ad prints 2025 limits: max $147,420)"
+        and "2025 chart" in lst.notes
+    )
 
 
 def test_facts_income_single_tier():
@@ -77,7 +80,8 @@ def test_facts_income_without_household_on_2025_chart():
     # Taxace prints no household range: $189,540 is the 2025 3-person cap at 130%
     lst = page("brooklyn__962-bushwick-avenue-unit-2a-1ron8b")
     assert [b.income_max for b in lst.units[0].bands] == [147420, 168480, 189540]
-    assert listing_verdict(lst).reason == "over income (max $147,420)" and "2025 chart" in lst.notes
+    assert lst.units[0].chart_year == 2025 and "2025 chart" in lst.notes
+    assert listing_verdict(lst).units[0][2] == "eligible on 2026 limits (ad prints 2025 limits: max $147,420)"
 
 
 def test_facts_income_range_of_caps():
@@ -208,8 +212,8 @@ def test_pronto_registration_link_and_stamped_caps(monkeypatch):
         "queens__sven-fpyq55", monkeypatch, **{"search": "pronto-search.json", "properties/4934": "pronto-4934.json"}
     )
     top = next(u for u in lst.units if u.bands[-1].income_max == 210600)
-    assert [b.income_max for b in top.bands] == [147420, 168480, 189540, 210600]
-    assert listing_verdict(lst).verdict == "excluded" and "2025 chart" in lst.notes
+    assert [b.income_max for b in top.bands] == [147420, 168480, 189540, 210600] and top.chart_year == 2025
+    assert listing_verdict(lst).verdict == "eligible" and "2025 chart" in lst.notes  # 2026's 1-person 130% fits
 
 
 def test_mitchell_lama_from_hpd(monkeypatch):

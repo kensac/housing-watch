@@ -15,19 +15,19 @@ import json as _json
 import re
 from dataclasses import asdict
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from . import Adapter
 
 API = "https://api.iafford.webaryco.com/v2/projects/mini_lotteries/"
 
 
-def _bands(households: list[dict], ami: int | None) -> list[Band]:
+def _bands(households: list[dict], pct: int | None) -> list[Band]:
     out = []
     for h in households:
         size, lo, hi = int(h["size"]), h.get("income_min"), h.get("income_max")
-        if lo and hi and hi < lo and ami:
-            hi = parse.ami_max(ami, size)  # typo'd cap (22 Chapel St prints $15,440 for $154,440)
+        if lo and hi and hi < lo and pct:
+            hi = ami.cap(pct, size)  # typo'd cap (22 Chapel St prints $15,440 for $154,440)
         out.append(Band(size, int(lo) if lo is not None else None, int(hi) if hi is not None else None))
     return out
 

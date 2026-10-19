@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Listing, Result, Snapshot, Unit
 from . import Adapter
 
@@ -57,13 +57,9 @@ def _slug(t: str) -> str:
 
 def _infer_ami(bands) -> int | None:
     """These ads print no AMI %; the cap of the first household row gives it (154,440 for 1 = 130%)."""
-    for b in bands:
-        if b.income_max and b.household in parse.AMI100:
-            pct = b.income_max / parse.AMI100[b.household] * 100
-            if abs(pct - round(pct / 5) * 5) < 0.3:
-                return int(round(pct / 5) * 5)
-            return None
-    return None
+    b = next((b for b in bands if b.income_max), None)
+    m = b and ami.match(b.income_max, b.household, sizes=[b.household])
+    return m[2] if m else None
 
 
 def _fix_money(t: str) -> str:
@@ -88,6 +84,7 @@ def _units(body: list[str]) -> list[Unit]:
             units[-1].bands += parse.bands_from_row(r.group(1), inc, None)
     for u in units:
         u.ami = _infer_ami(u.bands)
+    ami.stamp(units)
     return units
 
 

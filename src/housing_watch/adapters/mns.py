@@ -3,7 +3,7 @@
 Only `tr.afordable_listing` rows are live (the building filter list above the table names buildings,
 not vacancies). The detail page's "description" states MINIMUM INCOME and MAXIMUM INCOME, often only
 for one household size ("2 person: $77,760"). When no 1-person max is printed, the AMI % is inferred
-from the printed cap and the 1-person cap derived from it (parse.ami_max), as bands_from_row does.
+from the printed cap and the 1-person cap derived from it (ami.bands).
 The borough is the last segment of the detail URL (/details/<id>/rental/<area>/<borough>). The page is
 often empty of units, so it is also returned as a Snapshot; that keeps a zero-vacancy run valid.
 """
@@ -14,7 +14,7 @@ import re
 from dataclasses import asdict
 from urllib.parse import unquote_plus, urljoin
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Snapshot, Unit
 from . import Adapter
 
@@ -60,15 +60,13 @@ def parse_income(desc: str) -> tuple[list[Band], int | None]:
             v = re.search(r"\$([\d,]{4,})", seg)
             if v:  # a bare figure with no household size: assume it applies to a single person
                 caps[1] = parse.whole(v.group(1))
-    ami = parse.ami(desc)
+    pct = parse.ami(desc)
     if caps and 1 not in caps:
         h = min(caps)
-        pct = ami or (round(caps[h] / parse.AMI100[h] * 100, 1) if h in parse.AMI100 else None)
-        if pct:
-            caps[1] = parse.ami_max(pct, 1)
+        caps[1] = ami.bands([1, h], None, caps[h], pct)[0][0].income_max
     if not caps and lo is not None:
-        return [Band(1, lo, None)], ami
-    return [Band(h, lo, caps[h]) for h in sorted(caps)], ami
+        return [Band(1, lo, None)], pct
+    return [Band(h, lo, caps[h]) for h in sorted(caps)], pct
 
 
 def parse_detail(url: str, html: str, row: dict | None = None) -> Listing:
@@ -78,7 +76,7 @@ def parse_detail(url: str, html: str, row: dict | None = None) -> Listing:
     i = flat.find("\ndescription\n")
     j = flat.find("\nsimilar listings", i)
     desc = flat[i + 13 : j if j > i else i + 3000] if i >= 0 else ""
-    bands, ami = parse_income(desc)
+    bands, pct = parse_income(desc)
     lines = flat.splitlines()
     address = row.get("address") or (lines[lines.index("Contact") + 1] if "Contact" in lines else None)
     unit_no = row.get("unit")
@@ -107,7 +105,7 @@ def parse_detail(url: str, html: str, row: dict | None = None) -> Listing:
         url=url,
         address=address,
         borough=borough,
-        units=[Unit(size=size, rent=rent, ami=ami, unit_no=unit_no, bands=bands)],
+        units=[Unit(size=size, rent=rent, ami=pct, unit_no=unit_no, bands=bands, chart_year=ami.year_of(bands, pct))],
         senior_only=bool(re.search(r"\bseniors?\b|62\+|62 (years|and older)", desc, re.I)),
         notes=f"No online application: contact the listing agent {contact or '(see page)'} or MNS {OFFICE}",
     )

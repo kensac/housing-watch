@@ -43,7 +43,6 @@ def test_parse_helpers():
     assert parse.size("1 Bedroom") == "1br" and parse.size("Studio") == "studio" and parse.size("2-Bedroom") == "2br"
     assert parse.money_range("$80,511.- $154,440") == (80511, 154440)
     assert parse.household_range("1-3 people") == [1, 2, 3]
-    assert parse.ami_max(130, 1) == 154440 and parse.ami_max(165, 1) == 196020 and parse.ami_max(125, 1) == 148500
     b = parse.bands_from_row("1-3 people", "$95,452 – $198,510", 130)
     assert b[0] == Band(1, 95452, 154440) and b[-1] == Band(3, 95452, 198510)
     assert parse.borough("Long Island City, NY 11101") == "Queens"

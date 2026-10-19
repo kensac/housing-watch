@@ -78,8 +78,10 @@ def test_header_range_without_table():
     (u,) = lst.units
     assert lst.status == "upcoming" and lst.borough == "Queens"
     assert (u.size, u.rent) == ("unknown", 2722) and bands(u)[0] == (1, 99738, 147420)
-    assert "rent $2,722-$2,823" in lst.notes
-    assert listing_verdict(lst).reason.startswith("over income")
+    assert "rent $2,722-$2,823" in lst.notes and u.chart_year == 2025
+    assert (
+        listing_verdict(lst).reason == "income fits on 2026 limits (ad prints 2025 limits: max $147,420), size unknown"
+    )
 
 
 def test_header_range_with_floor_plan_sizes():

@@ -18,7 +18,7 @@ import re
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from . import Adapter
 
@@ -94,7 +94,7 @@ def _ami(text: str) -> int | None:
     return int(m.group(1) or m.group(2)) if m else None
 
 
-def _bands(text: str, ami: int | None) -> list[Band]:
+def _bands(text: str, pct: int | None) -> list[Band]:
     """Owner free text -> Bands. Per-size caps when listed; a lone min-max range is read as 1 person's."""
     caps: dict[int, int] = {}
     for amt, hh in _PER_HH.findall(text):
@@ -111,7 +111,7 @@ def _bands(text: str, ami: int | None) -> list[Band]:
         return []
     # The range's top is the cap for the largest household it covers, so it bounds 1 person's cap from
     # above (never wrongly excludes); with an AMI % the 1-person cap can be computed exactly.
-    cap1 = parse.ami_max(ami, 1)
+    cap1 = ami.cap(pct, 1)
     if hi is not None and cap1 is not None:
         hi = min(hi, cap1)
     return [Band(1, lo, hi)]

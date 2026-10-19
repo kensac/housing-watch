@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Listing, Result, Unit
 from . import Adapter
 
@@ -74,9 +74,10 @@ def _sizes(label: str) -> list[str]:
 
 def _derive_ami(hh: list[int], hi: int | None, printed: list[int]) -> int | None:
     top = hh[-1] if hh else None
-    if not hi or top not in parse.AMI100:
+    if not hi or top not in ami.AMI100:
         return min(printed) if len(set(printed)) == 1 else None
-    pct = hi / parse.AMI100[top] * 100
+    m = ami.match(hi, top, sizes=[top])
+    pct = m[2] if m else hi / ami.AMI100[top] * 100
     near = min(printed, key=lambda p: abs(p - pct), default=None)
     return near if near is not None and abs(near - pct) <= 7 else round(pct)
 

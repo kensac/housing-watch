@@ -21,8 +21,8 @@ def test_detail_bands_and_borough():
     assert (lst.ext_id, lst.borough, lst.title) == ("240428", "Bronx", "1730 Harrison AVE #4N")
     (u,) = lst.units
     assert (u.size, u.rent, u.unit_no) == ("1br", 2653.0, "4N")
-    # only the 2-person max is printed; the 1-person cap is derived (lower), never copied
-    assert [(b.household, b.income_min, b.income_max) for b in u.bands] == [(1, 35000, 68070), (2, 35000, 77760)]
+    # only the 2-person max is printed ($77,760 = 60% on the 2025 chart); the 1-person cap is derived from it
+    assert [(b.household, b.income_min, b.income_max) for b in u.bands] == [(1, 35000, 68040), (2, 35000, 77760)]
     assert "Vladimir Baron 347-381-0549" in lst.notes and "718-222-0211" in lst.notes
     assert listing_verdict(lst).verdict == "excluded"
 

@@ -17,7 +17,7 @@ import subprocess
 import tempfile
 from urllib.parse import urljoin
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Snapshot, Unit
 from ._page import COMMON_IGNORE, DOC_RE, PageAdapter
 
@@ -44,18 +44,11 @@ def _set_aside(line: str) -> str | None:
     return "/".join(hits) or None
 
 
-# HUD 100% AMI for NYC, households 1-4: FY2025 and parse's FY2026 (widgets mix both years).
-_AMI100 = [{1: 113_400, 2: 129_600, 3: 145_800, 4: 162_000}, {h: parse.AMI100[h] for h in (1, 2, 3, 4)}]
-
-
 def infer_ami(bands: list[Band]) -> int | None:
-    """AMI % from a per-household cap when none is printed: only an exact HUD multiple of 5 counts."""
+    """AMI % from a per-household cap when none is printed: only an exact HUD cap (any chart year) counts."""
     for b in bands:
-        for table in _AMI100:
-            if b.income_max and b.household in table:
-                pct = b.income_max / table[b.household] * 100
-                if abs(pct - round(pct / 5) * 5) < 0.05:
-                    return int(round(pct / 5) * 5)
+        if b.income_max and (m := ami.match(b.income_max, b.household, sizes=[b.household])):
+            return m[2]
     return None
 
 
@@ -63,7 +56,7 @@ def units_from_lines(lines: list[str]) -> list[Unit]:
     """Token-stream reader for one building's table text (HTML text lines or OCR lines)."""
     units: list[Unit] = []
     cur: Unit | None = None
-    ami: int | None = None
+    pct: int | None = None
     default_size, default_min = "unknown", None
     want_min = False
     hh: tuple[str, list[int]] | None = None  # household text, money values seen since
@@ -73,9 +66,8 @@ def units_from_lines(lines: list[str]) -> list[Unit]:
         if hh and cur is not None and hh[1]:
             vals = hh[1]
             lo, hi = (vals[0], vals[1]) if len(vals) >= 2 else (default_min, vals[0])
-            # a placeholder minimum keeps money_range from reading the max as the min; lo is restored after
-            bands = [Band(b.household, lo, b.income_max) for b in parse.bands_from_row(hh[0], f"$1,000 - ${hi:,}", ami)]
-            cur.bands += bands
+            if sizes := parse.household_range(hh[0]):
+                cur.bands += ami.bands(sizes, lo, hi, pct)[0]
         hh = None
 
     for i, line in enumerate(lines):
@@ -92,12 +84,12 @@ def units_from_lines(lines: list[str]) -> list[Unit]:
             val = m.group(kind)
             if kind == "ami":
                 close_hh()
-                ami = int(val)
+                pct = int(val)
                 if cur is not None and cur.ami is None and not cur.bands:
-                    cur.ami = ami
+                    cur.ami = pct
             elif kind == "size":
                 close_hh()
-                cur = Unit(size=parse.size(re.sub(r"bdrm", "bedroom", val, flags=re.I)), ami=ami)
+                cur = Unit(size=parse.size(re.sub(r"bdrm", "bedroom", val, flags=re.I)), ami=pct)
                 cur.set_aside = _set_aside(line)
                 units.append(cur)
             elif kind == "minimum":
@@ -105,7 +97,7 @@ def units_from_lines(lines: list[str]) -> list[Unit]:
             elif kind == "hh":
                 close_hh()
                 if cur is None and units == [] and default_size != "unknown":
-                    cur = Unit(size=default_size, ami=ami)
+                    cur = Unit(size=default_size, ami=pct)
                     units.append(cur)
                 hh = (val, [])
             elif kind == "range":
@@ -125,13 +117,14 @@ def units_from_lines(lines: list[str]) -> list[Unit]:
                     if cur is None:
                         if not re.search(r"rent", line + " " + prev, re.I):
                             continue
-                        cur = Unit(size=default_size, ami=ami)
+                        cur = Unit(size=default_size, ami=pct)
                         units.append(cur)
                     cur.rent = v
     close_hh()
     for u in units:
         if u.ami is None:
             u.ami = infer_ami(u.bands)
+    ami.stamp(units)
     return units
 
 

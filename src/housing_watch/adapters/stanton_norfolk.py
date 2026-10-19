@@ -20,7 +20,7 @@ import re
 import time
 from urllib.parse import urljoin, urlparse
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from . import Adapter
 
@@ -87,7 +87,7 @@ def stale_limits(units: list[Unit]) -> bool:
     """True when an ad's 1-person cap is below today's 1-person limit at its own AMI (old HUD year)."""
     for u in units:
         b1 = next((b for b in u.bands if b.household == 1), None)
-        cur = parse.ami_max(u.ami, 1)
+        cur = ami.cap(u.ami, 1)
         if b1 and b1.income_max and cur and b1.income_max < cur - 50:
             return True
     return False
@@ -154,7 +154,7 @@ def parse_site(base: str, home: str, floorplans: str | None, ad_text: str | None
                     " shown are today's HUD limits at that AMI, minimums the ad's; confirm with the office"
                 )
                 for u in units:
-                    u.bands = [Band(b.household, b.income_min, parse.ami_max(u.ami, b.household)) for b in u.bands]
+                    u.bands = [Band(b.household, b.income_min, ami.cap(u.ami, b.household)) for b in u.bands]
         except ValueError as e:
             notes.append(f"ad table not parsed ({e})")
     elif ad_url:

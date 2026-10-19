@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Snapshot, Unit
 from . import Adapter
 
@@ -44,13 +44,9 @@ def _card(col) -> dict | None:
 
 
 def _bands(hh: str, lo: int | None, hi: int | None, a: int | None) -> list[Band]:
-    """Per-size bands. The printed max is the top size's cap (bands_from_row logic); min may be absent."""
-    if lo is not None and hi is not None:
-        return parse.bands_from_row(hh, f"${lo:,} - ${hi:,}", a)
+    """Per-size bands. The printed max is the top size's cap (ami.bands); min may be absent."""
     sizes = parse.household_range(hh)
-    if hi is not None and not a and sizes and sizes[-1] in parse.AMI100:
-        a = round(hi / parse.AMI100[sizes[-1]] * 100, 1)
-    return [Band(h, lo, hi if h == sizes[-1] else parse.ami_max(a, h)) for h in sizes]
+    return ami.bands(sizes, lo, hi, a)[0] if sizes else []
 
 
 def parse_page(html: str) -> list[Listing]:

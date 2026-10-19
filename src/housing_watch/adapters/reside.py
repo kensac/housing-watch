@@ -11,21 +11,19 @@ from __future__ import annotations
 import re
 from dataclasses import asdict
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from . import Adapter
 
 SITEMAPS = [f"https://residenewyork.com/wp-sitemap-posts-property-{i}.xml" for i in (1, 2)]
 APPLY = "https://airtable.com/appsseXTOVx59HC0W/pagcVengefPFQvMZC/form"
-PARSER = 2  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
+PARSER = 3  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
 
 
 _W = "one two three four five six seven eight".split()
 _HHW = r"\b([1-8]|" + "|".join(_W) + r")\b[\s-]*(?:persons?|people)"
 _NUM = r"\$?\s*(\d[\d,]*(?:\.\d+)?)"
 _RANGE = re.compile(_NUM + r"\s*\.?\s*[-–—]+\s*" + _NUM)
-# HUD 2025 NYC 100% AMI; older ads print these (130% of 1 person = $147,420), newer ones parse.AMI100's
-_AMI100_2025 = {1: 113_400, 2: 129_600, 3: 145_800, 4: 162_000, 5: 175_000, 6: 188_000, 7: 201_000, 8: 213_900}
 _SIZES = re.compile(
     r"\b((?:studio|one|two|three|four|[0-4])(?:[\s-]*(?:,|&|and|or|/)[\s-]*(?:studio|one|two|three|four|[0-4]))*)"
     r"[\s-]*(?:bed(?:room)?s?|br|bd)\b|(?<!yoga )(?<!fitness )(?<!dance )(?<!art )\bstudios?\b",
@@ -53,44 +51,24 @@ def _hh(text: str | None) -> list[int]:
     return [int(w) if w.isdigit() else _W.index(w.lower()) + 1 for w in found] or parse.household_range(t)
 
 
-def _hh_for(cap: int, ami: int) -> int | None:
-    """The household size whose HUD cap at this AMI % is `cap` (unlabeled 'Maximum Income' lists)."""
-    for t in (parse.AMI100, _AMI100_2025):
-        h = next((h for h, v in t.items() if abs(v * ami / 100 - cap) <= cap * 0.005), None)
-        if h:
-            return h
-    return None
-
-
-def _spread(hhs: list[int], lo: int, hi: int) -> list[Band]:
-    """One range over several household sizes -> per-size caps, from the HUD table and whole AMI % its top cap is."""
-    for h in hhs[::-1]:  # the stated top first; some headers print a smaller household's cap as the top
-        for t in (parse.AMI100, _AMI100_2025):
-            pct = round(hi / t.get(h, 10**9) * 20) * 5
-            if pct >= 30 and abs(t[h] * pct / 100 - hi) <= 60:  # HUD rounds caps to $10-50
-                return [Band(k, lo, hi if k >= h or k not in t else round(t[k] * pct / 1000) * 10) for k in hhs]
-    top = hhs[-1]  # no whole % fits: scale by the 2026 table
-    return [
-        Band(k, lo, hi if k == top else round(hi * parse.AMI100.get(k, 0) / parse.AMI100.get(top, hi) / 10) * 10)
-        for k in hhs
-    ]
-
-
-def _bands(hh_text: str | None, inc: str, ami: int | None, lo_col: str | None = None) -> list[Band]:
-    """One table row (or the page header) -> Bands. lo_col is a separate 'Minimum Income' column."""
+def _bands(hh_text: str | None, inc: str, a: int | None, lo_col: str | None = None) -> tuple[list[Band], int | None]:
+    """One table row (or the page header) -> (Bands, chart year). lo_col is a separate 'Minimum Income' column."""
     lab = re.findall(_HHW + r"\W*?(\d[\d,]{3,})", inc, re.I)  # 'One Person $147,420 Two Person ...'
     if lo_col is not None:
         lo = parse.whole(lo_col)
         caps = [(lo, _n(c)) for c in ([c for _, c in lab] or re.findall(r"\d[\d,]{3,}(?:\.\d+)?", inc)) if _n(c) != lo]
     else:
-        caps = [(_n(a), _n(b)) for a, b in _RANGE.findall(inc)]
+        caps = [(_n(x), _n(y)) for x, y in _RANGE.findall(inc)]
         if len(caps) == 1 and len(_hh(hh_text)) > 1:  # one range over several household sizes
-            return _spread(_hh(hh_text), *caps[0])
+            hhs = _hh(hh_text)  # headers round caps by up to $60, so only the printed households are tried
+            return ami.bands(hhs, *caps[0], a, sizes=hhs[::-1], tol=60)
     hhs = [int(w) if w.isdigit() else _W.index(w.lower()) + 1 for w, _ in lab] or _hh(hh_text)
-    if len(hhs) != len(caps):
-        start = (ami and caps and _hh_for(caps[0][1], ami)) or 1
+    if len(hhs) != len(caps):  # unlabeled 'Maximum Income' list: the first cap names its household
+        m = a and caps and ami.match(caps[0][1], ami=a)
+        start = m[1] if m and m[2] == a else 1
         hhs = list(range(start, start + len(caps)))
-    return [Band(h, lo, hi) for h, (lo, hi) in zip(hhs, caps, strict=True)]
+    bands = [Band(h, lo, hi) for h, (lo, hi) in zip(hhs, caps, strict=True)]
+    return bands, ami.year_of(bands, a)
 
 
 def _table_units(s) -> list[Unit]:
@@ -119,15 +97,18 @@ def _table_units(s) -> list[Unit]:
                 )
                 lo = cells[c_lo] if c_lo is not None else None
                 aside = "disability/senior" if _ASIDE.search(" ".join(cells)) else None
-                bands = _bands(hh, cells[c_inc], a, lo)
-                mine.append(Unit(size=parse.size(cells[0]), rent=rent, ami=a, bands=bands, set_aside=aside))
+                bands, year = _bands(hh, cells[c_inc], a, lo)
+                size = parse.size(cells[0])
+                mine.append(Unit(size=size, rent=rent, ami=a, bands=bands, set_aside=aside, chart_year=year))
             elif mine and 2 <= len(cells) < len(head) and re.search(r"person|people|\d", cells[0], re.I):
                 # rowspan continuation: the trailing columns (household size, income) for the unit above
                 cols = head[len(head) - len(cells) :]
                 hh = next(
                     (c for c, h in zip(cells, cols, strict=True) if re.search(r"household|hh|composition", h)), cells[0]
                 )
-                mine[-1].bands += _bands(hh, cells[-1], mine[-1].ami)
+                bands, year = _bands(hh, cells[-1], mine[-1].ami)
+                mine[-1].bands += bands
+                mine[-1].chart_year = mine[-1].chart_year or year
         units += mine
     return units
 
@@ -201,9 +182,10 @@ def parse_page(url: str, html: str) -> Listing:
     notes = []
     if not units:
         # no table: the header's household/income range is the page's whole eligibility ad (its own checker uses it)
-        bands = _bands(hh, inc, None) if hh else []
+        bands, year = _bands(hh, inc, None) if hh else ([], None)
         if bands or rents:
-            units = [Unit(size=sz, rent=rents[0] if rents else None, bands=list(bands)) for sz in sizes or ["unknown"]]
+            rent = rents[0] if rents else None
+            units = [Unit(size=sz, rent=rent, bands=list(bands), chart_year=year) for sz in sizes or ["unknown"]]
             notes.append("no unit table: header range for the whole building" if bands else "page publishes only rent")
         else:
             notes.append("page publishes no unit sizes, rent or income ('Contact us for price')")
