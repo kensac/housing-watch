@@ -142,4 +142,4 @@ def test_digest_collapses_baseline(pg):
     with Session(pg) as s, s.begin():
         db.record_listings(s, "t", [good, meh], baseline=True)
     out = digest.send(pg, dry_run=True)
-    assert "Good" in out and "Meh" not in out and "1 first-run" in out
+    assert "Good" in out and "Meh" not in out and "First run of 1 source(s) (t): 2 listings" in out

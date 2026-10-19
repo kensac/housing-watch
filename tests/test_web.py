@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from housing_watch.web.app import create_app
-from seed import procrastinate_engine, seed
+from seed import seed, seed_jobs
 
 HX = {"HX-Request": "true"}
 
@@ -22,7 +22,6 @@ def test_pages_render(client):
         ("/listings?open=a%3A1", "Apply by mail"),
         ("/listings?open=missing", "Listing not found"),
         ("/sources", "TimeoutError: boom"),
-        ("/fleet", "set up yet"),
         ("/events", "source failed"),
         ("/events?type=new&source=a&baseline=0", "a 1"),
     ]:
@@ -51,13 +50,10 @@ def test_empty_store(pg):
     assert "Nothing pending" in TestClient(create_app(pg)).get("/").text
 
 
-def test_fleet_page(pg, pg_url):
+def test_fleet_page(pg, monkeypatch):
     seed(pg)
-    eng = procrastinate_engine(pg_url)
-    try:
-        r = TestClient(create_app(eng)).get("/fleet")
-    finally:
-        eng.dispose()
+    seed_jobs(pg)
+    r = TestClient(create_app(pg)).get("/fleet")
     assert r.status_code == 200 and "source_run a" in r.text and "hetzner" in r.text
 
 
@@ -82,3 +78,10 @@ def test_lists_scroll_in_batches(pg):
     assert "<strong>250</strong> events" in ev.text and 'hx-trigger="intersect once"' in ev.text
     older = c.get(ev.text.split('class="more-row" hx-get="')[1].split('"')[0].replace("&amp;", "&"), headers=HX)
     assert older.text.count("<tr>") == 50 and "No older events" in older.text
+
+
+def test_fleet_page_without_queue(pg, monkeypatch):
+    from housing_watch import queries
+
+    monkeypatch.setattr(queries, "JOBS_TABLE", "procrastinate_missing")
+    assert "set up yet" in TestClient(create_app(pg)).get("/fleet").text

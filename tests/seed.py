@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import make_url
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from housing_watch.mapping import apply_listing
@@ -57,26 +56,9 @@ def seed(engine) -> None:
                      ok=False, error="TimeoutError: boom", workers=["hetzner"]))  # fmt: skip
 
 
-def procrastinate_engine(pg_url: str):
-    """An engine whose search_path puts Procrastinate's tables (schema `pq`, applied by its own schema
-    manager) in front of the app's, so the plain engine still sees a database without them."""
-    from procrastinate import SyncPsycopgConnector
-    from procrastinate.schema import SchemaManager
-
-    eng = create_engine(pg_url, connect_args={"options": "-c search_path=pq,public"})
-    with eng.begin() as c:
-        exists = c.execute(text("SELECT to_regclass('pq.procrastinate_jobs')")).scalar()
-        if not exists:
-            c.execute(text("CREATE SCHEMA IF NOT EXISTS pq"))
-    if not exists:
-        url = make_url(pg_url).set(drivername="postgresql").update_query_dict({"options": "-csearch_path=pq"})
-        conn = SyncPsycopgConnector(conninfo=url.render_as_string(hide_password=False))
-        conn.open()
-        try:
-            SchemaManager(conn).apply_schema()
-        finally:
-            conn.close()
-    with eng.begin() as c:
+def seed_jobs(engine) -> None:
+    """A worker and a few jobs in Procrastinate's tables (created by the migrations)."""
+    with engine.begin() as c:
         c.execute(text("TRUNCATE procrastinate_jobs, procrastinate_workers RESTART IDENTITY CASCADE"))
         w = c.execute(text("INSERT INTO procrastinate_workers(last_heartbeat) VALUES (now()) RETURNING id")).scalar()
         jobs = [(1, "succeeded", '{"source": "a"}'), (2, "failed", '{"source": "b"}'), (3, "doing", '{"source": "a"}')]
@@ -90,4 +72,3 @@ def procrastinate_engine(pg_url: str):
                 {"i": jid, "a": args, "s": st, "w": w if st != "todo" else None},
             )
         c.execute(text("INSERT INTO procrastinate_events(job_id, type, at) VALUES (2, 'failed', now())"))
-    return eng

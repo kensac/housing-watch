@@ -536,6 +536,9 @@ class Fleet:
     hosts: list[dict] = field(default_factory=list)  # from runs.workers: name, last_run, runs/fails 24h
 
 
+JOBS_TABLE = "procrastinate_jobs"  # absent until migrations (or a worker) create Procrastinate's schema
+
+
 def fleet(engine: Engine) -> Fleet:
     with engine.connect() as c:
         hosts = [
@@ -550,7 +553,7 @@ def fleet(engine: Engine) -> Fleet:
                 )
             )
         ]
-        if c.execute(text("SELECT to_regclass('procrastinate_jobs')")).scalar() is None:
+        if c.execute(text("SELECT to_regclass(:t)"), {"t": JOBS_TABLE}).scalar() is None:
             return Fleet(False, hosts=hosts)
         t = now()
         workers = []

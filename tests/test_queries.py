@@ -1,7 +1,7 @@
 import pytest
 
 from housing_watch import queries as Q
-from seed import procrastinate_engine, seed
+from seed import seed, seed_jobs
 
 
 @pytest.fixture
@@ -91,17 +91,15 @@ def test_events(db):
     assert {e.source for e in Q.events(db, source="a").items} == {"a"}
 
 
-def test_fleet_without_procrastinate(db):
+def test_fleet_without_procrastinate(db, monkeypatch):
+    monkeypatch.setattr(Q, "JOBS_TABLE", "procrastinate_missing")
     f = Q.fleet(db)
     assert not f.available and {h["name"] for h in f.hosts} == {"oci", "hetzner"}
 
 
-def test_fleet(db, pg_url):
-    eng = procrastinate_engine(pg_url)
-    try:
-        f = Q.fleet(eng)
-    finally:
-        eng.dispose()
+def test_fleet(db):
+    seed_jobs(db)
+    f = Q.fleet(db)
     assert f.available and f.queues["sources"] == {"succeeded": 1, "failed": 1, "doing": 1, "todo": 1}
     (w,) = f.workers  # host: from the newest run among its jobs
     assert w["host"] == "hetzner" and w["doing"] == ["source_run a"] and w["age"] < 60
