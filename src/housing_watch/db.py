@@ -1,9 +1,16 @@
-"""SQLite store and change detection. Pure data: no eligibility logic lives here.
+"""Postgres store and change detection. Pure data: no eligibility logic lives here.
 
 Every listing a source publishes is stored, normalized into listings -> units -> bands, whatever it
-would be judged. Change events (new, changed, closed, gone, reopened, page_changed, source_failed,
-source_recovered) come only from the data. Filtering is business logic applied at read time
-(criteria.py, used by digest.py), so changing the profile re-judges all history without re-scraping.
+would be judged. Change events come only from the data:
+
+  new | changed (detail.before/after) | closed | gone | reopened             listings
+  watching (first sight) | page_changed (detail.added/removed/new_links)    snapshots
+  source_failed (2nd and 10th consecutive failure) | source_recovered       sources
+
+Events recorded by a source's first successful run carry detail.baseline=true: they describe what was
+already there, not what changed, so the digest can collapse them.
+
+Functions take a Session and never commit; callers own the transaction (one per recorded run).
 """
 
 from __future__ import annotations
@@ -11,63 +18,56 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import sqlite3
-import time
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
-from .models import Band, Listing, Snapshot, Unit
+from sqlalchemy import Engine, create_engine, delete, func, select, text
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Session, selectinload
 
-DB_PATH = os.environ.get("HW_DB", "/data/housing-watch.db")
-SCHEMA_VERSION = 1
+from .mapping import apply_listing, listing_from_row
+from .models import Listing, Snapshot
+from .orm import (
+    AdapterCacheRow,
+    ChunkResultRow,
+    EventRow,
+    ListingRow,
+    RunRow,
+    SnapshotRow,
+    SourceStateRow,
+    UnitRow,
+)
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS runs (
-  id INTEGER PRIMARY KEY, source TEXT NOT NULL, started REAL NOT NULL, finished REAL,
-  ok INTEGER, listings INTEGER, snapshots INTEGER, error TEXT
-);
-CREATE INDEX IF NOT EXISTS runs_source ON runs(source, started);
-CREATE TABLE IF NOT EXISTS listings (
-  key TEXT PRIMARY KEY, source TEXT NOT NULL, ext_id TEXT NOT NULL, title TEXT, url TEXT,
-  address TEXT, borough TEXT, status TEXT, kind TEXT, deadline TEXT, senior_only INTEGER NOT NULL DEFAULT 0,
-  notes TEXT, fingerprint TEXT NOT NULL,
-  first_seen REAL NOT NULL, last_seen REAL NOT NULL, last_changed REAL NOT NULL, gone_since REAL
-);
-CREATE INDEX IF NOT EXISTS listings_source ON listings(source);
-CREATE TABLE IF NOT EXISTS units (
-  id INTEGER PRIMARY KEY, listing_key TEXT NOT NULL REFERENCES listings(key) ON DELETE CASCADE,
-  pos INTEGER NOT NULL, size TEXT NOT NULL, rent REAL, ami INTEGER, unit_no TEXT, set_aside TEXT, available INTEGER
-);
-CREATE INDEX IF NOT EXISTS units_listing ON units(listing_key);
-CREATE TABLE IF NOT EXISTS bands (
-  unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
-  household INTEGER NOT NULL, income_min INTEGER, income_max INTEGER
-);
-CREATE INDEX IF NOT EXISTS bands_unit ON bands(unit_id);
-CREATE TABLE IF NOT EXISTS snapshots (
-  key TEXT PRIMARY KEY, source TEXT NOT NULL, url TEXT, digest TEXT, text TEXT, links TEXT,
-  first_seen REAL NOT NULL, last_seen REAL NOT NULL, changed REAL
-);
-CREATE TABLE IF NOT EXISTS events (
-  id INTEGER PRIMARY KEY, at REAL NOT NULL, source TEXT NOT NULL, key TEXT, type TEXT NOT NULL,
-  summary TEXT, detail TEXT, notified REAL
-);
-CREATE INDEX IF NOT EXISTS events_pending ON events(notified);
-CREATE TABLE IF NOT EXISTS adapter_cache (source TEXT PRIMARY KEY, value TEXT NOT NULL, updated REAL);
-CREATE TABLE IF NOT EXISTS source_state (
-  source TEXT PRIMARY KEY, last_ok REAL, last_attempt REAL, failing_since REAL, consecutive_failures INTEGER
-);
-"""
+DATABASE_URL = os.environ.get("HW_DATABASE_URL", "")
+MIGRATE_LOCK = 0x68770001  # pg advisory lock id held while migrating
+DUE_SLACK = timedelta(seconds=60)  # a run finishing a little late still counts as on schedule
 
 
-def connect(path: str = DB_PATH) -> sqlite3.Connection:
-    if path != ":memory:":
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    c = sqlite3.connect(path)
-    c.row_factory = sqlite3.Row
-    c.execute("PRAGMA journal_mode=WAL")
-    c.execute("PRAGMA foreign_keys=ON")
-    c.executescript(SCHEMA)
-    c.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
-    return c
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+def engine(url: str | None = None) -> Engine:
+    url = url or DATABASE_URL
+    if not url:
+        raise RuntimeError("set HW_DATABASE_URL (postgresql+psycopg://user:pass@host:port/db)")
+    return create_engine(url, pool_pre_ping=True)
+
+
+def migrate(eng: Engine) -> None:
+    """alembic upgrade head, under an advisory lock so workers starting together migrate once."""
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config()
+    cfg.set_main_option("script_location", str(Path(__file__).resolve().parents[2] / "alembic"))
+    with eng.begin() as conn:
+        conn.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": MIGRATE_LOCK})
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "head")
+
+
+# ---- change detection ------------------------------------------------------------------------------
 
 
 def _fp(lst: Listing) -> str:
@@ -84,226 +84,296 @@ def _fp(lst: Listing) -> str:
     ).hexdigest()
 
 
-def _event(c, source, key, typ, summary="", detail=None, now=None):
-    c.execute(
-        "INSERT INTO events(at, source, key, type, summary, detail) VALUES (?,?,?,?,?,?)",
-        (now or time.time(), source, key, typ, summary, json.dumps(detail, default=str) if detail else None),
-    )
+def _brief(lst: Listing) -> dict:
+    return {
+        "status": lst.status,
+        "deadline": lst.deadline,
+        "units": [[u.size, u.unit_no, u.rent, u.ami, u.available] for u in lst.units],
+    }
 
 
-def _write_units(c, lst: Listing) -> None:
-    c.execute("DELETE FROM units WHERE listing_key=?", (lst.key(),))
-    for pos, u in enumerate(lst.units):
-        cur = c.execute(
-            "INSERT INTO units(listing_key, pos, size, rent, ami, unit_no, set_aside, available)"
-            " VALUES (?,?,?,?,?,?,?,?)",
-            (
-                lst.key(),
-                pos,
-                u.size,
-                u.rent,
-                u.ami,
-                u.unit_no,
-                u.set_aside,
-                None if u.available is None else int(u.available),
-            ),
+def _event(s: Session, source, key, typ, summary="", detail=None, now=None, baseline=False) -> None:
+    if baseline:
+        detail = {**(detail or {}), "baseline": True}
+    s.add(EventRow(at=now or utcnow(), source=source, key=key, type=typ, summary=summary, detail=detail))
+
+
+def is_baseline(s: Session, source: str) -> bool:
+    """True until the source's first successful run is recorded."""
+    return s.scalar(select(SourceStateRow.last_ok).where(SourceStateRow.source == source)) is None
+
+
+def load_listing(s: Session, key: str) -> Listing | None:
+    r = s.get(ListingRow, key)
+    return listing_from_row(r) if r else None
+
+
+def record_listings(
+    s: Session, source: str, listings: list[Listing], now: datetime | None = None, baseline: bool = False
+) -> int:
+    """Upsert a source's complete listing set; anything it no longer lists is marked gone. Returns events."""
+    now = now or utcnow()
+    rows = {
+        r.key: r
+        for r in s.scalars(
+            select(ListingRow)
+            .where(ListingRow.source == source)
+            .options(selectinload(ListingRow.units).selectinload(UnitRow.bands))
         )
-        c.executemany(
-            "INSERT INTO bands(unit_id, household, income_min, income_max) VALUES (?,?,?,?)",
-            [(cur.lastrowid, b.household, b.income_min, b.income_max) for b in u.bands],
-        )
-
-
-def load_listing(c, key: str) -> Listing | None:
-    r = c.execute("SELECT * FROM listings WHERE key=?", (key,)).fetchone()
-    if r is None:
-        return None
-    units = []
-    for u in c.execute("SELECT * FROM units WHERE listing_key=? ORDER BY pos", (key,)).fetchall():
-        bands = [
-            Band(b["household"], b["income_min"], b["income_max"])
-            for b in c.execute("SELECT * FROM bands WHERE unit_id=? ORDER BY household", (u["id"],))
-        ]
-        units.append(
-            Unit(
-                size=u["size"],
-                rent=u["rent"],
-                ami=u["ami"],
-                unit_no=u["unit_no"],
-                bands=bands,
-                set_aside=u["set_aside"],
-                available=None if u["available"] is None else bool(u["available"]),
-            )
-        )
-    return Listing(
-        source=r["source"],
-        ext_id=r["ext_id"],
-        title=r["title"],
-        url=r["url"],
-        address=r["address"],
-        borough=r["borough"],
-        status=r["status"],
-        kind=r["kind"],
-        units=units,
-        deadline=r["deadline"],
-        senior_only=bool(r["senior_only"]),
-        notes=r["notes"],
-    )
-
-
-def record_listings(c: sqlite3.Connection, source: str, listings: list[Listing], now: float | None = None) -> int:
-    now = now or time.time()
-    seen = set()
+    }
+    seen: set[str] = set()
     n = 0
     for lst in listings:
-        if lst.key() in seen:
+        key = lst.key()
+        if key in seen:
             continue  # an adapter listing one thing twice must not flap
-        seen.add(lst.key())
+        seen.add(key)
         fp = _fp(lst)
-        row = c.execute("SELECT * FROM listings WHERE key=?", (lst.key(),)).fetchone()
-        cols = (
-            lst.title,
-            lst.url,
-            lst.address,
-            lst.borough,
-            lst.status,
-            lst.kind,
-            lst.deadline,
-            int(lst.senior_only),
-            lst.notes,
-            fp,
-        )
+        row = rows.get(key)
         if row is None:
-            c.execute(
-                "INSERT INTO listings(key, source, ext_id, title, url, address, borough, status, kind, deadline,"
-                " senior_only, notes, fingerprint, first_seen, last_seen, last_changed)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (lst.key(), source, lst.ext_id, *cols, now, now, now),
-            )
-            _write_units(c, lst)
-            _event(c, source, lst.key(), "new", lst.title, None, now)
+            row = apply_listing(lst, ListingRow(fingerprint=fp, first_seen=now, last_seen=now, last_changed=now))
+            row.source = source  # the run's source owns the row, as gone detection assumes
+            s.add(row)
+            _event(s, source, key, "new", lst.title, None, now, baseline)
             n += 1
             continue
         typ = None
-        if row["gone_since"] is not None or (row["status"] == "closed" and lst.status != "closed"):
+        if row.gone_since is not None or (row.status == "closed" and lst.status != "closed"):
             typ = "reopened"
-        elif row["fingerprint"] != fp:
-            typ = "closed" if lst.status == "closed" and row["status"] != "closed" else "changed"
-        before = load_listing(c, lst.key()) if typ == "changed" else None
-        c.execute(
-            "UPDATE listings SET title=?, url=?, address=?, borough=?, status=?, kind=?, deadline=?, senior_only=?,"
-            " notes=?, fingerprint=?, last_seen=?, gone_since=NULL"
-            + (", last_changed=?" if typ else "")
-            + " WHERE key=?",
-            (*cols, now, *([now] if typ else []), lst.key()),
-        )
-        if row["fingerprint"] != fp:
-            _write_units(c, lst)
+        elif row.fingerprint != fp:
+            typ = "closed" if lst.status == "closed" and row.status != "closed" else "changed"
+        detail = {"before": _brief(listing_from_row(row)), "after": _brief(lst)} if typ == "changed" else None
+        apply_listing(lst, row, units=row.fingerprint != fp)
+        row.source, row.fingerprint, row.last_seen, row.gone_since = source, fp, now, None
         if typ:
-            detail = {"before": _brief(before)} if before else None
-            _event(c, source, lst.key(), typ, lst.title, detail, now)
+            row.last_changed = now
+            _event(s, source, key, typ, lst.title, detail, now, baseline)
             n += 1
-    for row in c.execute("SELECT key, title FROM listings WHERE source=? AND gone_since IS NULL", (source,)).fetchall():
-        if row["key"] not in seen:
-            c.execute("UPDATE listings SET gone_since=? WHERE key=?", (now, row["key"]))
-            _event(c, source, row["key"], "gone", row["title"], None, now)
+    for key, row in rows.items():
+        if key not in seen and row.gone_since is None:
+            row.gone_since = now
+            _event(s, source, key, "gone", row.title, None, now, baseline)
             n += 1
     return n
 
 
-def _brief(lst: Listing) -> dict:
-    return {"status": lst.status, "units": [[u.size, u.unit_no, u.rent, u.ami] for u in lst.units]}
-
-
-def record_snapshots(c: sqlite3.Connection, source: str, snaps: list[Snapshot], now: float | None = None) -> int:
-    now = now or time.time()
+def record_snapshots(
+    s: Session, source: str, snaps: list[Snapshot], now: datetime | None = None, baseline: bool = False
+) -> int:
+    now = now or utcnow()
     n = 0
-    for s in snaps:
-        dg = hashlib.sha256((s.text + "\n" + "\n".join(sorted(s.links))).encode()).hexdigest()
-        row = c.execute("SELECT * FROM snapshots WHERE key=?", (s.key(),)).fetchone()
+    for sn in snaps:
+        dg = hashlib.sha256((sn.text + "\n" + "\n".join(sorted(sn.links))).encode()).hexdigest()
+        row = s.get(SnapshotRow, sn.key())
         if row is None:
-            c.execute(
-                "INSERT INTO snapshots(key, source, url, digest, text, links, first_seen, last_seen)"
-                " VALUES (?,?,?,?,?,?,?,?)",
-                (s.key(), source, s.url, dg, s.text, json.dumps(sorted(s.links)), now, now),
+            s.add(
+                SnapshotRow(
+                    key=sn.key(),
+                    source=source,
+                    url=sn.url,
+                    digest=dg,
+                    text=sn.text,
+                    links=sorted(sn.links),
+                    first_seen=now,
+                    last_seen=now,
+                )  # fmt: skip
             )
-            _event(c, source, s.key(), "watching", s.url, None, now)
+            _event(s, source, sn.key(), "watching", sn.url, None, now, baseline)
             n += 1
             continue
-        if row["digest"] != dg:
-            old_lines = set((row["text"] or "").splitlines())
-            added = [x for x in s.text.splitlines() if x not in old_lines][:40]
-            new_lines = set(s.text.splitlines())
-            removed = [x for x in (row["text"] or "").splitlines() if x not in new_lines][:20]
-            old_links = set(json.loads(row["links"] or "[]"))
-            new_links = sorted(set(s.links) - old_links)
-            c.execute(
-                "UPDATE snapshots SET digest=?, text=?, links=?, last_seen=?, changed=? WHERE key=?",
-                (dg, s.text, json.dumps(sorted(s.links)), now, now, s.key()),
-            )
-            _event(
-                c,
-                source,
-                s.key(),
-                "page_changed",
-                s.url,
-                {"added": added, "removed": removed, "new_links": new_links},
-                now,
-            )
-            n += 1
-        else:
-            c.execute("UPDATE snapshots SET last_seen=? WHERE key=?", (now, s.key()))
+        row.last_seen = now
+        if row.digest == dg:
+            continue
+        old, new = (row.text or "").splitlines(), sn.text.splitlines()
+        old_set, new_set = set(old), set(new)
+        detail = {
+            "added": [x for x in new if x not in old_set][:40],
+            "removed": [x for x in old if x not in new_set][:20],
+            "new_links": sorted(set(sn.links) - set(row.links or [])),
+        }
+        row.url, row.digest, row.text, row.links, row.changed = sn.url, dg, sn.text, sorted(sn.links), now
+        _event(s, source, sn.key(), "page_changed", sn.url, detail, now, baseline)
+        n += 1
     return n
 
 
-def start_run(c, source) -> int:
-    cur = c.execute("INSERT INTO runs(source, started) VALUES (?,?)", (source, time.time()))
-    return cur.lastrowid
+# ---- runs and source state -------------------------------------------------------------------------
 
 
-def finish_run(c, run_id, source, ok, listings=0, snapshots=0, error=None):
-    now = time.time()
-    c.execute(
-        "UPDATE runs SET finished=?, ok=?, listings=?, snapshots=?, error=? WHERE id=?",
-        (now, int(ok), listings, snapshots, error, run_id),
-    )
-    st = c.execute("SELECT * FROM source_state WHERE source=?", (source,)).fetchone()
+def start_run(s: Session, source: str, job_id: int | None = None, worker: str | None = None) -> int:
+    run = RunRow(source=source, job_id=job_id, started=utcnow(), workers=[worker] if worker else [])
+    s.add(run)
+    s.flush()
+    return run.id
+
+
+def discard_run(s: Session, run_id: int) -> None:
+    """Forget a run that never really happened (it was handed to another queue)."""
+    run = s.get(RunRow, run_id)
+    if run is not None:
+        s.delete(run)
+
+
+def _state(s: Session, source: str) -> SourceStateRow:
+    st = s.get(SourceStateRow, source, with_for_update=True)
+    if st is None:
+        st = SourceStateRow(source=source, consecutive_failures=0)
+        s.add(st)
+    return st
+
+
+def finish_run(
+    s: Session,
+    run_id: int,
+    source: str,
+    ok: bool,
+    *,
+    listings: int = 0,
+    snapshots: int = 0,
+    events: int = 0,
+    error: str | None = None,
+    every_hours: float | None = None,
+    workers: list[str] | None = None,
+) -> None:
+    now = utcnow()
+    run = s.get(RunRow, run_id)
+    run.finished, run.ok, run.listings, run.snapshots, run.events, run.error = (
+        now, ok, listings, snapshots, events, error,
+    )  # fmt: skip
+    if workers is not None:
+        run.workers = sorted(set(workers))
+    st = _state(s, source)
+    st.last_attempt = now
+    if every_hours is not None:
+        st.next_due = now + timedelta(hours=every_hours) - DUE_SLACK
     if ok:
-        if st and st["failing_since"]:
-            _event(c, source, None, "source_recovered", source, None, now)
-        c.execute(
-            "INSERT INTO source_state(source, last_ok, last_attempt, failing_since, consecutive_failures)"
-            " VALUES (?,?,?,NULL,0) ON CONFLICT(source) DO UPDATE SET last_ok=excluded.last_ok,"
-            " last_attempt=excluded.last_attempt, failing_since=NULL, consecutive_failures=0",
-            (source, now, now),
-        )
-    else:
-        fails = (st["consecutive_failures"] if st else 0) + 1
-        since = st["failing_since"] if st and st["failing_since"] else now
-        c.execute(
-            "INSERT INTO source_state(source, last_ok, last_attempt, failing_since, consecutive_failures)"
-            " VALUES (?,NULL,?,?,?) ON CONFLICT(source) DO UPDATE SET last_attempt=excluded.last_attempt,"
-            " failing_since=excluded.failing_since, consecutive_failures=excluded.consecutive_failures",
-            (source, now, since, fails),
-        )
-        if fails in (2, 10):  # one transient failure is noise; report on the 2nd and again on the 10th
-            _event(c, source, None, "source_failed", source, {"error": (error or "")[:500], "fails": fails}, now)
+        if st.failing_since:
+            _event(s, source, None, "source_recovered", source, None, now)
+        st.last_ok, st.failing_since, st.consecutive_failures = now, None, 0
+        return
+    st.consecutive_failures = (st.consecutive_failures or 0) + 1
+    st.failing_since = st.failing_since or now
+    if st.consecutive_failures in (2, 10):  # one transient failure is noise; report on the 2nd and the 10th
+        detail = {"error": (error or "")[:500], "fails": st.consecutive_failures}
+        _event(s, source, None, "source_failed", source, detail, now)
 
 
-def due(c, source: str, every_hours: float, now: float | None = None) -> bool:
-    now = now or time.time()
-    st = c.execute("SELECT last_attempt FROM source_state WHERE source=?", (source,)).fetchone()
-    return st is None or st["last_attempt"] is None or now - st["last_attempt"] >= every_hours * 3600 - 60
+def claim_due(s: Session, every: dict[str, float], now: datetime | None = None) -> list[tuple[str, str | None]]:
+    """Sources whose next_due has passed, as (source, learned queue); each is pushed a full cycle ahead.
+
+    Pushing next_due at claim time means a slow or lost run is not re-enqueued every tick; finish_run
+    sets it again from the real finish time.
+    """
+    now = now or utcnow()
+    known = {st.source: st for st in s.scalars(select(SourceStateRow).with_for_update(skip_locked=True))}
+    out = []
+    for source, hours in sorted(every.items()):
+        st = known.get(source)
+        if st is None:
+            if s.get(SourceStateRow, source) is not None:
+                continue  # locked by a run finishing right now
+            st = SourceStateRow(source=source, consecutive_failures=0)
+            s.add(st)
+        elif st.next_due is not None and st.next_due > now:
+            continue
+        st.next_due = now + timedelta(hours=hours)
+        out.append((source, st.queue))
+    return out
 
 
-def load_cache(c, source: str) -> dict:
-    row = c.execute("SELECT value FROM adapter_cache WHERE source=?", (source,)).fetchone()
-    return json.loads(row["value"]) if row else {}
+def set_queue(s: Session, source: str, queue: str | None) -> None:
+    _state(s, source).queue = queue
 
 
-def save_cache(c, source: str, value: dict) -> None:
-    c.execute(
-        "INSERT INTO adapter_cache(source, value, updated) VALUES (?,?,?)"
-        " ON CONFLICT(source) DO UPDATE SET value=excluded.value, updated=excluded.updated",
-        (source, json.dumps(value, default=str), time.time()),
+# ---- chunked runs ----------------------------------------------------------------------------------
+
+
+def plan_run(s: Session, run_id: int, keys: list[str], cache: dict) -> None:
+    run = s.get(RunRow, run_id)
+    run.chunks, run.plan = len(keys), {"keys": keys, "cache": _jsonable(cache)}
+
+
+def open_plan(s: Session, run_id: int) -> tuple[list[str], dict] | None:
+    """(keys, cache) of an unfinished chunked run, or None when it is finished or gone."""
+    run = s.get(RunRow, run_id)
+    if run is None or run.finished is not None or run.plan is None:
+        return None
+    return run.plan["keys"], run.plan["cache"]
+
+
+def save_chunk(
+    s: Session,
+    run_id: int,
+    key: str,
+    *,
+    ok: bool,
+    result: dict | None = None,
+    cache: dict | None = None,
+    worker: str | None = None,
+    error: str | None = None,
+) -> bool:
+    """Store one chunk's outcome. True when every planned chunk of the run now has one."""
+    run = s.get(RunRow, run_id, with_for_update=True)  # serializes the completion check across workers
+    if run is None or run.finished is not None:
+        return False
+    vals = dict(
+        pos=run.plan["keys"].index(key), ok=ok, result=result, cache=_jsonable(cache), worker=worker, error=error
     )
+    s.execute(
+        insert(ChunkResultRow)
+        .values(run_id=run_id, key=key, **vals)
+        .on_conflict_do_update(index_elements=["run_id", "key"], set_={**vals, "finished": func.now()})
+    )
+    done = s.scalar(select(func.count()).select_from(ChunkResultRow).where(ChunkResultRow.run_id == run_id))
+    return done >= run.chunks
+
+
+def chunk_results(s: Session, run_id: int) -> list[ChunkResultRow]:
+    return list(s.scalars(select(ChunkResultRow).where(ChunkResultRow.run_id == run_id).order_by(ChunkResultRow.pos)))
+
+
+def clear_chunks(s: Session, run_id: int) -> None:
+    s.execute(delete(ChunkResultRow).where(ChunkResultRow.run_id == run_id))
+
+
+def stale_runs(s: Session, older_than: timedelta) -> list[tuple[int, str]]:
+    """Unfinished runs started before now - older_than (their jobs were lost)."""
+    q = select(RunRow.id, RunRow.source).where(RunRow.finished.is_(None), RunRow.started < utcnow() - older_than)
+    return [(r.id, r.source) for r in s.execute(q)]
+
+
+def mergeable_runs(s: Session, older_than: timedelta) -> list[tuple[int, str]]:
+    """Unfinished chunked runs with every chunk in, the last older than older_than (merge never queued)."""
+    q = (
+        select(RunRow.id, RunRow.source)
+        .join(ChunkResultRow, ChunkResultRow.run_id == RunRow.id)
+        .where(RunRow.finished.is_(None), RunRow.chunks.is_not(None))
+        .group_by(RunRow.id)
+        .having(func.count() >= RunRow.chunks, func.max(ChunkResultRow.finished) < utcnow() - older_than)
+    )
+    return [(r.id, r.source) for r in s.execute(q)]
+
+
+# ---- adapter cache ---------------------------------------------------------------------------------
+
+
+def _jsonable(v):
+    return None if v is None else json.loads(json.dumps(v, default=str))
+
+
+def load_cache(s: Session, source: str) -> dict:
+    row = s.get(AdapterCacheRow, source)
+    return dict(row.value) if row else {}
+
+
+def save_cache(s: Session, source: str, value: dict) -> None:
+    value = _jsonable(value)
+    s.execute(
+        insert(AdapterCacheRow)
+        .values(source=source, value=value, updated=func.now())
+        .on_conflict_do_update(index_elements=["source"], set_={"value": value, "updated": func.now()})
+    )
+
+
+def source_states(s: Session) -> dict[str, SourceStateRow]:
+    return {st.source: st for st in s.scalars(select(SourceStateRow))}

@@ -31,7 +31,7 @@ def test_every_agent_link_and_no_nyc_gov_chrome():
     assert "Reclaim HDFC" in text and "Text-Size" not in text and "Register to vote" not in text
 
 
-def test_new_agent_is_a_change():
+def test_new_agent_is_a_change(store):
     text, links = parse_hub(HTML)
     html2 = HTML.replace(
         '<li><a href="https://yourneighborhoodhousing.com/"',
@@ -40,8 +40,8 @@ def test_new_agent_is_a_change():
     )
     text2, links2 = parse_hub(html2)
     assert set(links2) - set(links) == {"https://newagent.example.com/rentals"}
-    c = db.connect(":memory:")
+    c = store
     url = "https://www.nyc.gov/hub"
-    db.record_snapshots(c, "hpd_hub", [Snapshot("hpd_hub", url, url, text, links)], now=1)
-    assert db.record_snapshots(c, "hpd_hub", [Snapshot("hpd_hub", url, url, text, links)], now=2) == 0
-    assert db.record_snapshots(c, "hpd_hub", [Snapshot("hpd_hub", url, url, text2, links2)], now=3) == 1
+    db.record_snapshots(c, "hpd_hub", [Snapshot("hpd_hub", url, url, text, links)])
+    assert db.record_snapshots(c, "hpd_hub", [Snapshot("hpd_hub", url, url, text, links)]) == 0
+    assert db.record_snapshots(c, "hpd_hub", [Snapshot("hpd_hub", url, url, text2, links2)]) == 1

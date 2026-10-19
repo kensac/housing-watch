@@ -3,6 +3,8 @@ infinite_horizons, riverton) and the shared helpers in adapters/_pagekit.py."""
 
 from pathlib import Path
 
+from sqlalchemy import text
+
 from housing_watch import db
 from housing_watch.adapters._pagekit import snapshot, wsimg_images
 from housing_watch.adapters.cgmr import Cgmr
@@ -27,7 +29,7 @@ def test_cgmr_empty_page_keeps_content_and_drops_footer():
     assert all("/:/" not in u and "godaddy.com" not in u for u in s.links)  # resize suffix + footer link gone
 
 
-def test_cgmr_new_listing_is_a_change():
+def test_cgmr_new_listing_is_a_change(store):
     a = Cgmr()
     body = (F / "cgmr/page.html").read_text()
     s1 = snapshot(a, a.url, body, extra_links=wsimg_images(body))
@@ -36,11 +38,12 @@ def test_cgmr_new_listing_is_a_change():
         '<div><p>123 Example Ave, Bronx NY - Studio $1,900 - 80% AMI</p><a href="/flyer.pdf">Flyer</a></div></body>',
     )
     s2 = snapshot(a, a.url, body2, extra_links=wsimg_images(body2))
-    c = db.connect(":memory:")
-    assert db.record_snapshots(c, "cgmr", [s1], now=1) == 1
-    assert db.record_snapshots(c, "cgmr", [s1], now=2) == 0
-    assert db.record_snapshots(c, "cgmr", [s2], now=3) == 1
-    detail = c.execute("SELECT detail FROM events WHERE type='page_changed'").fetchone()["detail"]
+    c = store
+    assert db.record_snapshots(c, "cgmr", [s1]) == 1
+    assert db.record_snapshots(c, "cgmr", [s1]) == 0
+    assert db.record_snapshots(c, "cgmr", [s2]) == 1
+    c.flush()  # textual SQL does not autoflush
+    detail = str(c.scalar(text("SELECT detail FROM events WHERE type='page_changed'")))
     assert "123 Example Ave" in detail and "flyer.pdf" in detail
 
 

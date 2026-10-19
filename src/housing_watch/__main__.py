@@ -1,10 +1,12 @@
 """CLI.
 
-python -m housing_watch run [--source NAME ...] [--force]   run due (or named) adapters once
-python -m housing_watch digest [--dry-run]                  email un-notified events
-python -m housing_watch loop                                run + digest forever (the container's command)
-python -m housing_watch list                                adapters and their state
-python -m housing_watch show NAME                           what one adapter returns, nothing stored
+python -m housing_watch serve                  migrate + worker (+ web when HW_WEB_PORT is set); hetzner's command
+python -m housing_watch worker                 migrate + Procrastinate worker; every other host's command
+python -m housing_watch migrate                alembic upgrade head (advisory-locked)
+python -m housing_watch run --source NAME ...  run sources now, inline, without the queue
+python -m housing_watch digest [--dry-run]     email un-notified events (--dry-run prints, marks nothing)
+python -m housing_watch list                   adapters and their state
+python -m housing_watch show NAME              what one adapter returns, nothing stored
 """
 
 from __future__ import annotations
@@ -14,66 +16,104 @@ import json
 import logging
 import os
 import sys
-import time
+import threading
 from dataclasses import asdict
 
-from . import db, digest, runner
+from . import db, runner
 from .adapters import load_all
 from .criteria import PROFILE, listing_verdict
 
-TICK = int(os.environ.get("HW_TICK_SECONDS", "900"))  # how often the loop checks what is due
-DIGEST_HOURS = [int(h) for h in os.environ.get("HW_DIGEST_HOURS", "8,13,19").split(",")]  # local time
+log = logging.getLogger("housing_watch")
+
+
+def _web(eng) -> None:
+    """The read-only UI in a thread of this process, on HW_WEB_HOST:HW_WEB_PORT."""
+    port = int(os.environ.get("HW_WEB_PORT") or 0)
+    if not port:
+        return
+    try:
+        from .web.app import create_app
+    except ImportError as e:
+        log.warning("web: not available (%s); continuing without it", e)
+        return
+    import uvicorn
+
+    server = uvicorn.Server(uvicorn.Config(create_app(eng), host=os.environ.get("HW_WEB_HOST", "0.0.0.0"), port=port))
+    threading.Thread(target=server.run, name="web", daemon=True).start()
+    log.info("web on :%d", port)
+
+
+def _worker(eng, migrate: bool = True) -> None:
+    from . import metrics, tasks
+
+    if migrate:
+        db.migrate(eng)
+    tasks.set_engine(eng)
+    metrics.serve(tasks.engine)
+    name = os.environ.get("HW_WORKER_NAME") or runner.WORKER
+    concurrency = int(os.environ.get("HW_WORKER_CONCURRENCY", "4"))
+    queues = tasks.queues()
+    log.info("worker %s: queues %s, concurrency %d", name, queues, concurrency)
+    tasks.run_worker(name, concurrency, queues)
 
 
 def main(argv=None) -> int:
     logging.basicConfig(level=os.environ.get("HW_LOG", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
     ap = argparse.ArgumentParser(prog="housing_watch")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("serve")
+    sub.add_parser("worker")
+    sub.add_parser("migrate")
     r = sub.add_parser("run")
-    r.add_argument("--source", nargs="*")
-    r.add_argument("--force", action="store_true")
+    r.add_argument("--source", nargs="+", required=True)
     d = sub.add_parser("digest")
     d.add_argument("--dry-run", action="store_true")
-    sub.add_parser("loop")
     sub.add_parser("list")
     s = sub.add_parser("show")
     s.add_argument("name")
     a = ap.parse_args(argv)
-    if PROFILE.income <= 0:
+    if a.cmd in ("show", "digest", "serve") and PROFILE.income <= 0:
         ap.error("set HW_INCOME (annual household income); see criteria.Profile for the other HW_* vars")
 
     if a.cmd == "show":
-        res = load_all()[a.name]().fetch()
+        res, _ = runner.fetch_all(load_all()[a.name]())
         for lst in res.listings:
             v = listing_verdict(lst)
             print(json.dumps({"verdict": v.verdict, "reason": v.reason, **asdict(lst)}, default=str))
         for snap in res.snapshots:
             print(json.dumps({"snapshot": snap.url, "links": snap.links, "text": snap.text[:500]}))
         return 0
-    c = db.connect()
-    if a.cmd == "list":
+    eng = db.engine()
+    if a.cmd == "migrate":
+        db.migrate(eng)
+    elif a.cmd == "worker":
+        _worker(eng)
+    elif a.cmd == "serve":
+        db.migrate(eng)  # before the web starts reading
+        _web(eng)
+        _worker(eng, migrate=False)
+    elif a.cmd == "list":
+        from sqlalchemy.orm import Session
+
+        with Session(eng) as ses:
+            states = db.source_states(ses)
         for name, cls in sorted(load_all().items()):
-            st = c.execute("SELECT * FROM source_state WHERE source=?", (name,)).fetchone()
-            print(f"{name:28} every {cls.every_hours:>4}h  {dict(st) if st else 'never run'}")
+            st = states.get(name)
+            info = (f"last ok {st.last_ok:%Y-%m-%d %H:%M}" if st and st.last_ok else "never ok") + (
+                f", {st.consecutive_failures} failing" if st and st.consecutive_failures else ""
+            )
+            due = f", due {st.next_due:%Y-%m-%d %H:%M}" if st and st.next_due else ""
+            print(f"{name:28} every {cls.every_hours:>4}h  {info}{due}")
     elif a.cmd == "run":
-        for k, v in runner.run(c, a.source, a.force or bool(a.source)).items():
-            print(f"{k}: {v}")
+        unknown = set(a.source) - set(load_all())
+        if unknown:
+            ap.error(f"unknown source(s): {', '.join(sorted(unknown))}")
+        for name in a.source:
+            print(f"{name}: {runner.run_inline(eng, name)}")
     elif a.cmd == "digest":
-        print(digest.send(c, a.dry_run))
-    elif a.cmd == "loop":
-        last_digest_hour = None
-        while True:
-            runner.run(c)
-            hour = time.localtime().tm_hour
-            slot = (time.strftime("%Y-%m-%d"), hour)
-            urgent = digest.urgent(c)
-            if urgent or (hour in DIGEST_HOURS and slot != last_digest_hour):
-                try:
-                    logging.info("digest: %s", digest.send(c))
-                    last_digest_hour = slot
-                except Exception as e:  # noqa: BLE001 - keep watching; retry next tick
-                    logging.error("digest failed: %s", e)
-            time.sleep(TICK)
+        from . import digest
+
+        print(digest.send(eng, dry_run=a.dry_run))
     return 0
 
 

@@ -34,8 +34,8 @@ def listing_from_row(r: ListingRow) -> Listing:
     )
 
 
-def apply_listing(lst: Listing, r: ListingRow) -> ListingRow:
-    """Copy a Listing's published fields (not timestamps or fingerprint) onto a row, replacing its units."""
+def apply_listing(lst: Listing, r: ListingRow, units: bool = True) -> ListingRow:
+    """Copy a Listing's published fields (not timestamps or fingerprint) onto a row; units=True replaces its units."""
     r.key, r.source, r.ext_id = lst.key(), lst.source, lst.ext_id
     r.title, r.url, r.address, r.borough = lst.title, lst.url, lst.address, lst.borough
     r.status, r.kind, r.deadline, r.senior_only, r.notes = (
@@ -45,6 +45,8 @@ def apply_listing(lst: Listing, r: ListingRow) -> ListingRow:
         lst.senior_only,
         lst.notes,
     )
+    if not units:
+        return r
     r.units = [
         UnitRow(
             pos=i,

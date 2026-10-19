@@ -1,6 +1,16 @@
+from datetime import UTC, datetime
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from housing_watch import db, parse
 from housing_watch.criteria import ELIGIBLE, EXCLUDED, POSSIBLE, listing_verdict, unit_verdict
 from housing_watch.models import Band, Listing, Snapshot, Unit
+from housing_watch.orm import EventRow
+
+
+def T(n: int) -> datetime:
+    return datetime.fromtimestamp(1_800_000_000 + n, UTC)
 
 
 def L(units, **kw):
@@ -40,40 +50,46 @@ def test_parse_helpers():
     assert parse.borough("Brooklyn") == "Brooklyn" and parse.borough("2401 Third Ave, Bronx, NY 10451") == "Bronx"
 
 
-def test_change_detection():
-    c = db.connect(":memory:")
+def test_change_detection(pg):
     good = Unit("studio", 2400, 130, unit_no="2A", bands=[Band(1, 82557, 154440)])
-    assert db.record_listings(c, "t", [L([good])], now=1) == 1
-    assert db.record_listings(c, "t", [L([good])], now=2) == 0  # unchanged
-    good.rent = 2500
-    assert db.record_listings(c, "t", [L([good])], now=3) == 1  # changed
-    assert db.record_listings(c, "t", [], now=4) == 1  # gone
-    assert db.record_listings(c, "t", [L([good])], now=5) == 1  # reopened
-    types = [r["type"] for r in c.execute("SELECT type FROM events ORDER BY id")]
+    with Session(pg) as s, s.begin():
+        assert db.record_listings(s, "t", [L([good])], now=T(1)) == 1
+        assert db.record_listings(s, "t", [L([good])], now=T(2)) == 0  # unchanged
+        good.rent = 2500
+        assert db.record_listings(s, "t", [L([good])], now=T(3)) == 1  # changed
+        assert db.record_listings(s, "t", [], now=T(4)) == 1  # gone
+        assert db.record_listings(s, "t", [L([good])], now=T(5)) == 1  # reopened
+        types = s.scalars(select(EventRow.type).order_by(EventRow.id)).all()
     assert types == ["new", "changed", "gone", "reopened"]
 
 
-def test_snapshot_changes():
-    c = db.connect(":memory:")
-    s = Snapshot("p", "url", "url", "No vacancies", [])
-    assert db.record_snapshots(c, "p", [s], now=1) == 1
-    assert db.record_snapshots(c, "p", [s], now=2) == 0
-    s2 = Snapshot("p", "url", "url", "No vacancies\n123 Main St Unit 4B Studio $2,400", ["https://x/ad.pdf"])
-    assert db.record_snapshots(c, "p", [s2], now=3) == 1
-    ev = c.execute("SELECT * FROM events WHERE type='page_changed'").fetchone()
-    assert "123 Main St" in ev["detail"] and "ad.pdf" in ev["detail"]
+def test_snapshot_changes(pg):
+    sn = Snapshot("p", "url", "url", "No vacancies", [])
+    with Session(pg) as s, s.begin():
+        assert db.record_snapshots(s, "p", [sn], now=T(1)) == 1
+        assert db.record_snapshots(s, "p", [sn], now=T(2)) == 0
+        s2 = Snapshot("p", "url", "url", "No vacancies\n123 Main St Unit 4B Studio $2,400", ["https://x/ad.pdf"])
+        assert db.record_snapshots(s, "p", [s2], now=T(3)) == 1
+        ev = s.scalars(select(EventRow).where(EventRow.type == "page_changed")).one()
+        assert ev.detail["added"] == ["123 Main St Unit 4B Studio $2,400"] and ev.detail["new_links"] == [
+            "https://x/ad.pdf"
+        ]
 
 
-def test_digest_builds():
+def test_digest_builds(pg):
     from housing_watch import digest
 
-    c = db.connect(":memory:")
-    db.record_listings(c, "t", [L([Unit("studio", 2400, 130, bands=[Band(1, 82557, 154440)])], borough="Queens")])
-    subject, plain, _, ids = digest.build(c)
+    with Session(pg) as s, s.begin():
+        db.record_listings(s, "t", [L([Unit("studio", 2400, 130, bands=[Band(1, 82557, 154440)])], borough="Queens")])
+    with Session(pg) as s:
+        subject, plain, _, ids = digest.build(s)
     assert "1 eligible" in subject and "ELIGIBLE" in plain and ids
+    assert digest.urgent(pg)
+    assert "ELIGIBLE" in digest.send(pg, dry_run=True)
+    assert digest.urgent(pg)  # a dry run marks nothing
 
 
-def test_fingerprint_with_missing_rent():
-    c = db.connect(":memory:")
+def test_fingerprint_with_missing_rent(pg):
     lst = L([Unit("studio", 2000.0), Unit("studio", None)], borough="Queens")
-    assert db.record_listings(c, "t", [lst]) == 1
+    with Session(pg) as s, s.begin():
+        assert db.record_listings(s, "t", [lst]) == 1

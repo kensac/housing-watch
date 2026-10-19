@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from sqlalchemy import text
+
 from housing_watch import db
 from housing_watch.adapters.clinton import parse_cards
 from housing_watch.criteria import listing_verdict
@@ -25,7 +27,7 @@ def test_fully_occupied_cards_are_closed_listings():
     assert ls["rialto-west"].borough == "Manhattan" and ls["crossroads-plaza"].borough == "Bronx"
 
 
-def test_card_moving_to_current_vacancies_reopens():
+def test_card_moving_to_current_vacancies_reopens(store):
     before = parse_cards(HTML)
     # move OHM's card from the "no current vacancies" grid into the (empty) vacancies section
     start = HTML.index('<article class="affordable-property-card">')
@@ -39,7 +41,8 @@ def test_card_moving_to_current_vacancies_reopens():
     html2 = (HTML[:start] + HTML[end:]).replace(empty, f'<div class="affordable-property-grid">{card}</div>')
     after = by_id(parse_cards(html2))
     assert after["ohm"].status == "open" and listing_verdict(after["ohm"]).verdict == "possible"
-    c = db.connect(":memory:")
-    db.record_listings(c, "clinton", before, now=1)
-    assert db.record_listings(c, "clinton", list(after.values()), now=2) == 1
-    assert c.execute("SELECT type FROM events ORDER BY id DESC LIMIT 1").fetchone()["type"] == "reopened"
+    c = store
+    db.record_listings(c, "clinton", before)
+    assert db.record_listings(c, "clinton", list(after.values())) == 1
+    c.flush()  # textual SQL does not autoflush
+    assert c.scalar(text("SELECT type FROM events ORDER BY id DESC LIMIT 1")) == "reopened"

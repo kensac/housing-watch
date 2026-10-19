@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 
 @dataclass(frozen=True)
@@ -69,3 +69,22 @@ class Snapshot:
 class Result:
     listings: list[Listing] = field(default_factory=list)
     snapshots: list[Snapshot] = field(default_factory=list)
+
+    def to_json(self) -> dict:
+        """Plain JSON, for passing a chunk's Result between workers through the database."""
+        return asdict(self)
+
+    @classmethod
+    def from_json(cls, d: dict) -> Result:
+        def unit(u: dict) -> Unit:
+            return Unit(**{**u, "bands": [Band(**b) for b in u["bands"]]})
+
+        return cls(
+            listings=[Listing(**{**x, "units": [unit(u) for u in x["units"]]}) for x in d.get("listings", [])],
+            snapshots=[Snapshot(**x) for x in d.get("snapshots", [])],
+        )
+
+    def extend(self, other: Result) -> Result:
+        self.listings += other.listings
+        self.snapshots += other.snapshots
+        return self

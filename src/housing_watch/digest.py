@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import html
-import json
 import os
 import smtplib
-import time
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
+
+from sqlalchemy import Engine, select, update
+from sqlalchemy.orm import Session
 
 from . import db
 from .criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, listing_verdict, unit_verdict
 from .models import Listing
+from .orm import EventRow, ListingRow
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "localhost")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
@@ -35,23 +37,30 @@ def _units(lst: Listing) -> list[str]:
     return out
 
 
-def urgent(c) -> bool:
+def urgent(engine: Engine) -> bool:
     """An open listing became eligible and nobody was told yet: first come, first served, so mail now."""
-    for r in c.execute(
-        "SELECT DISTINCT key FROM events WHERE notified IS NULL AND type IN ('new','reopened','changed')"
-    ).fetchall():
-        lst = db.load_listing(c, r["key"])
-        if lst and lst.status == "open" and listing_verdict(lst).verdict == ELIGIBLE:
-            return True
+    with Session(engine) as s:
+        keys = s.scalars(
+            select(EventRow.key)
+            .where(EventRow.notified.is_(None), EventRow.type.in_(("new", "reopened", "changed")))
+            .distinct()
+        ).all()
+        for key in keys:
+            lst = db.load_listing(s, key)
+            if lst and lst.status == "open" and listing_verdict(lst).verdict == ELIGIBLE:
+                return True
     return False
 
 
-def build(c) -> tuple[str, str, str, list[int]] | None:
-    rows = c.execute("SELECT * FROM events WHERE notified IS NULL ORDER BY at").fetchall()
+def build(s: Session) -> tuple[str, str, str, list[int]] | None:
+    rows = [
+        {"id": e.id, "key": e.key, "type": e.type, "source": e.source, "summary": e.summary, "detail": e.detail}
+        for e in s.scalars(select(EventRow).where(EventRow.notified.is_(None)).order_by(EventRow.at, EventRow.id))
+    ]
     if not rows:
         return None
     ids = [r["id"] for r in rows]
-    listing_rows = {r["key"]: r for r in c.execute("SELECT * FROM listings").fetchall()}
+    listing_rows = {r.key: {"status": r.status} for r in s.scalars(select(ListingRow))}
     sections: dict[str, list[tuple[str, str, list[str]]]] = {
         "eligible": [],
         "possible": [],
@@ -60,7 +69,7 @@ def build(c) -> tuple[str, str, str, list[int]] | None:
         "recovered": [],
         "closed": [],
     }
-    counts = {"excluded_new": 0, "watching": 0}
+    counts = {"excluded_new": 0, "watching": 0, "baseline": 0}
     seen_keys: set[str] = set()
     for r in reversed(rows):  # newest event per key wins
         if r["key"] and r["key"] in seen_keys:
@@ -68,22 +77,26 @@ def build(c) -> tuple[str, str, str, list[int]] | None:
         if r["key"]:
             seen_keys.add(r["key"])
         typ = r["type"]
+        base = bool((r["detail"] or {}).get("baseline"))  # a source's first run: only eligible ones are listed
+        if base and typ in ("watching", "page_changed"):
+            counts["baseline"] += 1
+            continue
         if typ == "watching":
             counts["watching"] += 1
             continue
         if typ == "source_failed":
-            d = json.loads(r["detail"] or "{}")
+            d = r["detail"] or {}
             sections["failed"].append((r["source"], f"{d.get('fails')} failures in a row: {d.get('error')}", []))
             continue
         if typ == "source_recovered":
             sections["recovered"].append((r["source"], "working again", []))
             continue
         if typ == "page_changed":
-            d = json.loads(r["detail"] or "{}")
+            d = r["detail"] or {}
             lines = [f"+ {x}" for x in d.get("added", [])[:15]] + [f"new link: {x}" for x in d.get("new_links", [])]
             sections["pages"].append((r["source"], r["summary"], lines))
             continue
-        lst = db.load_listing(c, r["key"])
+        lst = db.load_listing(s, r["key"])
         lr = listing_rows.get(r["key"])
         if lst is None or lr is None:
             continue
@@ -98,6 +111,9 @@ def build(c) -> tuple[str, str, str, list[int]] | None:
         if typ in ("closed", "gone"):
             if v.verdict != EXCLUDED or lr["status"] != "closed":
                 sections["closed"].append((head, "", []))
+            continue
+        if base and v.verdict != ELIGIBLE:
+            counts["baseline"] += 1
             continue
         if v.verdict == ELIGIBLE:
             sections["eligible"].append((head, "", detail))
@@ -137,15 +153,17 @@ def build(c) -> tuple[str, str, str, list[int]] | None:
         htm += ["</ul>"]
     tail = (
         f"Also: {counts['excluded_new']} new listings filtered out (over income, Bronx, 2BR+, set-aside),"
-        f" {counts['watching']} pages now watched."
+        f" {counts['watching']} pages now watched,"
+        f" {counts['baseline']} first-run listings and pages recorded (eligible ones listed above)."
     )
     plain += [tail]
     htm += [f"<p><small>{html.escape(tail)}</small></p>"]
     return subject, "\n".join(plain), "\n".join(htm), ids
 
 
-def send(c, dry_run: bool = False) -> str:
-    built = build(c)
+def send(engine: Engine, dry_run: bool = False) -> str:
+    with Session(engine) as s:
+        built = build(s)
     if built is None:
         return "no events"
     subject, plain, htm, ids = built
@@ -163,6 +181,6 @@ def send(c, dry_run: bool = False) -> str:
             s.login(os.environ["SMTP_USER"], os.environ["SMTP_PASS"])
             s.send_message(msg)
     if not dry_run:
-        c.executemany("UPDATE events SET notified=? WHERE id=?", [(time.time(), i) for i in ids])
-        c.commit()
+        with Session(engine) as s, s.begin():
+            s.execute(update(EventRow).where(EventRow.id.in_(ids)).values(notified=db.utcnow()))
     return plain if dry_run else (f"sent: {subject}" if subject else "nothing notable; events marked read")

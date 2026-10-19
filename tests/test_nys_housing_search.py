@@ -78,13 +78,13 @@ def test_card_range_kept_when_no_units_table():
     assert u.size == "unknown" and (u.bands[0].income_min, u.bands[0].income_max) == (45000, 281923)
 
 
-def test_closed_record_and_change_detection():
+def test_closed_record_and_change_detection(store):
     r = dict(rec("Amalgamated Houses"))
     rules = RULES[r["Id"]]
-    c = db.connect(":memory:")
-    db.record_listings(c, "nys_housing_search", [nys.to_listing(r, rules)], now=1)
-    assert db.record_listings(c, "nys_housing_search", [nys.to_listing(r, rules)], now=2) == 0
+    c = store
+    db.record_listings(c, "nys_housing_search", [nys.to_listing(r, rules)])
+    assert db.record_listings(c, "nys_housing_search", [nys.to_listing(r, rules)]) == 0
     r["Status"] = "Closed"
     closed = nys.to_listing(r, rules)
     assert closed.status == "closed"
-    assert db.record_listings(c, "nys_housing_search", [closed], now=3) == 1
+    assert db.record_listings(c, "nys_housing_search", [closed]) == 1
