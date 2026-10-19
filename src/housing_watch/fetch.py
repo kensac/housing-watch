@@ -130,10 +130,23 @@ def json(url: str, **kw):
         raise FetchError(f"JSON {url}: {e}") from e
 
 
-def rendered(url: str, wait_ms: int = 4000) -> str:
-    """HTML after JavaScript (and any Cloudflare challenge) ran, via byparr (FlareSolverr API)."""
+def rendered(url: str, wait_ms: int = 4000, expect: str | None = None, tries: int = 3) -> str:
+    """HTML after JavaScript (and any Cloudflare challenge) ran, via byparr (FlareSolverr API).
+
+    expect: text the finished page must contain. byparr sometimes snapshots a page before it has
+    loaded (TF Cornerstone: 25 KB shell instead of 123 KB), so the render is retried until it shows up.
+    """
     if not BYPARR_URL:
         raise NeedsByparr(f"render {url}: BYPARR_URL not set on this worker")
+    body = ""
+    for attempt in range(tries):
+        body = _render(url, wait_ms * (attempt + 1))  # give a slow page longer each time
+        if not expect or expect in body:
+            return body
+    raise FetchError(f"render {url}: {expect!r} missing after {tries} renders ({len(body)} bytes)")
+
+
+def _render(url: str, wait_ms: int) -> str:
     try:
         with _render_lock, _slot(url):  # byparr drives one browser: one render at a time
             r = httpx.post(
