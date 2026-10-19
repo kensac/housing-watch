@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY --from=ghcr.io/astral-sh/uv:0.9.27 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.9.27@sha256:143b40f4ab56a780f43377604702107b5a35f83a4453daf1e4be691358718a6a /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
 ENV UV_PYTHON_PREFERENCE=only-system \
     UV_LINK_MODE=copy
