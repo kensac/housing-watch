@@ -1,8 +1,9 @@
+import json
 from pathlib import Path
 
 import pytest
 
-from housing_watch.adapters.tf_cornerstone import parse_page
+from housing_watch.adapters.tf_cornerstone import parse_api
 from housing_watch.criteria import listing_verdict, unit_verdict
 from housing_watch.models import Band
 
@@ -11,7 +12,7 @@ F = Path(__file__).parent / "fixtures" / "tf_cornerstone"
 
 @pytest.fixture(scope="module")
 def listings():
-    res = parse_page((F / "re-rentals.html").read_text())
+    res = parse_api(json.loads((F / "api.json").read_text()))
     return {lst.address: lst for lst in res.listings}
 
 
@@ -80,12 +81,5 @@ def test_w37_excluded(listings):
 
 
 def test_no_buildings_is_a_snapshot():
-    html = "<html><body><h2>Available Re-Rentals</h2><p>There are no re-rentals available right now.</p></body></html>"
-    res = parse_page(html)
+    res = parse_api({"Data": []})
     assert not res.listings and len(res.snapshots) == 1
-    assert "no re-rentals available" in res.snapshots[0].text
-
-
-def test_unrendered_shell_raises():
-    with pytest.raises(RuntimeError):
-        parse_page("<html><body><div id='root'></div></body></html>")
