@@ -49,7 +49,7 @@ tables), so the same input always gives the same output.
 | `HW_RUN_TIMEOUT_HOURS` | an unfinished run older than this is failed as abandoned (default 6) |
 | `HW_HOST_GAP` | minimum seconds between requests to one host (default 0.5) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | STARTTLS SMTP |
-| `HW_APPLICANT_FILE` | applicant JSON for pre-filling known paper application forms (UI only; schema: `tests/fixtures/applications/applicant.example.json`). No SSN; signatures and dates are left blank |
+| `HW_APPLICANT_FILE` | applicant JSON for pre-filling known paper application forms (UI only; schema: `tests/fixtures/applications/applicant.example.json`). Signs (`signature_image`, else the name in a handwriting font) and dates the applicant's line; never the SSN |
 | `BYPARR_URL` | FlareSolverr-compatible renderer for JS/Cloudflare pages |
 
 ## Running

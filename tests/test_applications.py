@@ -1,7 +1,10 @@
+import base64
 import io
 import json
+import re
 from pathlib import Path
 
+from PIL import Image
 from pypdf import PdfReader
 
 from housing_watch import applications as A
@@ -43,8 +46,7 @@ def test_fill_hc2():
     assert v["Add together the total annual income amounts from 1A and 2A above"] == "150,000"
     assert v["Check Box2"] == "/Yes" and v["Check Box1"] is None  # NYCHA: No
     assert v["undefined_7"] == "/No" and v["undefined_15"] == "/Yes_3" and v["No_4"] == "/On"
-    for never in ("SSNTIN OptionalRow1", "Signature", "Date"):
-        assert not v.get(never)
+    assert not v.get("SSNTIN OptionalRow1") and re.fullmatch(r"\d\d/\d\d/\d{4}", v["Date"]) and not v.get("Date_2")
 
 
 def test_radio_widgets_show_the_choice():
@@ -64,3 +66,19 @@ def test_overrides_and_missing_file(tmp_path):
     assert A.applicant(str(tmp_path / "nope.json")) is None
     (tmp_path / "a.json").write_text(json.dumps(ME))
     assert A.applicant(str(tmp_path / "a.json"))["first"] == "Alex"
+
+
+def _page10_text(pdf: bytes) -> str:
+    return PdfReader(io.BytesIO(pdf)).pages[9].extract_text()
+
+
+def test_signing():
+    signed = A.fill(BLANK, ME)
+    assert "Alex Example" in _page10_text(signed)  # typed in the handwriting font
+    unsigned = A.fill(BLANK, ME | {"sign": False})
+    assert "Alex Example" not in _page10_text(unsigned) and not values(unsigned).get("Date")
+    png = io.BytesIO()
+    Image.new("RGBA", (300, 60), (0, 0, 0, 0)).save(png, "PNG")
+    img = A.fill(BLANK, ME | {"signature_image": "data:image/png;base64," + base64.b64encode(png.getvalue()).decode()})
+    page = PdfReader(io.BytesIO(img)).pages[9]
+    assert "Alex Example" not in page.extract_text() and page.images  # the image, not the typed name

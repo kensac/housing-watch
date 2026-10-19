@@ -16,6 +16,7 @@ dependencies = [
     "jinja2==3.1.6",
     "prometheus-client==0.26.0",
     "pypdf==6.21.1",
+    "reportlab==5.0.1",
 ]
 
 [dependency-groups]
