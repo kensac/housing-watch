@@ -54,3 +54,12 @@ def pg(pg_url):
         )
     yield eng
     eng.dispose()
+
+
+@pytest.fixture
+def store(pg):
+    """A Session in one transaction on the emptied test database, for change-detection tests."""
+    from sqlalchemy.orm import Session
+
+    with Session(pg) as s, s.begin():
+        yield s

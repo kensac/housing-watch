@@ -50,7 +50,7 @@ def test_sizes_status_and_bands():
     assert "over income" in str(listing_verdict(g).units)
 
 
-def test_new_revision_with_a_change_is_detected():
+def test_new_revision_with_a_change_is_detected(store):
     url = "https://www.nyc.gov/assets/hpd/downloads/pdfs/services/ML-waiting-Lists-Status.pdf"
     v1 = TEXT
     # Goodwill Terrace's studio list closes in the next revision
@@ -59,9 +59,9 @@ def test_new_revision_with_a_change_is_detected():
         "Rental      Closed   Open     Closed   None       None",
     )
     assert v2 != v1
-    c = db.connect(":memory:")
-    assert db.record_snapshots(c, "mitchell_lama", [pdf_snapshot("mitchell_lama", url, v1)], now=1) == 1
-    assert db.record_snapshots(c, "mitchell_lama", [pdf_snapshot("mitchell_lama", url, v1)], now=2) == 0
-    assert db.record_snapshots(c, "mitchell_lama", [pdf_snapshot("mitchell_lama", url, v2)], now=3) == 1
-    db.record_listings(c, "mitchell_lama", parse_open_lists(v1, LIMITS), now=1)
-    assert db.record_listings(c, "mitchell_lama", parse_open_lists(v2, LIMITS), now=3) == 1  # Goodwill changed
+    c = store
+    assert db.record_snapshots(c, "mitchell_lama", [pdf_snapshot("mitchell_lama", url, v1)]) == 1
+    assert db.record_snapshots(c, "mitchell_lama", [pdf_snapshot("mitchell_lama", url, v1)]) == 0
+    assert db.record_snapshots(c, "mitchell_lama", [pdf_snapshot("mitchell_lama", url, v2)]) == 1
+    db.record_listings(c, "mitchell_lama", parse_open_lists(v1, LIMITS))
+    assert db.record_listings(c, "mitchell_lama", parse_open_lists(v2, LIMITS)) == 1  # Goodwill changed
