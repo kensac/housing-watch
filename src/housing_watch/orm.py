@@ -131,7 +131,27 @@ class RunRow(Base):
     events: Mapped[int | None] = mapped_column(Integer)
     workers: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)  # who ran its chunks
     error: Mapped[str | None] = mapped_column(Text)
+    chunks: Mapped[int | None] = mapped_column(Integer)  # planned chunk count; None for a single-chunk run
+    plan: Mapped[dict | None] = mapped_column(JSONB)  # {"keys": [...], "cache": {...}} every chunk starts from
     __table_args__ = (Index("runs_source_started", "source", "started"),)
+
+
+class ChunkResultRow(Base):
+    """One finished chunk of a multi-chunk run: Procrastinate keeps no return values, so results land here.
+
+    Deleted once the run is merged.
+    """
+
+    __tablename__ = "chunk_results"
+    run_id: Mapped[int] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), primary_key=True)
+    key: Mapped[str] = mapped_column(Text, primary_key=True)
+    pos: Mapped[int] = mapped_column(Integer)
+    ok: Mapped[bool] = mapped_column(Boolean)
+    result: Mapped[dict | None] = mapped_column(JSONB)  # models.Result.to_json()
+    cache: Mapped[dict | None] = mapped_column(JSONB)  # top-level cache keys the chunk changed
+    worker: Mapped[str | None] = mapped_column(Text)
+    error: Mapped[str | None] = mapped_column(Text)
+    finished: Mapped[datetime] = mapped_column(TS, server_default=func.now())
 
 
 class SourceStateRow(Base):
@@ -142,6 +162,7 @@ class SourceStateRow(Base):
     failing_since: Mapped[datetime | None] = mapped_column(TS)
     consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
     next_due: Mapped[datetime | None] = mapped_column(TS)  # scheduler enqueues when now() >= next_due
+    queue: Mapped[str | None] = mapped_column(Text)  # "byparr" once the source needed fetch.rendered()
 
 
 class AdapterCacheRow(Base):
