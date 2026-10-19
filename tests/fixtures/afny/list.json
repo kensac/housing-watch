@@ -1,0 +1,63 @@
+{
+ "data": {
+  "records": [
+   {
+    "address": "75 Dupont St, Brooklyn, NY 11222",
+    "bedrooms_avg": 1.0,
+    "bedrooms_max": 1,
+    "bedrooms_min": 1,
+    "borough_title": "Brooklyn",
+    "hc_property_id": "2995707",
+    "household_max": 3,
+    "household_min": 1,
+    "id": "2995707",
+    "image": "https://a806-housingconnectapi.nyc.gov/MailTemplates/photos/28452849.png",
+    "latitude": "40.73626629026491",
+    "longitude": "-73.95726501321707",
+    "rent_max": "3661.00",
+    "rent_min": "3661.00",
+    "title": "75 Dupont Street Unit 421 0826",
+    "units": 1
+   },
+   {
+    "address": "153-10 88th Avenue, Jamaica, NY 11432",
+    "bedrooms_avg": 1.2,
+    "bedrooms_max": 2,
+    "bedrooms_min": 1,
+    "borough_title": "Queens",
+    "hc_property_id": "3319305",
+    "household_max": 5,
+    "household_min": 1,
+    "id": "3319305",
+    "image": "https://a806-housingconnectapi.nyc.gov/MailTemplates/photos/22625136.png",
+    "latitude": "40.70252440980011",
+    "longitude": "-73.80177004739026",
+    "rent_max": "2630.20",
+    "rent_min": "1628.59",
+    "title": "The 88 aka 153-10 88th Avenue Apartments - 0326 Multiple Units",
+    "units": 6
+   },
+   {
+    "address": "65 Dupont St, Brooklyn, NY 11222",
+    "bedrooms_avg": 1.0,
+    "bedrooms_max": 2,
+    "bedrooms_min": 1,
+    "borough_title": "Brooklyn",
+    "hc_property_id": "3399348",
+    "household_max": 5,
+    "household_min": 1,
+    "id": "3399348",
+    "image": "https://a806-housingconnectapi.nyc.gov/MailTemplates/photos/30697033.png",
+    "latitude": "40.73588470760883",
+    "longitude": "-73.9579358",
+    "rent_max": "4376.00",
+    "rent_min": "3423.00",
+    "title": "Greenpoint Central Apartments - 65 Dupont Street Units Still Available",
+    "units": 22
+   }
+  ]
+ },
+ "error": 0,
+ "errorCode": 0,
+ "success": 1
+}

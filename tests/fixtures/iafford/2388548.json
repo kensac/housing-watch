@@ -1,0 +1,55 @@
+{
+ "data": {
+  "record": {
+   "address": "22 CHAPEL STREET, BROOKLYN, NY 11201",
+   "ami_grid": {
+    "130": [
+     {
+      "households": [
+       {
+        "income_max": 15440,
+        "income_min": 86930,
+        "size": 1
+       },
+       {
+        "income_max": 176410,
+        "income_min": 86930,
+        "size": 2
+       }
+      ],
+      "monthly_rent": 2370.44,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 693,
+        "monthly_rent": 2370.44,
+        "name": "6F"
+       }
+      ],
+      "unit_size": "Studio"
+     }
+    ]
+   },
+   "borough_title": "Brooklyn",
+   "details": "<p>Experience the charm of urban living in this stunning apartment located at 22 Chapel Street Apartments in Brooklyn. Enjoy spacious interiors, high-end finishes, and an abundance of natural light, making it an ideal sanctuary in the heart of the city.</p><p><br></p><p>Tenants are responsible for electricity including electric stove and heat.</p>",
+   "end_date": "2022-09-16T00:00:00",
+   "featured_photo": "https://a806-housingconnectapi.nyc.gov/MailTemplates/photos/17443820.png",
+   "hc_property_id": "2388548",
+   "housing_connect_property_url": null,
+   "how_to_apply": {},
+   "id": "2388548",
+   "latitude": "40.697148843906",
+   "longitude": "-73.98594660184867",
+   "mail_address": "22 Chapel Street Multiple Units 1026\nC/O IAFFORD NY\n365 FLUSHING AVE SUITE #503\nBROOKLYN NY 11205",
+   "pets_allowed": null,
+   "project_file": "https://iafford.s3.amazonaws.com/projects/7573051--Attachment_G-1_-22_Chapel_Street_Multiple_Units_1026.pdf",
+   "project_file_link": "",
+   "rules": null,
+   "title": "22 Chapel Street Multiple Units 1026",
+   "units_count": 1
+  }
+ },
+ "error": 0,
+ "errorCode": 0,
+ "success": 1
+}

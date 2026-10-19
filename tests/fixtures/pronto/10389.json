@@ -1,0 +1,72 @@
+{
+ "property": {
+  "id": 10389,
+  "apply_listing_id": 576,
+  "name": "Victoria Tower",
+  "address": "230 W 126th St, New York, NY 10027",
+  "state": "NY",
+  "city": "New York",
+  "contact_phone": "+1 (833) 392-2002",
+  "contact_email": "victoria-tower@prontohousing.io",
+  "application_deadline": null,
+  "homeless_preference": false,
+  "pets_allowed": false,
+  "parking_available": false,
+  "pool_available": false,
+  "gym_available": false,
+  "accessibility_features": [],
+  "lat": 40.8097,
+  "lng": -73.9481,
+  "accepts_vouchers": true,
+  "application_link": "https://prontohousing.io/accounts/registration/6813950d-c23a-4293-89b9-358d6df14c86/",
+  "paper_application_url": "",
+  "website_url": "https://victoriatowerresidences.com/",
+  "is_future_development": false,
+  "next_important_date": null,
+  "next_important_event": "",
+  "learn_more_url": "",
+  "is_waitlist": true,
+  "waitlist_only": true,
+  "waitlist_link": "https://prontohousing.io/accounts/registration/6813950d-c23a-4293-89b9-358d6df14c86/",
+  "source": "pronto",
+  "is_partner": false,
+  "owner_name": "Rose",
+  "manager_name": "deanna.riddlespur@prontohousing.com",
+  "type": "property",
+  "available_units": 0,
+  "available_offering_count": 0,
+  "available_offerings": [],
+  "created_at": "2026-10-16T04:09:36.199025Z",
+  "description": "",
+  "disclaimer": "Actual rent varies based on lease terms. The NYC Rent Guidelines Board approved rent increases for rent-stabilized apartments of 0% for one-year leases & two-year leases commencing on or after October 1, 2026, and on or before September 30, 2027. If approved, you will be offered both rent amounts and lease options to choose from. Tenant is responsible for electricity. New York City is committed to the principle of inclusivity in all of its neighborhoods, including supporting New Yorkers to reside in neighborhoods of their choice, regardless of their neighborhood of origin and regardless of the neighborhood into which they want to move.\r\n\r\nNote: This is a general waitlist for this property. As such, the unit information shown here is subject to change and reflects a range. Final income and rent details will be provided based on unit availability at the time of processing, should you be selected to proceed further.",
+  "property_income_ranges": [
+   {
+    "max_income": 67850.0,
+    "min_income": 65418.0,
+    "ami_percentage": 0.44,
+    "household_size": 2
+   },
+   {
+    "max_income": 76350.0,
+    "min_income": 65418.0,
+    "ami_percentage": 0.44,
+    "household_size": 3
+   },
+   {
+    "max_income": 84800.0,
+    "min_income": 65418.0,
+    "ami_percentage": 0.44,
+    "household_size": 4
+   },
+   {
+    "max_income": 91600.0,
+    "min_income": 65418.0,
+    "ami_percentage": 0.44,
+    "household_size": 5
+   }
+  ],
+  "external_url": ""
+ },
+ "units": [],
+ "canonical_id": null
+}

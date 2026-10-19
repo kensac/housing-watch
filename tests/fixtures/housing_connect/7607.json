@@ -1,0 +1,448 @@
+{
+"lotteryId": 7607,
+"lotteryNumber": "86647607",
+"lotteryName": "One River Park 355 Exterior Street ",
+"lotteryDescription": "227 newly constructed units at 70% & 130% AMI. Located at 355 Exterior Street, Bronx, NY 10451 in the Mott Haven neighborhood.- request for deadline on 9/11",
+"endDate": "2026-11-06T00:00:00",
+"isPhasedLottery": false,
+"isPaperAppsEntered": false,
+"isMiniLottery": false,
+"isMitchelLamaLottery": false,
+"ownerTypeId": null,
+"propertyTypeId": 2,
+"isFormerSiteTenant": false,
+"photos": [],
+"lotteryBuildings": [
+{
+"buildingId": 8120,
+"address": "355 Exterior St",
+"city": "Bronx",
+"state": "NY",
+"zip": "10451",
+"latitude": "40.8162979",
+"longitude": "-73.9316946",
+"nearbyPlaces": []
+}
+],
+"amenities": [
+{
+"isBuildingLevel": false,
+"name": "Pet-friendly"
+},
+{
+"isBuildingLevel": false,
+"name": "Bike storage lockers"
+}
+],
+"units": [
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1936.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "355 Exterior St",
+"city": "Bronx",
+"unitRegulatoryMechanismAmi": 70,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 73783.0,
+"maximumIncome": 83160.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 73783.0,
+"maximumIncome": 94990.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 73783.0,
+"maximumIncome": 106890.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1936.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "355 Exterior St",
+"city": "Bronx",
+"unitRegulatoryMechanismAmi": 70,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 73783.0,
+"maximumIncome": 83160.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 73783.0,
+"maximumIncome": 94990.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 73783.0,
+"maximumIncome": 106890.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2297.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 3,
+"utilityTypeId": null,
+"minimumHouseholdSize": 2,
+"maximumHouseholdSize": 5,
+"unitLayoutTypeName": "2 Bedroom",
+"address": "355 Exterior St",
+"city": "Bronx",
+"unitRegulatoryMechanismAmi": 70,
+"unitIncome": [
+{
+"houseHoldSize": 2,
+"minimumIncome": 87600.0,
+"maximumIncome": 94990.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 87600.0,
+"maximumIncome": 106890.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 87600.0,
+"maximumIncome": 118720.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 87600.0,
+"maximumIncome": 128240.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2297.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 3,
+"utilityTypeId": null,
+"minimumHouseholdSize": 2,
+"maximumHouseholdSize": 5,
+"unitLayoutTypeName": "2 Bedroom",
+"address": "355 Exterior St",
+"city": "Bronx",
+"unitRegulatoryMechanismAmi": 70,
+"unitIncome": [
+{
+"houseHoldSize": 2,
+"minimumIncome": 87600.0,
+"maximumIncome": 94990.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 87600.0,
+"maximumIncome": 106890.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 87600.0,
+"maximumIncome": 118720.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 87600.0,
+"maximumIncome": 128240.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2500.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 1,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 2,
+"unitLayoutTypeName": "Studio",
+"address": "355 Exterior St",
+"city": "Bronx",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 91475.0,
+"maximumIncome": 154440.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 91475.0,
+"maximumIncome": 176410.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2500.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 1,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 2,
+"unitLayoutTypeName": "Studio",
+"address": "355 Exterior St",
+"city": "Bronx",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 91475.0,
+"maximumIncome": 154440.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 91475.0,
+"maximumIncome": 176410.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2600.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "355 Exterior St",
+"city": "Bronx",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 95726.0,
+"maximumIncome": 154440.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 95726.0,
+"maximumIncome": 176410.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 95726.0,
+"maximumIncome": 198510.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2600.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "355 Exterior St",
+"city": "Bronx",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 95726.0,
+"maximumIncome": 154440.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 95726.0,
+"maximumIncome": 176410.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 95726.0,
+"maximumIncome": 198510.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2850.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 3,
+"utilityTypeId": null,
+"minimumHouseholdSize": 2,
+"maximumHouseholdSize": 5,
+"unitLayoutTypeName": "2 Bedroom",
+"address": "355 Exterior St",
+"city": "Bronx",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 2,
+"minimumIncome": 106560.0,
+"maximumIncome": 176410.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 106560.0,
+"maximumIncome": 198510.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 106560.0,
+"maximumIncome": 220480.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 106560.0,
+"maximumIncome": 238160.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2850.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 3,
+"utilityTypeId": null,
+"minimumHouseholdSize": 2,
+"maximumHouseholdSize": 5,
+"unitLayoutTypeName": "2 Bedroom",
+"address": "355 Exterior St",
+"city": "Bronx",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 2,
+"minimumIncome": 106560.0,
+"maximumIncome": 176410.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 106560.0,
+"maximumIncome": 198510.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 106560.0,
+"maximumIncome": 220480.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 106560.0,
+"maximumIncome": 238160.0
+}
+]
+}
+],
+"lotterySetAsidePreferences": [],
+"lotteryTasks": [
+{
+"taskInventoryId": 7,
+"advertisementContent": null,
+"paperApplicationDelivery": [
+{
+"paperApplicationId": 6181,
+"lotteryTaskId": 64810,
+"poBoxNumber": "",
+"address": "One River Park C/O Taxace NY LLC, 139 Tompkins Avenue",
+"city": "Brooklyn",
+"state": "NY",
+"zip": "11206",
+"supervisingAgencyId": 1,
+"poLocationId": null,
+"openedDate": null,
+"deadLineDate": null
+}
+]
+},
+{
+"taskInventoryId": 10,
+"advertisementContent": {
+"advertisementContentId": 7671,
+"lotteryTaskId": 64813,
+"developmentWebsite": "https://housingconnect.nyc.gov/PublicWeb/",
+"projectSpecificDetails": "Discover One River Park, where modern living is at its peak. Experience the serenity and relaxation of living alongside the Harlem River. Located at 355 Exterior Street, Bronx, NY 10451, in the vibrant Mott Haven neighborhood, this 40-story building features 29 studios, 154 one-bedroom, and 44 two-bedroom apartments with spacious layouts and modern designs. Residents can enjoy exceptional amenities, including a Lobby Lounge, Sky Lobby, Bike Storage, Storage Lockers, Package Room, Fitness Center, Pet Spa, Yoga Studio, Spin Studio, Game Room, Golf Simulator, Movie Theater, Indoor Pickleball Court, Party Room, Kids Room, Outdoor Pool, Rooftop Terraces with Grill Stations, and more. One River Park offers quality city living at affordable rents.\nOne pet allowed with a 30 lb. weight limit per pet; additional restrictions apply. No pet deposit required. Tenants are responsible for electricity, including electric stove and electric heat. Hot water is included in the rent.\n",
+"affordableHousingProgram": "This building is being constructed by the 421a Tax Exemption Program of the New York City Department of Housing Preservation and Development.",
+"depositsAndOrApplicationFees": false,
+"refundable": null,
+"amount": null,
+"adContentAgency": [
+"Department of Housing Preservation and Development"
+]
+},
+"paperApplicationDelivery": null
+}
+]
+}

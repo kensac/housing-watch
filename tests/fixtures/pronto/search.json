@@ -1,0 +1,563 @@
+{
+ "listings": [
+  {
+   "id": 12030,
+   "applyListingId": 680,
+   "name": "Aura",
+   "address": "23-10 42nd Rd, Long Island City, NY 11101",
+   "state": "NY",
+   "city": "Long Island City",
+   "contactPhone": "+1 (833) 392-2002",
+   "contactEmail": "aura@prontohousing.io",
+   "applicationDeadline": null,
+   "homelessPreference": false,
+   "petsAllowed": false,
+   "parkingAvailable": false,
+   "poolAvailable": false,
+   "gymAvailable": false,
+   "accessibilityFeatures": [],
+   "lat": 40.7500424,
+   "lng": -73.941683,
+   "acceptsVouchers": true,
+   "applicationLink": "https://prontohousing.io/accounts/registration/3ed8932c-2e16-4593-9f06-eafce40eff07/",
+   "paperApplicationUrl": "",
+   "websiteUrl": "https://aura-lic.com/",
+   "isFutureDevelopment": false,
+   "nextImportantDate": null,
+   "nextImportantEvent": "",
+   "learnMoreUrl": "",
+   "isWaitlist": true,
+   "waitlistOnly": true,
+   "waitlistLink": "https://prontohousing.io/accounts/registration/3ed8932c-2e16-4593-9f06-eafce40eff07/",
+   "source": "pronto",
+   "isPartner": false,
+   "ownerName": "Rose",
+   "managerName": "deanna.riddlespur@prontohousing.com",
+   "type": "property",
+   "availableUnits": 0,
+   "availableOfferingCount": 0,
+   "availableOfferings": [],
+   "createdAt": "2026-10-16T04:10:48.868410Z"
+  },
+  {
+   "id": 4934,
+   "applyListingId": 460,
+   "name": "SVEN",
+   "address": "29-59 Northern Boulevard, Long Island City, New York 11101",
+   "state": "NY",
+   "city": "Long Island City",
+   "contactPhone": "+1 (833) 392-2001",
+   "contactEmail": "sven@prontohousing.io",
+   "applicationDeadline": null,
+   "homelessPreference": false,
+   "petsAllowed": false,
+   "parkingAvailable": false,
+   "poolAvailable": false,
+   "gymAvailable": false,
+   "accessibilityFeatures": [],
+   "lat": 40.7525,
+   "lng": -73.9369,
+   "acceptsVouchers": true,
+   "applicationLink": "https://prontohousing.io/accounts/registration/774a3c38-6bb5-4b27-9a75-9071b1965df2/",
+   "paperApplicationUrl": "",
+   "websiteUrl": "https://www.svenlic.com/",
+   "isFutureDevelopment": false,
+   "nextImportantDate": null,
+   "nextImportantEvent": "",
+   "learnMoreUrl": "",
+   "isWaitlist": true,
+   "waitlistOnly": false,
+   "waitlistLink": "https://prontohousing.io/accounts/registration/774a3c38-6bb5-4b27-9a75-9071b1965df2/",
+   "source": "pronto",
+   "isPartner": false,
+   "ownerName": "The Durst Organization Portfolio",
+   "managerName": "deanna.riddlespur@prontohousing.com",
+   "type": "property",
+   "availableUnits": 2,
+   "availableOfferingCount": 2,
+   "availableOfferings": [
+    {
+     "bedrooms": 0,
+     "bedroomSize": "STUDIO",
+     "amiPct": 1.3,
+     "amiDisplay": "130% AMI",
+     "unitCount": 1,
+     "rentMin": 2189.0,
+     "rentMax": 2189.0,
+     "rentVaries": false,
+     "leaseTerms": [
+      "1_year"
+     ],
+     "availableDateMin": "2025-07-22",
+     "incomeRanges": [
+      {
+       "maxIncome": 168480.0,
+       "minIncome": 77303.0,
+       "householdSize": 1
+      },
+      {
+       "maxIncome": 168480.0,
+       "minIncome": 77303.0,
+       "householdSize": 2
+      }
+     ]
+    },
+    {
+     "bedrooms": 1,
+     "bedroomSize": "ONE_BR",
+     "amiPct": 1.3,
+     "amiDisplay": "130% AMI",
+     "unitCount": 1,
+     "rentMin": 2345.0,
+     "rentMax": 2345.0,
+     "rentVaries": false,
+     "leaseTerms": [
+      "1_year",
+      "2_years"
+     ],
+     "availableDateMin": null,
+     "incomeRanges": [
+      {
+       "maxIncome": 168480.0,
+       "minIncome": 85089.0,
+       "householdSize": 1
+      },
+      {
+       "maxIncome": 168480.0,
+       "minIncome": 85089.0,
+       "householdSize": 2
+      }
+     ]
+    }
+   ],
+   "createdAt": "2026-10-16T04:10:32.432799Z"
+  },
+  {
+   "id": 10145,
+   "applyListingId": 1183,
+   "name": "Sawyer Place",
+   "address": "45 Main Street, Yonkers, NY 10701",
+   "state": "NY",
+   "city": "Yonkers",
+   "contactPhone": "",
+   "contactEmail": "sawyer-place@prontohousing.io",
+   "applicationDeadline": null,
+   "homelessPreference": false,
+   "petsAllowed": true,
+   "parkingAvailable": false,
+   "poolAvailable": false,
+   "gymAvailable": true,
+   "accessibilityFeatures": [],
+   "lat": 40.93121,
+   "lng": -73.89875,
+   "acceptsVouchers": false,
+   "applicationLink": "https://prontohousing.io/accounts/registration/cae272d8-b5eb-4e99-a390-3dff9b7c4bcd/",
+   "paperApplicationUrl": "",
+   "websiteUrl": "",
+   "isFutureDevelopment": false,
+   "nextImportantDate": null,
+   "nextImportantEvent": "",
+   "learnMoreUrl": "",
+   "isWaitlist": false,
+   "waitlistOnly": false,
+   "waitlistLink": "",
+   "source": "pronto",
+   "isPartner": false,
+   "ownerName": "Settlement Housing Fund",
+   "managerName": "deanna.riddlespur@prontohousing.com",
+   "type": "property",
+   "availableUnits": 16,
+   "availableOfferingCount": 8,
+   "availableOfferings": [
+    {
+     "bedrooms": 0,
+     "bedroomSize": "STUDIO",
+     "amiPct": 0.65,
+     "amiDisplay": "65% AMI",
+     "unitCount": 1,
+     "rentMin": 1545.0,
+     "rentMax": 1545.0,
+     "rentVaries": false,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": []
+    },
+    {
+     "bedrooms": 0,
+     "bedroomSize": "STUDIO",
+     "amiPct": 0.8,
+     "amiDisplay": "80% AMI",
+     "unitCount": 4,
+     "rentMin": 1525.0,
+     "rentMax": 1955.0,
+     "rentVaries": true,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": []
+    },
+    {
+     "bedrooms": 1,
+     "bedroomSize": "ONE_BR",
+     "amiPct": 0.65,
+     "amiDisplay": "65% AMI",
+     "unitCount": 4,
+     "rentMin": 721.94,
+     "rentMax": 1808.73,
+     "rentVaries": true,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": []
+    },
+    {
+     "bedrooms": 1,
+     "bedroomSize": "ONE_BR",
+     "amiPct": 0.8,
+     "amiDisplay": "80% AMI",
+     "unitCount": 2,
+     "rentMin": 1600.0,
+     "rentMax": 1955.0,
+     "rentVaries": true,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": []
+    },
+    {
+     "bedrooms": 2,
+     "bedroomSize": "TWO_BR",
+     "amiPct": 0.65,
+     "amiDisplay": "65% AMI",
+     "unitCount": 2,
+     "rentMin": 1201.0,
+     "rentMax": 1340.5,
+     "rentVaries": true,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": []
+    },
+    {
+     "bedrooms": 2,
+     "bedroomSize": "TWO_BR",
+     "amiPct": 0.8,
+     "amiDisplay": "80% AMI",
+     "unitCount": 1,
+     "rentMin": 1912.41,
+     "rentMax": 1912.41,
+     "rentVaries": false,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": []
+    },
+    {
+     "bedrooms": 2,
+     "bedroomSize": "TWO_BR",
+     "amiPct": 1.0,
+     "amiDisplay": "100% AMI",
+     "unitCount": 1,
+     "rentMin": 2583.0,
+     "rentMax": 2583.0,
+     "rentVaries": false,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": []
+    },
+    {
+     "bedrooms": 3,
+     "bedroomSize": "THREE_BR",
+     "amiPct": 1.0,
+     "amiDisplay": "100% AMI",
+     "unitCount": 1,
+     "rentMin": 2409.0,
+     "rentMax": 2409.0,
+     "rentVaries": false,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": []
+    }
+   ],
+   "createdAt": "2026-09-25T23:55:33.537907Z"
+  },
+  {
+   "id": 7409,
+   "applyListingId": 891,
+   "name": "Waterside Plaza",
+   "address": "10 Waterside Plz, New York, NY 10010",
+   "state": "NY",
+   "city": "New York",
+   "contactPhone": "",
+   "contactEmail": "waterside@prontohousing.io",
+   "applicationDeadline": "2027-08-10",
+   "homelessPreference": false,
+   "petsAllowed": true,
+   "parkingAvailable": true,
+   "poolAvailable": true,
+   "gymAvailable": true,
+   "accessibilityFeatures": [],
+   "lat": 40.7359608,
+   "lng": -73.9749888,
+   "acceptsVouchers": true,
+   "applicationLink": "https://prontohousing.io/accounts/registration/0aa5f255-512d-421d-b398-d97b1b58ebe6/",
+   "paperApplicationUrl": "",
+   "websiteUrl": "",
+   "isFutureDevelopment": false,
+   "nextImportantDate": null,
+   "nextImportantEvent": "",
+   "learnMoreUrl": "",
+   "isWaitlist": false,
+   "waitlistOnly": false,
+   "waitlistLink": "",
+   "source": "pronto",
+   "isPartner": false,
+   "ownerName": "Settlement Housing Fund",
+   "managerName": "deanna.riddlespur@prontohousing.com",
+   "type": "property",
+   "availableUnits": 11,
+   "availableOfferingCount": 4,
+   "availableOfferings": [
+    {
+     "bedrooms": 0,
+     "bedroomSize": "STUDIO",
+     "amiPct": 1.3,
+     "amiDisplay": "130% AMI",
+     "unitCount": 1,
+     "rentMin": 2428.0,
+     "rentMax": 2428.0,
+     "rentVaries": false,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": [
+      {
+       "maxIncome": 154440.0,
+       "minIncome": 88458.0,
+       "householdSize": 1
+      },
+      {
+       "maxIncome": 176410.0,
+       "minIncome": 88458.0,
+       "householdSize": 2
+      }
+     ]
+    },
+    {
+     "bedrooms": 1,
+     "bedroomSize": "ONE_BR",
+     "amiPct": 1.3,
+     "amiDisplay": "130% AMI",
+     "unitCount": 2,
+     "rentMin": 2593.0,
+     "rentMax": 2593.0,
+     "rentVaries": false,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": [
+      {
+       "maxIncome": 154440.0,
+       "minIncome": 94869.0,
+       "householdSize": 1
+      },
+      {
+       "maxIncome": 176410.0,
+       "minIncome": 94869.0,
+       "householdSize": 2
+      },
+      {
+       "maxIncome": 198510.0,
+       "minIncome": 94869.0,
+       "householdSize": 3
+      }
+     ]
+    },
+    {
+     "bedrooms": 1,
+     "bedroomSize": "ONE_BR",
+     "amiPct": 1.6,
+     "amiDisplay": "160% AMI",
+     "unitCount": 2,
+     "rentMin": 3094.0,
+     "rentMax": 3094.0,
+     "rentVaries": false,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": [
+      {
+       "maxIncome": 190080.0,
+       "minIncome": 112046.0,
+       "householdSize": 1
+      },
+      {
+       "maxIncome": 217120.0,
+       "minIncome": 112046.0,
+       "householdSize": 2
+      },
+      {
+       "maxIncome": 244320.0,
+       "minIncome": 112046.0,
+       "householdSize": 3
+      }
+     ]
+    },
+    {
+     "bedrooms": 2,
+     "bedroomSize": "TWO_BR",
+     "amiPct": 1.6,
+     "amiDisplay": "160% AMI",
+     "unitCount": 6,
+     "rentMin": 3689.0,
+     "rentMax": 3689.0,
+     "rentVaries": false,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": [
+      {
+       "maxIncome": 217120.0,
+       "minIncome": 134469.0,
+       "householdSize": 2
+      },
+      {
+       "maxIncome": 244320.0,
+       "minIncome": 134469.0,
+       "householdSize": 3
+      },
+      {
+       "maxIncome": 271360.0,
+       "minIncome": 134469.0,
+       "householdSize": 4
+      },
+      {
+       "maxIncome": 293120.0,
+       "minIncome": 134469.0,
+       "householdSize": 5
+      }
+     ]
+    }
+   ],
+   "createdAt": "2026-09-25T23:15:57.599233Z"
+  },
+  {
+   "id": "padsplit-46564",
+   "applyListingId": 21638,
+   "name": "Live in Adelanto",
+   "address": "Adelanto, CA 92301",
+   "state": "CA",
+   "city": "Adelanto",
+   "contactPhone": "",
+   "contactEmail": "",
+   "applicationDeadline": null,
+   "homelessPreference": false,
+   "petsAllowed": false,
+   "parkingAvailable": false,
+   "poolAvailable": false,
+   "gymAvailable": false,
+   "accessibilityFeatures": [],
+   "lat": 34.51012,
+   "lng": -117.41494,
+   "acceptsVouchers": false,
+   "applicationLink": "https://www.padsplit.com/rooms-for-rent/listing/ca/adelanto/live-in-adelanto/46564?utm_source=ProntoHousing&utm_medium=RentalListings&utm_campaign=RentalListings",
+   "paperApplicationUrl": "",
+   "websiteUrl": "",
+   "isFutureDevelopment": false,
+   "nextImportantDate": null,
+   "nextImportantEvent": "",
+   "learnMoreUrl": "",
+   "isWaitlist": false,
+   "waitlistOnly": false,
+   "waitlistLink": "",
+   "source": "padsplit",
+   "isPartner": true,
+   "ownerName": "Padsplit",
+   "managerName": "Padsplit",
+   "type": "property",
+   "availableUnits": 3,
+   "availableOfferingCount": 1,
+   "availableOfferings": [
+    {
+     "bedrooms": 1,
+     "bedroomSize": "",
+     "amiPct": null,
+     "amiDisplay": "",
+     "unitCount": 3,
+     "rentMin": 1054.0,
+     "rentMax": 1350.0,
+     "rentVaries": true,
+     "leaseTerms": [],
+     "availableDateMin": null,
+     "incomeRanges": []
+    }
+   ],
+   "createdAt": "2026-10-18T11:30:00.165644Z"
+  },
+  {
+   "id": 11897,
+   "applyListingId": 1216,
+   "name": "Lenox Park",
+   "address": "1400 East West Highway, Silver Spring, MD 20910",
+   "state": "MD",
+   "city": "Silver Spring",
+   "contactPhone": "+1 (833) 392-2002",
+   "contactEmail": "lenox-park@prontohousing.io",
+   "applicationDeadline": null,
+   "homelessPreference": false,
+   "petsAllowed": true,
+   "parkingAvailable": true,
+   "poolAvailable": true,
+   "gymAvailable": true,
+   "accessibilityFeatures": [],
+   "lat": 38.9937,
+   "lng": -77.033,
+   "acceptsVouchers": true,
+   "applicationLink": "https://prontohousing.io/accounts/registration/22a7fbef-df8d-4153-b090-737278ffa2d2/",
+   "paperApplicationUrl": "",
+   "websiteUrl": "https://www.lenoxparkliving.com/",
+   "isFutureDevelopment": false,
+   "nextImportantDate": null,
+   "nextImportantEvent": "",
+   "learnMoreUrl": "",
+   "isWaitlist": false,
+   "waitlistOnly": false,
+   "waitlistLink": "",
+   "source": "pronto",
+   "isPartner": false,
+   "ownerName": "BMC Property Management",
+   "managerName": "deanna.riddlespur@prontohousing.com",
+   "type": "property",
+   "availableUnits": 2,
+   "availableOfferingCount": 1,
+   "availableOfferings": [
+    {
+     "bedrooms": 1,
+     "bedroomSize": "ONE_BR",
+     "amiPct": 0.5,
+     "amiDisplay": "50% AMI",
+     "unitCount": 2,
+     "rentMin": 1045.0,
+     "rentMax": 1045.0,
+     "rentVaries": false,
+     "leaseTerms": [],
+     "availableDateMin": "2026-08-15",
+     "incomeRanges": [
+      {
+       "maxIncome": 57400.0,
+       "minIncome": 32760.0,
+       "householdSize": 1
+      },
+      {
+       "maxIncome": 65600.0,
+       "minIncome": 32760.0,
+       "householdSize": 2
+      },
+      {
+       "maxIncome": 73800.0,
+       "minIncome": 32760.0,
+       "householdSize": 3
+      }
+     ]
+    }
+   ],
+   "createdAt": "2026-10-15T16:56:55.529199Z"
+  }
+ ],
+ "meta": {
+  "highIncome": false,
+  "maxIncomeCap": 293120.0,
+  "total": 3205
+ }
+}

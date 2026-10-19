@@ -1,0 +1,160 @@
+{
+"lotteryId": 7660,
+"lotteryNumber": "87427660",
+"lotteryName": "Cantilever House- Units Still Available",
+"lotteryDescription": "3 units at 130% AMI",
+"endDate": "2026-11-04T00:00:00",
+"isPhasedLottery": false,
+"isPaperAppsEntered": false,
+"isMiniLottery": false,
+"isMitchelLamaLottery": false,
+"ownerTypeId": null,
+"propertyTypeId": 2,
+"isFormerSiteTenant": false,
+"photos": [],
+"lotteryBuildings": [
+{
+"buildingId": 8198,
+"address": "21 GARDEN STREET",
+"city": "BROOKLYN",
+"state": "NY",
+"zip": "11206",
+"latitude": "40.701261",
+"longitude": "-73.937427",
+"nearbyPlaces": []
+}
+],
+"amenities": [
+{
+"isBuildingLevel": false,
+"name": "Garages"
+},
+{
+"isBuildingLevel": false,
+"name": "Covered parking"
+}
+],
+"units": [
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 3250.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "21 GARDEN STREET",
+"city": "BROOKLYN",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 120069.0,
+"maximumIncome": 154440.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 120069.0,
+"maximumIncome": 176410.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 120069.0,
+"maximumIncome": 198510.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 3250.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "21 GARDEN STREET",
+"city": "BROOKLYN",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 120069.0,
+"maximumIncome": 154440.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 120069.0,
+"maximumIncome": 176410.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 120069.0,
+"maximumIncome": 198510.0
+}
+]
+}
+],
+"lotterySetAsidePreferences": [
+{
+"requirementAllocation": 5.0,
+"name": "Mobility",
+"priority": 1,
+"preferenceTypeId": 1,
+"minAgePreference": null,
+"isSetAside": true,
+"lotterySetAsidePreferenceId": 5026
+}
+],
+"lotteryTasks": [
+{
+"taskInventoryId": 7,
+"advertisementContent": null,
+"paperApplicationDelivery": [
+{
+"paperApplicationId": 6220,
+"lotteryTaskId": 65489,
+"poBoxNumber": "",
+"address": " Affordable for NY C/O 365 Flushing Avenue, Suite 505",
+"city": "Brooklyn",
+"state": "NY",
+"zip": "11205",
+"supervisingAgencyId": 1,
+"poLocationId": null,
+"openedDate": null,
+"deadLineDate": null
+}
+]
+},
+{
+"taskInventoryId": 10,
+"advertisementContent": {
+"advertisementContentId": 7725,
+"lotteryTaskId": 65492,
+"developmentWebsite": "https://housingconnect.nyc.gov/PublicWeb/",
+"projectSpecificDetails": "Many residents already call Cantilever House home and enjoy the comfort and convenience of this vibrant community. Now, just three beautifully designed one-bedroom units remain available at 21 Garden Street, located at the crossroads of Williamsburg and Bushwick. Each home features an open layout with a charming kitchen and bathroom, offering an inviting place to live. Residents enjoy a full-service package room*, lounge with co-working and media spaces, and a state-of-the-art fitness center* with dedicated areas for yoga*, cardio*, and more. The landscaped rooftop deck* provides a relaxing outdoor space, while bike storage* and indoor parking* offer added convenience. With modern amenities, thoughtful design, and a prime Brooklyn location, Cantilever House offers comfortable urban living in a neighborhood full of energy and character. Pet-friendly (max 2, 30 lbs. each, non-aggressive breeds). Tenants are responsible for electricity, including electric stove, hot water, and heat.",
+"affordableHousingProgram": "This building is being constructed through the Inclusionary Housing Program and is anticipated to receive a Tax Exemption through the 421a Tax Incentive program of the New York City Department of Housing Preservation and Development.",
+"depositsAndOrApplicationFees": false,
+"refundable": null,
+"amount": null,
+"adContentAgency": [
+"Department of Housing Preservation and Development"
+]
+},
+"paperApplicationDelivery": null
+}
+]
+}

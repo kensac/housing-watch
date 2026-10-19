@@ -1,0 +1,458 @@
+{
+"lotteryId": 7693,
+"lotteryNumber": "87697693",
+"lotteryName": "DOMI",
+"lotteryDescription": "57 units with 70% and 130% AMI",
+"endDate": "2026-11-10T00:00:00",
+"isPhasedLottery": false,
+"isPaperAppsEntered": false,
+"isMiniLottery": false,
+"isMitchelLamaLottery": false,
+"ownerTypeId": null,
+"propertyTypeId": 2,
+"isFormerSiteTenant": false,
+"photos": [],
+"lotteryBuildings": [
+{
+"buildingId": 8234,
+"address": "29-24 40th Ave",
+"city": "Queens",
+"state": "NY",
+"zip": "11101",
+"latitude": "40.751731",
+"longitude": "-73.935019",
+"nearbyPlaces": []
+}
+],
+"amenities": [
+{
+"isBuildingLevel": false,
+"name": "Pet-friendly"
+},
+{
+"isBuildingLevel": false,
+"name": "Dog washing station"
+}
+],
+"units": [
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1842.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 1,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 2,
+"unitLayoutTypeName": "Studio",
+"address": "29-24 40th Ave",
+"city": "Queens",
+"unitRegulatoryMechanismAmi": 70,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 68092.0,
+"maximumIncome": 83160.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 68092.0,
+"maximumIncome": 94990.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1842.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 1,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 2,
+"unitLayoutTypeName": "Studio",
+"address": "29-24 40th Ave",
+"city": "Queens",
+"unitRegulatoryMechanismAmi": 70,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 68092.0,
+"maximumIncome": 83160.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 68092.0,
+"maximumIncome": 94990.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1962.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "29-24 40th Ave",
+"city": "Queens",
+"unitRegulatoryMechanismAmi": 70,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 72892.0,
+"maximumIncome": 83160.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 72892.0,
+"maximumIncome": 94990.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 72892.0,
+"maximumIncome": 106890.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1962.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "29-24 40th Ave",
+"city": "Queens",
+"unitRegulatoryMechanismAmi": 70,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 72892.0,
+"maximumIncome": 83160.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 72892.0,
+"maximumIncome": 94990.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 72892.0,
+"maximumIncome": 106890.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 3784.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "29-24 40th Ave",
+"city": "Queens",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 135360.0,
+"maximumIncome": 154440.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 135360.0,
+"maximumIncome": 176410.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 135360.0,
+"maximumIncome": 198510.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 3784.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "29-24 40th Ave",
+"city": "Queens",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 135360.0,
+"maximumIncome": 154440.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 135360.0,
+"maximumIncome": 176410.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 135360.0,
+"maximumIncome": 198510.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 4518.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 3,
+"utilityTypeId": null,
+"minimumHouseholdSize": 2,
+"maximumHouseholdSize": 5,
+"unitLayoutTypeName": "2 Bedroom",
+"address": "29-24 40th Ave",
+"city": "Queens",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 2,
+"minimumIncome": 162446.0,
+"maximumIncome": 176410.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 162446.0,
+"maximumIncome": 198510.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 162446.0,
+"maximumIncome": 220480.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 162446.0,
+"maximumIncome": 238160.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 4518.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 3,
+"utilityTypeId": null,
+"minimumHouseholdSize": 2,
+"maximumHouseholdSize": 5,
+"unitLayoutTypeName": "2 Bedroom",
+"address": "29-24 40th Ave",
+"city": "Queens",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 2,
+"minimumIncome": 162446.0,
+"maximumIncome": 176410.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 162446.0,
+"maximumIncome": 198510.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 162446.0,
+"maximumIncome": 220480.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 162446.0,
+"maximumIncome": 238160.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 5200.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 4,
+"utilityTypeId": null,
+"minimumHouseholdSize": 3,
+"maximumHouseholdSize": 7,
+"unitLayoutTypeName": "3 Bedroom",
+"address": "29-24 40th Ave",
+"city": "Queens",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 3,
+"minimumIncome": 187715.0,
+"maximumIncome": 198510.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 187715.0,
+"maximumIncome": 220480.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 187715.0,
+"maximumIncome": 238160.0
+},
+{
+"houseHoldSize": 6,
+"minimumIncome": 187715.0,
+"maximumIncome": 255840.0
+},
+{
+"houseHoldSize": 7,
+"minimumIncome": 187715.0,
+"maximumIncome": 273520.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 5200.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 4,
+"utilityTypeId": null,
+"minimumHouseholdSize": 3,
+"maximumHouseholdSize": 7,
+"unitLayoutTypeName": "3 Bedroom",
+"address": "29-24 40th Ave",
+"city": "Queens",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 3,
+"minimumIncome": 187715.0,
+"maximumIncome": 198510.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 187715.0,
+"maximumIncome": 220480.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 187715.0,
+"maximumIncome": 238160.0
+},
+{
+"houseHoldSize": 6,
+"minimumIncome": 187715.0,
+"maximumIncome": 255840.0
+},
+{
+"houseHoldSize": 7,
+"minimumIncome": 187715.0,
+"maximumIncome": 273520.0
+}
+]
+}
+],
+"lotterySetAsidePreferences": [],
+"lotteryTasks": [
+{
+"taskInventoryId": 7,
+"advertisementContent": null,
+"paperApplicationDelivery": [
+{
+"paperApplicationId": 6280,
+"lotteryTaskId": 65938,
+"poBoxNumber": "",
+"address": " Domi C/O Reside New York, 349 Keap Street",
+"city": "Brooklyn",
+"state": "NY",
+"zip": "11211",
+"supervisingAgencyId": 1,
+"poLocationId": null,
+"openedDate": null,
+"deadLineDate": null
+}
+]
+},
+{
+"taskInventoryId": 10,
+"advertisementContent": {
+"advertisementContentId": 7760,
+"lotteryTaskId": 65941,
+"developmentWebsite": "https://residenewyork.com/property/domi/",
+"projectSpecificDetails": "Domi offers 57 affordable units at 29-24 40th Avenue, where contemporary design and city living comes together at an affordable price! Near transportation, shopping, dining, and entertainment, Domi puts convenience and style within reach.\n\nApartment features include private balconies, dishwashers, washers and dryers. Building conveniences include common area Wi-Fi, an elevator, satellite TV, doorman, on-site resident manager, and online payment options.\n\nResidents may enjoy an optional $95/month amenity package per household, including a landscaped courtyard*, rooftop lounge*, fitness and yoga center*, music and podcast room*, co-working lounge*, game room*, dining/bar lounge and event space*, and dog washing station*.\n\nUp to two pets per household are welcome, each up to 50 lbs., with no pet security deposit. Aggressive breeds are prohibited. Service animals are always welcome.\n\nTenants are responsible for electricity, including cooking, and heating. Hot water is included in the rent.",
+"affordableHousingProgram": "This building is anticipated to receive a Tax Exemption through the 421a Tax Incentive program of the New York City Department of Housing Preservation and Development.",
+"depositsAndOrApplicationFees": false,
+"refundable": null,
+"amount": null,
+"adContentAgency": [
+"Department of Housing Preservation and Development"
+]
+},
+"paperApplicationDelivery": null
+}
+]
+}

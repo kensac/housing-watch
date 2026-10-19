@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=2">
+
+    <meta name="description" content="">
+    <meta name="keywords" content="">
+
+    <!-- CSRF Token -->
+    <meta name="csrf-token" content="DyfMC5RNKlYbjbyEB2lhA8UtMbDvmH4Eq7kUBAw7">
+
+    <title>Affordable Units | MNS Real Estate NYC</title>
+
+    <link rel="shortcut icon" href="https://www.mns.com/assets/images/favicon.ico" type="image/x-icon">
+    <link rel="shortcut icon" href="https://www.mns.com/assets/images/favicon.png" type="image/x-icon">
+
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/font-awesome.css">
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/font-awesome5.css">
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/jquery-ui.min.css">
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/jquery-confirm.css">
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/jquery.multiselect.css">
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/jquery.multiselect.filter.css">
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/swiper.css">
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/fontello.css">
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/select2.css">
+
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/main.css?v=8">
+    <link rel="stylesheet" href="https://www.mns.com/assets/css/responsive.css?v=1.69">
+
+    <!-- Scripts -->
+    <script>
+
+        window.Laravel = {"csrfToken":"DyfMC5RNKlYbjbyEB2lhA8UtMbDvmH4Eq7kUBAw7"}
+        var js_bed_title = "Bed";
+        var js_bath_title = "Bath";
+        var loop_slider = false;
+        var media_url = "https://reo.mns.com/media";
+
+    </script>
+
+</head>
+<body>
+
+<a href="#main_content" class="skip_navigation">Skip to main content</a>
+
+
+<main>
+
+    <section class="nav_logo_layout">
+
+        <div class="logo_list">
+            <a href="https://www.mns.com">
+                <img src="https://www.mns.com/assets/images/logo.svg"  alt="mns logo" class="img100">
+            </a>
+        </div>
+
+        <a href="https://www.mns.com/contact" class="mail_icon" aria-label="Contact icon"></a>
+        <button type="button" class="search_icon" aria-label="search icon"></button>
+
+        <form id="generalsearch_n" class="search_bar">
+            <div class="wrap">
+                <input type="search" id="search_kw_n" aria-label="Search">
+                <button class="search_btn" type="submit"><span class="visually_hidden">Search</span></button>
+            </div>
+        </form>
+
+
+        <button type="button" class="nav_icon" id="menu_button" aria-label="nav icon"></button>
+
+
+    </section>
+
+    <nav>
+        <button type="button" class="close nav_close" aria-label="Close">
+            <svg xmlns="https://www.w3.org/2000/svg" viewBox="0 0 14.1 26.8"><defs><style>.cls-1{font-size:23.24px;font-family: 'MaisonNeue-Book';letter-spacing:0em;}</style></defs><title>Close</title><g id="Layer_2" data-name="Layer 2"><g id="Layer_2-2" data-name="Layer 2"><text class="cls-1" transform="translate(0.1 19.9) rotate(-0.4)">X</text></g></g></svg>
+        </button>
+        <div class="menu_logo">
+            <a href="https://www.mns.com">
+                <img src="https://www.mns.com/assets/images/logo.svg" alt="MNS logo" class="img100">
+            </a>
+        </div>
+        <div class="menu_layout">
+            <ul>
+                <li><a href="https://www.mns.com">home</a></li>
+                <li><a href="https://www.mns.com/new_development">New Development Platform</a></li>
+                <li><a href="https://www.mns.com/in-house_leasing">In-House Leasing Platform</a></li>
+                <li><a href="https://www.mns.com/data">Data</a></li>
+                <li><a href="https://www.mns.com/mns_buildings">MNS Buildings</a></li>
+                <li><a href="https://www.mns.com/mns_listings/sale">MNS Listings</a></li>
+                <li><a href="https://www.mns.com/affordable_units">Affordable Housing</a></li>
+                <li><a href="https://www.mns.com/agents">Agents</a></li>
+                <li><a href="https://www.mns.com/team">Team</a></li>
+                <li><a href="https://www.mns.com/press">Press</a></li>
+                <li><a href="https://www.mns.com/contact">Contact</a></li>
+                <li>
+                    <div class="search">
+                        <form id="generalsearch">
+                            <input id="search_kw" type="search" placeholder="search" aria-label="search">
+                            <button type="submit" aria-label="search icon"></button>
+                        </form>
+                    </div>
+                </li>
+            </ul>
+
+        </div>
+
+    </nav>
+
+    
+    <section>
+        <div class="content">
+            <div class="top_space">
+                <section class="afford_units_filter_wrap">
+                    <h2>affordable <span class="tfw divider">units</span></h2>
+                    <section class="afford_units_filter">
+                        <div class="form_layout">
+                            <div class="fill_form">
+                                <select name="hood_select" id="hood_select" class="sl_menu" placeholder="">
+                                    <option class="default" value="">Neighborhood</option>
+                                                                            <option value="Morris Heights">Morris Heights</option>
+                                                                    </select>
+                            </div>
+                            <div class="fill_form">
+                                <select name="address_select" id="address_select" class="sl_menu" placeholder="">
+                                    <option class="default" value="">Buildings</option>
+                                                                            <option value="1730   Harrison AVE">1730   Harrison AVE</option>
+                                                                        <option value="">626  First AVE</option>
+                                    <option value="">265 E 66 ST</option>
+                                </select>
+                            </div>
+                            <div class="fill_form">
+                                <select name="bedroom_select" id="bedroom_select" class="sl_menu" placeholder="">
+                                    <option class="default" value="">Bedrooms</option>
+                                    <option value="0">Studio</option>
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                </select>
+                            </div>
+                        </div>
+                    </section>
+                    <h3>
+                        New York City is committed to the principle of inclusivity in all of its neighborhoods, including supporting New Yorkers to reside in neighborhoods of their choice, regardless of their neighborhood of origin and regardless of the neighborhood into which they want to move.
+                    </h3>
+                </section>
+            </div>
+
+            <section class="bld_table_layout afford_units_table">
+                <h2 class="center">Availability</h2>
+                <table>
+                    <thead>
+                    <tr>
+                        <th>address</th>
+                        <th>Unit</th>
+                        <th>Int SQft</th>
+                        <th>Outdoor Space</th>
+                        <th>bed</th>
+                        <th>bath</th>
+                        <th>price</th>
+
+                        <th><span class="d_fp">floorplan</span><span class="m_fp">fp</span></th>
+                        <th><span class="d_3d">Video TOUR</span><span class="m_3d">Video</span></th>
+
+                                            </tr>
+                    </thead>
+                    <tbody>
+
+                                            <tr class="afordable_listing" lhood="morris+heights" lbedrooms="1" laddress="1730   Harrison AVE">
+                            <td>
+                                <a href="https://www.mns.com/details/240428/rental/morris+heights/bronx" aria-label="address">
+                                    1730   Harrison AVE
+                                </a>
+                            </td>
+                            <td class="unit">
+                                <a href="https://www.mns.com/details/240428/rental/morris+heights/bronx" aria-label="unit">4N</a>
+                                                                                                                                                                                                                            </td>
+                            <td>
+                                <a href="https://www.mns.com/details/240428/rental/morris+heights/bronx" aria-label="int sqft">
+                                    
+                                </a>
+                            </td>
+                            <td>
+                                <a href="https://www.mns.com/details/240428/rental/morris+heights/bronx" aria-label="outdoor space">
+                                                                        <span>&#8226;</span>  </li></ul>
+                                </a>
+                            </td>
+                            <td>
+                                <a href="https://www.mns.com/details/240428/rental/morris+heights/bronx" aria-label="bed">
+                                    1
+                                </a>
+                            </td>
+                            <td>
+                                <a href="https://www.mns.com/details/240428/rental/morris+heights/bronx" aria-label="bath">
+                                    1
+                                </a>
+                            </td>
+                            <td>
+                                <a href="https://www.mns.com/details/240428/rental/morris+heights/bronx" aria-label="price">
+                                    $2,653
+                                </a>
+                            </td>
+
+                            <td>
+                                <a class="f_dwnFP fp demo-icon icon-dl" href="javascript: void(0);" aria-label="floorplan"
+                                   data-toggle="modal"
+                                   data-target="#pdfModal"
+                                   data-floorplanimage="/images/apartment/floorplan/240428_771740_20260413155127pm.jpg"
+                                   data-floorplandocument="https://reo.mns.com/media/images/apartment/floorplan/240428_20260413155126pm.pdf"
+                                   data-aptid="240428"
+                                   data-blgid="28224"
+                                   data-bedroom="1 Bedroom"
+                                   data-respmanager="JSUAREZ"></a>
+                            </td>
+                            <td>
+                                                            </td>
+
+                                                    </tr>
+                    
+                    </tbody>
+                </table>
+            </section>
+
+            <div class="afordable_units_wrap">
+
+                                    
+                        <div class="afordable_units_card" hood="Morris Heights" address="1730   Harrison AVE">
+
+                                                        <div>
+                                <h4>1730   Harrison AVE</h4>
+                                <h4>1730 Harrison</h4>
+                                
+
+                            </div>
+                        </div>
+
+                                    
+            </div>
+        </div>
+
+    </section>
+
+    <section class="contact_layout">
+        <div class="sec_cont">
+            <div>
+                <img src="https://www.mns.com/assets/images/say_hi.svg" alt="say hi" class="img100">
+            </div>
+            <form class="contact_form" method="post">
+                <div class="form_layout">
+                    <div class="fill_form">
+                        <select name="user_type" class="sl_menu" placeholder="I am a Renter" aria-label="I am a Renter">
+                            <option class="default" value="Renter">I am a Renter</option>
+                            <option value="Buyer">I am a Buyer</option>
+                            <option value="Property owner">Property Owner</option>
+                            <option value="None of these">None of These</option>
+                        </select>
+                    </div>
+                    <div class="fill_form">
+                        <select name="retx_referrer_id_ptr" class="sl_menu" req="1" placeholder="How did you hear about us?" aria-label="How did you hear about us?">
+                            <option class="default" selected="selected" value="">How Did You Hear About Us?*</option>
+                            <option value="131">Streeteasy</option>
+                            <option value="130">Google</option>
+                            <option value="149">Mailing</option>
+                            <option value="153">Building Sign</option>
+                            <option value="151">Word of Mouth</option>
+                            <option value="194">Facebook</option>
+                            <option value="195">Instagram</option>
+                            <option value="99">Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form_layout">
+                    <div class="fill_form">
+                        <input type="text" name="FirstName" placeholder="First Name*" req="1" aria-label="First Name">
+                    </div>
+                    <div class="fill_form">
+                        <input type="text" name="LastName" placeholder="Last Name*" req="1" aria-label="Last Name">
+                    </div>
+                </div>
+                <div class="form_layout">
+                    <div class="fill_form">
+                        <input type="email" name="Email" placeholder="Email*" req="1" aria-label="Email">
+                    </div>
+                    <div class="fill_form">
+                        <input type="text" name="Phone" placeholder="Phone" aria-label="Phone">
+                    </div>
+                </div>
+                <div class="fill_form">
+                    <textarea name="Comments" placeholder="Message*" req="1" aria-label="Message"></textarea>
+                </div>
+                <div class="fill_form submit_form">
+
+                    <input type="hidden" name="apt_id" value="">
+                    <input type="hidden" name="blg_id" value="">
+                    <input type="hidden" name="resp_manager" value="ABARROCAS">
+                    <input type="hidden" name="agent_2" value="SANDREWS">
+
+                    <input type="hidden" name="rd_url" value="contact">
+                    <input type="hidden" name="ml_subject" value="home - contact form request">
+                    <input type="hidden" name="leadName" value="mns">
+                    <input type="hidden" name="ref_source" value="">
+                    <input type="hidden" name="utm_source" value="">
+                    <input type="hidden" name="utm_medium" value="">
+                    <input type="hidden" name="utm_campaign" value="">
+
+                    <input type="hidden" name="_token" value="DyfMC5RNKlYbjbyEB2lhA8UtMbDvmH4Eq7kUBAw7">
+
+                    <button type="submit" class="submit">submit</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+    <div class="modal fade pdf_modal" id="pdfModal" tabindex="-1" role="dialog" aria-labelledby="pdfModal"
+         aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-body">
+                    <button type="button" class="close close_icon" data-dismiss="modal" aria-label="Close">
+                        <svg xmlns="https://www.w3.org/2000/svg" viewBox="0 0 14.1 26.8">
+                            <defs>
+                                <style>
+                                    .cls-close {
+                                        font-size: 23.24px;
+                                        font-family: 'MaisonNeue-Book';
+                                        letter-spacing: 0em;
+                                    }
+                                </style>
+                            </defs>
+                            <title>Close</title>
+                            <g id="modal-close" data-name="modal-close">
+                                <g id="modal-close-icon" data-name="modal-close-icon">
+                                    <text class="cls-close" transform="translate(0.1 19.9) rotate(-0.4)">X</text>
+                                </g>
+                            </g>
+                        </svg>
+                    </button>
+                    <h2><span>download</span>
+                        <span class="divider">this floorplan</span>
+                    </h2>
+                    <h3>
+                        For a printable version of the floorplan
+                        <span class="divider">please enter your name and email</span>
+                    </h3>
+                    <div class="pdf_layout">
+                        <div id="floorPlanImage" class="pdf_fp bg_left"></div>
+                        <div class="pdf_form">
+                            <div class="fp_form ">
+                                <form method="post" class="floorplan_form">
+                                    <div class="fill_form">
+                                        <input type="text" name="FirstName" placeholder="first name*" req="1" aria-label="first name">
+                                    </div>
+                                    <div class="fill_form">
+                                        <input type="text" name="LastName" placeholder="last name" aria-label="last name">
+                                    </div>
+                                    <div class="fill_form">
+                                        <input type="email" name="Email" placeholder="email*" req="1" eml="1" aria-label="email">
+                                    </div>
+                                    <div class="pdf_btn_layout">
+
+                                        <input type="hidden" name="apt_id" id="apt_id_1" value="">
+                                        <input type="hidden" name="blg_id" id="blg_id_1" value="">
+                                        <input type="hidden" name="resp_manager" id="resp_manager_1" value="">
+
+                                        <input type="hidden" name="rd_url" value="floorplan">
+                                        <input type="hidden" name="isPDF" value="1">
+                                        <input type="hidden" name="leadName" value="mns">
+                                        <input type="hidden" name="ref_source" value="">
+                                        <input type="hidden" name="utm_source" value="">
+                                        <input type="hidden" name="utm_medium" value="">
+                                        <input type="hidden" name="utm_campaign" value="">
+
+                                        <input type="hidden" name="_token" value="DyfMC5RNKlYbjbyEB2lhA8UtMbDvmH4Eq7kUBAw7">
+
+                                        <button class="submit" type="submit">submit</button>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="fp_link  hide ">
+                                <a id="floorPlanPDF" href="http://mns.com">Download PDF file</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade pdf_modal" id="tour_3d_Modal" tabindex="-1" role="dialog" aria-labelledby="tour_3d_Modal" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-body">
+                    <button type="button" class="close close_icon" data-dismiss="modal" aria-label="Close">
+                        <svg xmlns="https://www.w3.org/2000/svg" viewBox="0 0 14.1 26.8">
+                            <defs>
+                                <style>
+                                    .cls-close {
+                                        font-size: 23.24px;
+                                        font-family: 'MaisonNeue-Book';
+                                        letter-spacing: 0em;
+                                    }
+                                </style>
+                            </defs>
+                            <title>Close</title>
+                            <g id="modal-close" data-name="modal-close">
+                                <g id="modal-close-icon" data-name="modal-close-icon">
+                                    <text class="cls-close" transform="translate(0.1 19.9) rotate(-0.4)">X</text>
+                                </g>
+                            </g>
+                        </svg>
+                    </button>
+                    <h2><span>PLEASE PROVIDE</span>
+                        <span class="divider">YOUR NAME AND EMAIL</span>
+                    </h2>
+
+                    <div class="pdf_layout">
+                        <div class="pdf_fp bg_left" style="background-image: url(https://www.mns.com/assets/images/360_icon.jpg)"></div>
+                        <div class="pdf_form">
+                            <div class="fp_form ">
+                                <form method="post" class="floorplan_form">
+                                    <div class="fill_form">
+                                        <input type="text" name="FirstName" placeholder="first name*" req="1" aria-label="first name">
+                                    </div>
+                                    <div class="fill_form">
+                                        <input type="text" name="LastName" placeholder="last name" aria-label="last name">
+                                    </div>
+                                    <div class="fill_form">
+                                        <input type="email" name="Email" placeholder="email*" req="1" eml="1" aria-label="email">
+                                    </div>
+                                    <div class="pdf_btn_layout">
+
+                                        <input type="hidden" name="apt_id" id="apt_id_3" value=""/>
+                                        <input type="hidden" name="blg_id" id="blg_id_3" value=""/>
+                                        <input type="hidden" name="bedroom" id="bedroom_3" value=""/>
+                                        <input type="hidden" name="resp_manager" id="resp_manager_3" value=""/>
+
+                                        <input type="hidden" name="rd_url" value="3dtour">
+                                        <input type="hidden" name="leadName" value="mns">
+                                        <input type="hidden" name="ref_source" value="">
+                                        <input type="hidden" name="utm_source" value="">
+                                        <input type="hidden" name="utm_medium" value="">
+                                        <input type="hidden" name="utm_campaign" value="">
+
+                                        <input type="hidden" name="_token" value="DyfMC5RNKlYbjbyEB2lhA8UtMbDvmH4Eq7kUBAw7">
+
+                                        <button class="submit" type="submit">VIEW 3D TOUR</button>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="fp_link  hide ">
+                                <a id="tourUrl" target="_blank" href="">View 3D Tour</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade pdf_modal" id="tour_video" tabindex="-1" role="dialog" aria-labelledby="tour_video" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-body">
+                    <button type="button" class="close close_icon" data-dismiss="modal" aria-label="Close">
+                        <svg xmlns="https://www.w3.org/2000/svg" viewBox="0 0 14.1 26.8">
+                            <defs>
+                                <style>
+                                    .cls-close {
+                                        font-size: 23.24px;
+                                        font-family: 'MaisonNeue-Book';
+                                        letter-spacing: 0em;
+                                    }
+                                </style>
+                            </defs>
+                            <title>Close</title>
+                            <g id="modal-close" data-name="modal-close">
+                                <g id="modal-close-icon" data-name="modal-close-icon">
+                                    <text class="cls-close" transform="translate(0.1 19.9) rotate(-0.4)">X</text>
+                                </g>
+                            </g>
+                        </svg>
+                    </button>
+                    <h2><span>PLEASE PROVIDE</span>
+                        <span class="divider">YOUR NAME AND EMAIL</span>
+                    </h2>
+
+                    <div class="pdf_layout">
+                        <div class="pdf_fp bg_left" style="background-image: url(https://www.mns.com/assets/images/play_button.png)"></div>
+                        <div class="pdf_form">
+                            <div class="fp_form ">
+                                <form method="post" class="floorplan_form">
+                                    <div class="fill_form">
+                                        <input type="text" name="FirstName" placeholder="first name*" req="1" aria-label="first name">
+                                    </div>
+                                    <div class="fill_form">
+                                        <input type="text" name="LastName" placeholder="last name" aria-label="last name">
+                                    </div>
+                                    <div class="fill_form">
+                                        <input type="email" name="Email" placeholder="email*" req="1" eml="1" aria-label="email">
+                                    </div>
+                                    <div class="pdf_btn_layout">
+
+                                        <input type="hidden" name="apt_id" id="apt_id_4" value=""/>
+                                        <input type="hidden" name="blg_id" id="blg_id_4" value=""/>
+                                        <input type="hidden" name="bedroom" id="bedroom_4" value=""/>
+                                        <input type="hidden" name="resp_manager" id="resp_manager_4" value=""/>
+
+                                        <input type="hidden" name="rd_url" value="videotour">
+                                        <input type="hidden" name="leadName" value="mns">
+                                        <input type="hidden" name="ref_source" value="">
+                                        <input type="hidden" name="utm_source" value="">
+                                        <input type="hidden" name="utm_medium" value="">
+                                        <input type="hidden" name="utm_campaign" value="">
+
+                                        <input type="hidden" name="_token" value="DyfMC5RNKlYbjbyEB2lhA8UtMbDvmH4Eq7kUBAw7">
+
+                                        <button class="submit" type="submit">VIEW Video TOUR</button>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="fp_link  hide ">
+                                <a id="tourUrl_4" target="_blank" href="">View Video Tour</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+
+
+</main>
+
+<footer>
+    <div class="left">
+        <h3>m.n.s real estate nyc</h3>
+        <p>
+            &copy; 2026. All rights reserved.
+            <span class="home_logo"></span>
+            <button class="disability_logo" data-toggle="modal" data-target="#contact_Modal_for_ada" aria-label="icon for people with disabilities" title="Icon for People with Disabilities"></button>
+        </p>
+    </div>
+    <div class="right">
+        <ul class="footer_menu">
+            <li><a href="https://www.mns.com">home</a></li>
+            <li><a href="https://www.mns.com/new_development">New Development Platform</a></li>
+            <li><a href="https://www.mns.com/in-house_leasing">In-House Leasing Platform</a></li>
+            <li><a href="https://www.mns.com/data">Data</a></li>
+            <li><a href="https://www.mns.com/mns_buildings">MNS Buildings</a></li>
+            <li><a href="https://www.mns.com/mns_listings/sale">MNS Listings</a></li>
+            <li><a href="https://www.mns.com/affordable_units">Affordable Housing</a></li>
+            <li><a href="https://www.mns.com/agents">Agents</a></li>
+            <li><a href="https://www.mns.com/team">Team</a></li>
+            <li><a href="https://www.mns.com/press">Press</a></li>
+            <li><a href="https://www.mns.com/contact">Contact</a></li>
+        </ul>
+        <div class="disclosure_forms">
+            <a href="/MNS_SOP.pdf" target="_blank">Standard Operating Procedures</a>
+            <a href="/fairhousingnotice.pdf" target="_blank">Fair Housing Notice</a>
+            <a href="/privacy-notice" target="_blank">Privacy Policy</a>
+            <a href="/Renter-Rights-Regarding-Broker-Fees-English.pdf" target="_blank">FARE Act</a>
+            <a href="/Preferred_Vendor_One_Flyer.pdf" target="_blank">Save on Moving Services</a>
+        </div>
+        <div class="soc_pay_layout">
+            <a href="https://secure.usaepay.com/pay/2nkt6jx2k28n1qjc8/bJPHmf5c" target="_blank">
+                <span>Click here for online payments</span>
+                <span>
+                    <img src="https://www.mns.com/assets/images/footer_logos.svg" alt="visa, master, discover online payments" class="img100">
+                    <img src="https://www.mns.com/assets/images/american_express.png" alt="american express online payment" class="img100 am_express">
+                </span>
+            </a>
+        </div>
+        <div>
+            <ul class="social">
+                <li>
+                    <a target="_blank" href="https://www.linkedin.com/company/mns" aria-label="Linkedin icon">
+                        <i class="fab fa-linkedin-in"></i>
+                        <span class="visually_hidden">Linkedin icon</span>
+                    </a>
+                </li>
+                <li>
+                    <a target="_blank" href="http://instagram.com/mnsrealestate" aria-label="Instagram icon">
+                        <i class="fab fa-instagram"></i>
+                        <span class="visually_hidden">Instagram icon</span>
+                    </a>
+                </li>
+                <li>
+                    <a target="_blank" href="http://www.twitter.com/MNSrealestate" aria-label="Twitter icon">
+                        <i class="fab fa-twitter"></i>
+                        <span class="visually_hidden">Twitter icon</span>
+                    </a>
+                </li>
+                <li>
+                    <a target="_blank" href="http://www.facebook.com/MNSrealestate" aria-label="Facebook icon">
+                        <i class="fab fa-facebook-f"></i>
+                        <span class="visually_hidden">Facebook icon</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+</footer>
+
+<div class="modal fade contact_modal_lyt" id="contact_Modal_for_ada" tabindex="-1" role="dialog" aria-labelledby="contact_Modal_for_ada" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-body">
+                <button type="button" class="close close_icon" data-dismiss="modal" aria-label="Close">
+                    <svg xmlns="https://www.w3.org/2000/svg" viewBox="0 0 14.1 26.8">
+                        <defs>
+                            <style>
+                                .cls-close{font-size:23.24px;font-family: 'MaisonNeue-Book';letter-spacing:0em;}
+                            </style>
+                        </defs>
+                        <title>Close</title>
+                        <g id="modal-close" data-name="modal-close">
+                            <g id="modal-close-icon" data-name="modal-close-icon">
+                                <text class="cls-close" transform="translate(0.1 19.9) rotate(-0.4)">X</text>
+                            </g>
+                        </g>
+                    </svg>
+                </button>
+
+                <div class="contact_modal">
+                    <h2>Give Us Feedback</h2>
+                    <form class="contact_form" method="post">
+                        <div class="fill_form">
+                            <input type="text" name="FirstName" placeholder="First Name*" req="1" aria-label="First Name">
+                        </div>
+                        <div class="fill_form">
+                            <input type="text" name="LastName" placeholder="Last Name*" req="1" aria-label="Last Name">
+                        </div>
+                        <div class="fill_form">
+                            <input type="email" name="Email" placeholder="Email*" req="1" aria-label="Email">
+                        </div>
+                        <div class="fill_form">
+                            <input type="text" name="Phone" placeholder="Phone" aria-label="Phone">
+                        </div>
+                        <div class="fill_form">
+                            <textarea name="Comments" placeholder="Please Tell Us How We Can Make This Site Better" aria-label="Please Tell Us How We Can Make This Site Better"></textarea>
+                        </div>
+
+                        <div class="contact_submit">
+
+                            <input type="hidden" name="resp_manager" value="RMCCANN">
+                            <input type="hidden" name="agent_2" value="IVARGAS">
+
+                            <input type="hidden" name="rd_url" value="accessibility">
+                            <input type="hidden" name="ml_subject" value="contact - accessibility form request">
+                            <input type="hidden" name="leadName" value="mns">
+                            <input type="hidden" name="ref_source" value="">
+                            <input type="hidden" name="utm_source" value="">
+                            <input type="hidden" name="utm_medium" value="">
+                            <input type="hidden" name="utm_campaign" value="">
+
+                            <input type="hidden" name="_token" value="DyfMC5RNKlYbjbyEB2lhA8UtMbDvmH4Eq7kUBAw7">
+
+                            <button type="submit" class="submit">submit</button>
+                        </div>
+
+                    </form>
+                </div>
+
+                <div class="thank_you_message hide">
+                    <h3>Thank you for your feedback</h3>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Scripts -->
+<script src="https://www.mns.com/assets/js/jquery-3.4.1.min.js"></script>
+<script src="https://www.mns.com/assets/js/bootstrap.min.js"></script>
+<script src="https://www.mns.com/assets/js/jquery-confirm.js"></script>
+<script src="https://www.mns.com/assets/js/jquery-ui.min.js"></script>
+<script src="https://www.mns.com/assets/js/jquery.multiselect.js"></script>
+<script src="https://www.mns.com/assets/js/jquery.multiselect.filter.js"></script>
+<script src="https://www.mns.com/assets/js/swiper.js"></script>
+<script src="https://www.mns.com/assets/js/main.js?v=1.3"></script>
+<script src="https://www.mns.com/assets/js/app.js?v=1.8"></script>
+<script src="https://www.mns.com/assets/js/select2.full.js"></script>
+<script src="https://www.mns.com/assets/js/apt_search.js"></script>
+
+
+<script async type='module' src='https://interfaces.zapier.com/assets/web-components/zapier-interfaces/zapier-interfaces.esm.js'></script>
+<zapier-interfaces-chatbot-embed is-popup='true' chatbot-id='cm9ypffaw006l135appqm51jz'></zapier-interfaces-chatbot-embed>
+
+
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-890309-6"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'UA-890309-6');
+</script>
+
+
+<!-- Facebook Pixel Code -->
+<script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '502979967177784');
+    fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+               src="https://www.facebook.com/tr?id=502979967177784&ev=PageView&noscript=1"
+    /></noscript>
+<!-- End Facebook Pixel Code -->
+
+
+<!-- Facebook Pixel Code -->
+<script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '948131045215824');
+    fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+               src="https://www.facebook.com/tr?id=948131045215824&ev=PageView&noscript=1"
+    /></noscript>
+<!-- End Facebook Pixel Code -->
+
+
+<script>
+    !function (w, d, t) {
+        w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"],ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e},ttq.load=function(e,n){var i="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{},ttq._i[e]=[],ttq._i[e]._u=i,ttq._t=ttq._t||{},ttq._t[e]=+new Date,ttq._o=ttq._o||{},ttq._o[e]=n||{};var o=document.createElement("script");o.type="text/javascript",o.async=!0,o.src=i+"?sdkid="+e+"&lib="+t;var a=document.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};
+
+        ttq.load('CD2SN7RC77UBMOCN4UKG');
+        ttq.page();
+    }(window, document, 'ttq');
+</script>
+
+
+</body>
+</html>

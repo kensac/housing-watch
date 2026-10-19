@@ -1,0 +1,768 @@
+{
+ "property": {
+  "id": 12788,
+  "apply_listing_id": 1063,
+  "name": "Eastchester Heights",
+  "address": "3459 Corsa Avenue, Bronx, NY 10469",
+  "state": "NY",
+  "city": "Bronx",
+  "contact_phone": "+1 (718) 515-0747",
+  "contact_email": "eastchester-heights@prontohousing.io",
+  "application_deadline": null,
+  "homeless_preference": false,
+  "pets_allowed": false,
+  "parking_available": true,
+  "pool_available": false,
+  "gym_available": false,
+  "accessibility_features": [],
+  "lat": 40.8772324,
+  "lng": -73.8473872,
+  "accepts_vouchers": false,
+  "application_link": "https://prontohousing.io/accounts/registration/875ea576-7a0c-40cb-bd6b-c4fb0384fa79/",
+  "paper_application_url": "",
+  "website_url": "",
+  "is_future_development": false,
+  "next_important_date": null,
+  "next_important_event": "",
+  "learn_more_url": "",
+  "is_waitlist": false,
+  "waitlist_only": false,
+  "waitlist_link": "",
+  "source": "pronto",
+  "is_partner": false,
+  "owner_name": "Taconic",
+  "manager_name": "deanna.riddlespur@prontohousing.com",
+  "type": "property",
+  "available_units": 50,
+  "available_offering_count": 12,
+  "available_offerings": [
+   {
+    "bedrooms": 0,
+    "bedroom_size": "STUDIO",
+    "ami_pct": 0.55,
+    "ami_display": "55% AMI",
+    "unit_count": 2,
+    "rent_min": 983.1,
+    "rent_max": 1039.32,
+    "rent_varies": true,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 65340.0,
+      "min_income": 33706.0,
+      "household_size": 1
+     },
+     {
+      "max_income": 74635.0,
+      "min_income": 33706.0,
+      "household_size": 2
+     }
+    ]
+   },
+   {
+    "bedrooms": 0,
+    "bedroom_size": "STUDIO",
+    "ami_pct": 0.8,
+    "ami_display": "80% AMI",
+    "unit_count": 3,
+    "rent_min": 1805.0,
+    "rent_max": 1805.0,
+    "rent_varies": false,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 95040.0,
+      "min_income": 61885.0,
+      "household_size": 1
+     },
+     {
+      "max_income": 108560.0,
+      "min_income": 61885.0,
+      "household_size": 2
+     }
+    ]
+   },
+   {
+    "bedrooms": 1,
+    "bedroom_size": "ONE_BR",
+    "ami_pct": 0.65,
+    "ami_display": "65% AMI",
+    "unit_count": 1,
+    "rent_min": 1608.0,
+    "rent_max": 1608.0,
+    "rent_varies": false,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 77220.0,
+      "min_income": 55131.0,
+      "household_size": 1
+     },
+     {
+      "max_income": 88205.0,
+      "min_income": 55131.0,
+      "household_size": 2
+     },
+     {
+      "max_income": 99255.0,
+      "min_income": 55131.0,
+      "household_size": 3
+     }
+    ]
+   },
+   {
+    "bedrooms": 1,
+    "bedroom_size": "ONE_BR",
+    "ami_pct": 0.8,
+    "ami_display": "80% AMI",
+    "unit_count": 7,
+    "rent_min": 1702.97,
+    "rent_max": 1926.0,
+    "rent_varies": true,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 95040.0,
+      "min_income": 58387.0,
+      "household_size": 1
+     },
+     {
+      "max_income": 108560.0,
+      "min_income": 58387.0,
+      "household_size": 2
+     },
+     {
+      "max_income": 122160.0,
+      "min_income": 58387.0,
+      "household_size": 3
+     }
+    ]
+   },
+   {
+    "bedrooms": 1,
+    "bedroom_size": "ONE_BR",
+    "ami_pct": 0.95,
+    "ami_display": "95% AMI",
+    "unit_count": 8,
+    "rent_min": 2244.0,
+    "rent_max": 2244.0,
+    "rent_varies": false,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 112860.0,
+      "min_income": 76937.0,
+      "household_size": 1
+     },
+     {
+      "max_income": 128915.0,
+      "min_income": 76937.0,
+      "household_size": 2
+     },
+     {
+      "max_income": 145065.0,
+      "min_income": 76937.0,
+      "household_size": 3
+     }
+    ]
+   },
+   {
+    "bedrooms": 2,
+    "bedroom_size": "TWO_BR",
+    "ami_pct": 0.55,
+    "ami_display": "55% AMI",
+    "unit_count": 1,
+    "rent_min": 1266.06,
+    "rent_max": 1266.06,
+    "rent_varies": false,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 74635.0,
+      "min_income": 43407.0,
+      "household_size": 2
+     },
+     {
+      "max_income": 83985.0,
+      "min_income": 43407.0,
+      "household_size": 3
+     },
+     {
+      "max_income": 93280.0,
+      "min_income": 43407.0,
+      "household_size": 4
+     },
+     {
+      "max_income": 100760.0,
+      "min_income": 43407.0,
+      "household_size": 5
+     }
+    ]
+   },
+   {
+    "bedrooms": 2,
+    "bedroom_size": "TWO_BR",
+    "ami_pct": 0.65,
+    "ami_display": "65% AMI",
+    "unit_count": 2,
+    "rent_min": 1627.68,
+    "rent_max": 1918.0,
+    "rent_varies": true,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 88205.0,
+      "min_income": 55806.0,
+      "household_size": 2
+     },
+     {
+      "max_income": 99255.0,
+      "min_income": 55806.0,
+      "household_size": 3
+     },
+     {
+      "max_income": 110240.0,
+      "min_income": 55806.0,
+      "household_size": 4
+     },
+     {
+      "max_income": 119080.0,
+      "min_income": 55806.0,
+      "household_size": 5
+     }
+    ]
+   },
+   {
+    "bedrooms": 2,
+    "bedroom_size": "TWO_BR",
+    "ami_pct": 0.8,
+    "ami_display": "80% AMI",
+    "unit_count": 9,
+    "rent_min": 1864.07,
+    "rent_max": 2300.0,
+    "rent_varies": true,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 108560.0,
+      "min_income": 63910.0,
+      "household_size": 2
+     },
+     {
+      "max_income": 122160.0,
+      "min_income": 63910.0,
+      "household_size": 3
+     },
+     {
+      "max_income": 135680.0,
+      "min_income": 63910.0,
+      "household_size": 4
+     },
+     {
+      "max_income": 146560.0,
+      "min_income": 63910.0,
+      "household_size": 5
+     }
+    ]
+   },
+   {
+    "bedrooms": 2,
+    "bedroom_size": "TWO_BR",
+    "ami_pct": 0.95,
+    "ami_display": "95% AMI",
+    "unit_count": 10,
+    "rent_min": 2198.97,
+    "rent_max": 2682.0,
+    "rent_varies": true,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 128915.0,
+      "min_income": 75393.0,
+      "household_size": 2
+     },
+     {
+      "max_income": 145065.0,
+      "min_income": 75393.0,
+      "household_size": 3
+     },
+     {
+      "max_income": 161120.0,
+      "min_income": 75393.0,
+      "household_size": 4
+     },
+     {
+      "max_income": 174040.0,
+      "min_income": 75393.0,
+      "household_size": 5
+     }
+    ]
+   },
+   {
+    "bedrooms": 3,
+    "bedroom_size": "THREE_BR",
+    "ami_pct": 0.65,
+    "ami_display": "65% AMI",
+    "unit_count": 1,
+    "rent_min": 2033.31,
+    "rent_max": 2033.31,
+    "rent_varies": false,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 99255.0,
+      "min_income": 69713.0,
+      "household_size": 3
+     },
+     {
+      "max_income": 110240.0,
+      "min_income": 69713.0,
+      "household_size": 4
+     },
+     {
+      "max_income": 119080.0,
+      "min_income": 69713.0,
+      "household_size": 5
+     },
+     {
+      "max_income": 128040.0,
+      "min_income": 69713.0,
+      "household_size": 6
+     },
+     {
+      "max_income": 136920.0,
+      "min_income": 69713.0,
+      "household_size": 7
+     }
+    ]
+   },
+   {
+    "bedrooms": 3,
+    "bedroom_size": "THREE_BR",
+    "ami_pct": 0.8,
+    "ami_display": "80% AMI",
+    "unit_count": 5,
+    "rent_min": 2250.61,
+    "rent_max": 2616.0,
+    "rent_varies": true,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 122160.0,
+      "min_income": 77163.0,
+      "household_size": 3
+     },
+     {
+      "max_income": 135680.0,
+      "min_income": 77163.0,
+      "household_size": 4
+     },
+     {
+      "max_income": 146560.0,
+      "min_income": 77163.0,
+      "household_size": 5
+     },
+     {
+      "max_income": 157440.0,
+      "min_income": 77163.0,
+      "household_size": 6
+     },
+     {
+      "max_income": 168320.0,
+      "min_income": 77163.0,
+      "household_size": 7
+     }
+    ]
+   },
+   {
+    "bedrooms": 3,
+    "bedroom_size": "THREE_BR",
+    "ami_pct": 0.95,
+    "ami_display": "95% AMI",
+    "unit_count": 1,
+    "rent_min": 2889.52,
+    "rent_max": 2889.52,
+    "rent_varies": false,
+    "lease_terms": [],
+    "available_date_min": null,
+    "income_ranges": [
+     {
+      "max_income": 145065.0,
+      "min_income": 99069.0,
+      "household_size": 3
+     },
+     {
+      "max_income": 161120.0,
+      "min_income": 99069.0,
+      "household_size": 4
+     },
+     {
+      "max_income": 174040.0,
+      "min_income": 99069.0,
+      "household_size": 5
+     },
+     {
+      "max_income": 187160.0,
+      "min_income": 99069.0,
+      "household_size": 6
+     },
+     {
+      "max_income": 200080.0,
+      "min_income": 99069.0,
+      "household_size": 7
+     }
+    ]
+   }
+  ],
+  "created_at": "2026-09-25T23:16:24.317917Z",
+  "description": "",
+  "disclaimer": "",
+  "property_income_ranges": [
+   {
+    "max_income": 65340.0,
+    "min_income": 33706.0,
+    "household_size": 1
+   },
+   {
+    "max_income": 74635.0,
+    "min_income": 33706.0,
+    "household_size": 2
+   }
+  ],
+  "external_url": ""
+ },
+ "units": [
+  {
+   "id": 1063,
+   "property_id": 12788,
+   "name": "00GA",
+   "address": "3459 Corsa Avenue, Bronx, NY 10469",
+   "state": "NY",
+   "city": "Bronx",
+   "property_name": "Eastchester Heights",
+   "bedrooms": 0,
+   "bathrooms": 1.0,
+   "rent": 1039.32,
+   "min_income": 33706.0,
+   "max_income": 74635.0,
+   "min_household_size": 1,
+   "max_household_size": 2,
+   "contact_phone": "+1 (718) 515-0747",
+   "contact_email": "eastchester-heights@prontohousing.io",
+   "application_deadline": null,
+   "homeless_preference": false,
+   "pets_allowed": false,
+   "parking_available": true,
+   "pool_available": false,
+   "gym_available": false,
+   "accessibility_features": [],
+   "lat": 40.8772324,
+   "lng": -73.8473872,
+   "accepts_vouchers": false,
+   "lease_term": null,
+   "ami_percentage": 55,
+   "lease_options": [],
+   "source": "pronto",
+   "is_partner": false,
+   "owner_name": "Taconic",
+   "manager_name": "deanna.riddlespur@prontohousing.com",
+   "type": "unit",
+   "is_available": true,
+   "created_at": "2026-09-25T23:16:25.526190Z",
+   "description": "",
+   "external_url": ""
+  },
+  {
+   "id": 1064,
+   "property_id": 12788,
+   "name": "00GB",
+   "address": "3449 Corsa Avenue, Bronx, NY 10469",
+   "state": "NY",
+   "city": "Bronx",
+   "property_name": "Eastchester Heights",
+   "bedrooms": 0,
+   "bathrooms": 1.0,
+   "rent": 983.1,
+   "min_income": 33706.0,
+   "max_income": 74635.0,
+   "min_household_size": 1,
+   "max_household_size": 2,
+   "contact_phone": "+1 (718) 515-0747",
+   "contact_email": "eastchester-heights@prontohousing.io",
+   "application_deadline": null,
+   "homeless_preference": false,
+   "pets_allowed": false,
+   "parking_available": true,
+   "pool_available": false,
+   "gym_available": false,
+   "accessibility_features": [],
+   "lat": 40.8772324,
+   "lng": -73.8473872,
+   "accepts_vouchers": false,
+   "lease_term": null,
+   "ami_percentage": 55,
+   "lease_options": [],
+   "source": "pronto",
+   "is_partner": false,
+   "owner_name": "Taconic",
+   "manager_name": "deanna.riddlespur@prontohousing.com",
+   "type": "unit",
+   "is_available": true,
+   "created_at": "2026-09-25T23:16:25.574623Z",
+   "description": "",
+   "external_url": ""
+  },
+  {
+   "id": 1065,
+   "property_id": 12788,
+   "name": "001A",
+   "address": "3436 Corsa Avenue, Bronx, NY 10469",
+   "state": "NY",
+   "city": "Bronx",
+   "property_name": "Eastchester Heights",
+   "bedrooms": 2,
+   "bathrooms": 1.0,
+   "rent": 1266.06,
+   "min_income": 43407.0,
+   "max_income": 100760.0,
+   "min_household_size": 2,
+   "max_household_size": 5,
+   "contact_phone": "+1 (718) 515-0747",
+   "contact_email": "eastchester-heights@prontohousing.io",
+   "application_deadline": null,
+   "homeless_preference": false,
+   "pets_allowed": false,
+   "parking_available": true,
+   "pool_available": false,
+   "gym_available": false,
+   "accessibility_features": [],
+   "lat": 40.8772324,
+   "lng": -73.8473872,
+   "accepts_vouchers": false,
+   "lease_term": null,
+   "ami_percentage": 55,
+   "lease_options": [],
+   "source": "pronto",
+   "is_partner": false,
+   "owner_name": "Taconic",
+   "manager_name": "deanna.riddlespur@prontohousing.com",
+   "type": "unit",
+   "is_available": true,
+   "created_at": "2026-09-25T23:16:25.621910Z",
+   "description": "",
+   "external_url": ""
+  },
+  {
+   "id": 1066,
+   "property_id": 12788,
+   "name": "004C",
+   "address": "3458 Fish Avenue, Bronx, NY 10469",
+   "state": "NY",
+   "city": "Bronx",
+   "property_name": "Eastchester Heights",
+   "bedrooms": 1,
+   "bathrooms": 1.0,
+   "rent": 1608.0,
+   "min_income": 55131.0,
+   "max_income": 99255.0,
+   "min_household_size": 1,
+   "max_household_size": 3,
+   "contact_phone": "+1 (718) 515-0747",
+   "contact_email": "eastchester-heights@prontohousing.io",
+   "application_deadline": null,
+   "homeless_preference": false,
+   "pets_allowed": false,
+   "parking_available": true,
+   "pool_available": false,
+   "gym_available": false,
+   "accessibility_features": [],
+   "lat": 40.8772324,
+   "lng": -73.8473872,
+   "accepts_vouchers": false,
+   "lease_term": null,
+   "ami_percentage": 65,
+   "lease_options": [],
+   "source": "pronto",
+   "is_partner": false,
+   "owner_name": "Taconic",
+   "manager_name": "deanna.riddlespur@prontohousing.com",
+   "type": "unit",
+   "is_available": true,
+   "created_at": "2026-09-25T23:16:25.667389Z",
+   "description": "",
+   "external_url": ""
+  },
+  {
+   "id": 1067,
+   "property_id": 12788,
+   "name": "002A",
+   "address": "3467 Fish Avenue, Bronx, NY 10469",
+   "state": "NY",
+   "city": "Bronx",
+   "property_name": "Eastchester Heights",
+   "bedrooms": 2,
+   "bathrooms": 1.0,
+   "rent": 1918.0,
+   "min_income": 55806.0,
+   "max_income": 119080.0,
+   "min_household_size": 2,
+   "max_household_size": 5,
+   "contact_phone": "+1 (718) 515-0747",
+   "contact_email": "eastchester-heights@prontohousing.io",
+   "application_deadline": null,
+   "homeless_preference": false,
+   "pets_allowed": false,
+   "parking_available": true,
+   "pool_available": false,
+   "gym_available": false,
+   "accessibility_features": [],
+   "lat": 40.8772324,
+   "lng": -73.8473872,
+   "accepts_vouchers": false,
+   "lease_term": null,
+   "ami_percentage": 65,
+   "lease_options": [],
+   "source": "pronto",
+   "is_partner": false,
+   "owner_name": "Taconic",
+   "manager_name": "deanna.riddlespur@prontohousing.com",
+   "type": "unit",
+   "is_available": true,
+   "created_at": "2026-09-25T23:16:25.709577Z",
+   "description": "",
+   "external_url": ""
+  },
+  {
+   "id": 1068,
+   "property_id": 12788,
+   "name": "003A",
+   "address": "3461 Seymour Avenue, Bronx, NY 10469",
+   "state": "NY",
+   "city": "Bronx",
+   "property_name": "Eastchester Heights",
+   "bedrooms": 2,
+   "bathrooms": 1.0,
+   "rent": 1627.68,
+   "min_income": 55806.0,
+   "max_income": 119080.0,
+   "min_household_size": 2,
+   "max_household_size": 5,
+   "contact_phone": "+1 (718) 515-0747",
+   "contact_email": "eastchester-heights@prontohousing.io",
+   "application_deadline": null,
+   "homeless_preference": false,
+   "pets_allowed": false,
+   "parking_available": true,
+   "pool_available": false,
+   "gym_available": false,
+   "accessibility_features": [],
+   "lat": 40.8772324,
+   "lng": -73.8473872,
+   "accepts_vouchers": false,
+   "lease_term": null,
+   "ami_percentage": 65,
+   "lease_options": [],
+   "source": "pronto",
+   "is_partner": false,
+   "owner_name": "Taconic",
+   "manager_name": "deanna.riddlespur@prontohousing.com",
+   "type": "unit",
+   "is_available": true,
+   "created_at": "2026-09-25T23:16:25.774037Z",
+   "description": "",
+   "external_url": ""
+  },
+  {
+   "id": 1069,
+   "property_id": 12788,
+   "name": "001A",
+   "address": "3475 Fish Avenue, Bronx, NY 10469",
+   "state": "NY",
+   "city": "Bronx",
+   "property_name": "Eastchester Heights",
+   "bedrooms": 3,
+   "bathrooms": 1.0,
+   "rent": 2033.31,
+   "min_income": 69713.0,
+   "max_income": 136920.0,
+   "min_household_size": 3,
+   "max_household_size": 7,
+   "contact_phone": "+1 (718) 515-0747",
+   "contact_email": "eastchester-heights@prontohousing.io",
+   "application_deadline": null,
+   "homeless_preference": false,
+   "pets_allowed": false,
+   "parking_available": true,
+   "pool_available": false,
+   "gym_available": false,
+   "accessibility_features": [],
+   "lat": 40.8772324,
+   "lng": -73.8473872,
+   "accepts_vouchers": false,
+   "lease_term": null,
+   "ami_percentage": 65,
+   "lease_options": [],
+   "source": "pronto",
+   "is_partner": false,
+   "owner_name": "Taconic",
+   "manager_name": "deanna.riddlespur@prontohousing.com",
+   "type": "unit",
+   "is_available": true,
+   "created_at": "2026-09-25T23:16:25.817032Z",
+   "description": "",
+   "external_url": ""
+  },
+  {
+   "id": 1070,
+   "property_id": 12788,
+   "name": "00GA",
+   "address": "3463 Fish Avenue, Bronx, NY 10469",
+   "state": "NY",
+   "city": "Bronx",
+   "property_name": "Eastchester Heights",
+   "bedrooms": 0,
+   "bathrooms": 1.0,
+   "rent": 1805.0,
+   "min_income": 61885.0,
+   "max_income": 108560.0,
+   "min_household_size": 1,
+   "max_household_size": 2,
+   "contact_phone": "+1 (718) 515-0747",
+   "contact_email": "eastchester-heights@prontohousing.io",
+   "application_deadline": null,
+   "homeless_preference": false,
+   "pets_allowed": false,
+   "parking_available": true,
+   "pool_available": false,
+   "gym_available": false,
+   "accessibility_features": [],
+   "lat": 40.8772324,
+   "lng": -73.8473872,
+   "accepts_vouchers": false,
+   "lease_term": null,
+   "ami_percentage": 80,
+   "lease_options": [],
+   "source": "pronto",
+   "is_partner": false,
+   "owner_name": "Taconic",
+   "manager_name": "deanna.riddlespur@prontohousing.com",
+   "type": "unit",
+   "is_available": true,
+   "created_at": "2026-09-25T23:16:25.867359Z",
+   "description": "",
+   "external_url": ""
+  }
+ ],
+ "canonical_id": null
+}

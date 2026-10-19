@@ -1,0 +1,109 @@
+{
+ "data": {
+  "record": {
+   "address": "1420 stebbins avenue bronx ny 10459",
+   "ami_grid": {
+    "130": [
+     {
+      "households": [
+       {
+        "income_max": 198510,
+        "income_min": 141291,
+        "size": 3
+       },
+       {
+        "income_max": 220480,
+        "income_min": 141291,
+        "size": 4
+       },
+       {
+        "income_max": 238160,
+        "income_min": 141291,
+        "size": 5
+       },
+       {
+        "income_max": 255840,
+        "income_min": 141291,
+        "size": 6
+       },
+       {
+        "income_max": 273520,
+        "income_min": 141291,
+        "size": 7
+       }
+      ],
+      "monthly_rent": 4061.0,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 1588,
+        "monthly_rent": 4061.0,
+        "name": "4J"
+       }
+      ],
+      "unit_size": "3 Bedrooms"
+     },
+     {
+      "households": [
+       {
+        "income_max": 198510,
+        "income_min": 141154,
+        "size": 3
+       },
+       {
+        "income_max": 220480,
+        "income_min": 141154,
+        "size": 4
+       },
+       {
+        "income_max": 238160,
+        "income_min": 141154,
+        "size": 5
+       },
+       {
+        "income_max": 255840,
+        "income_min": 141154,
+        "size": 6
+       },
+       {
+        "income_max": 273520,
+        "income_min": 141154,
+        "size": 7
+       }
+      ],
+      "monthly_rent": 4061.0,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 1563,
+        "monthly_rent": 4061.0,
+        "name": "2K"
+       }
+      ],
+      "unit_size": "3 Bedrooms"
+     }
+    ]
+   },
+   "borough_title": "Bronx",
+   "details": "<p>1420 Stebbins Apartments is a 73 Unit building located in the Bronx. The apartments were designed to maximize living space and provide the latest in comfort, design and technology..</p><p><br></p><p>The actual rent may vary based on lease terms. The NYC Rent Guidelines Board approved rent increases for rent-stabilized apartments of:</p><p>For one-year leases, there is a 2.75% increase commencing on or after October 1, 2024, and on or before September 30, 2025,</p><p>and a 5.25% increase for a two-year lease commencing on or after October 1, 2024, and on or before September 30, 2025.</p><p><br></p><p>Tenants are responsible for electricity, including Electric stove and heat.</p>",
+   "end_date": "",
+   "featured_photo": "https://s3.us-east-2.amazonaws.com/media.myelisting.com/listings/11/295230/1420-stebbins-avenue-the-bronx-ny-10459.jpg?tr=w-300",
+   "hc_property_id": "2278330",
+   "housing_connect_property_url": null,
+   "how_to_apply": {},
+   "id": "2278330",
+   "latitude": "40.834076811450096",
+   "longitude": " -73.8941045032107",
+   "mail_address": "1420 Stebbins Avenue Apartments - 0126 Multiple Units\n C/O IAFFORD NY \n365 FLUSHING AVE SUITE #503 \nBROOKLYN NY 11205",
+   "pets_allowed": null,
+   "project_file": "https://iafford.s3.amazonaws.com/projects/1959977-Attachment_G-1.pdf",
+   "project_file_link": "",
+   "rules": null,
+   "title": "1420 Stebbins avenue apartments - 0126 Multiple Units",
+   "units_count": 2
+  }
+ },
+ "error": 0,
+ "errorCode": 0,
+ "success": 1
+}

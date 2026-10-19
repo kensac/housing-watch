@@ -1,0 +1,27 @@
+[project]
+name = "housing-watch"
+version = "0"
+description = "Deterministic watcher for NYC affordable-housing listings"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx==0.28.1",
+    "beautifulsoup4==4.13.4",
+    "lxml==6.0.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.4.1",
+    "ruff==0.12.7",
+]
+
+[tool.ruff]
+line-length = 120
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

@@ -1,0 +1,115 @@
+<html><body>
+<script>
+<div class="dtl--cntct--btn" data-bind="visible: helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId())"><a href="javascript:void(0)" data-sectionlink="direct_inquiry" data-bind="click: function () { propertyDetails.showSection(event); }" class="cmn--btn"><i class="far fa-envelope"></i>Send Message</a></div>
+<div class="cmn--alert--msg cmn--alert--blue" style="display: none;" data-bind="visible: !helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId())">
+<!-- ko if: (!helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) && propertyDetailsModel.domain.haCard.haDetails()) -->
+<li id="availablePropertyColumn" data-bind="visible: helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()), css:{'mob-visible' : IsTMLPEnabled}" class="avl--prop--col" ><small class="fac--lbl">Availability</small>
+<li id="SubsidizedUnits" data-bind="visible: !helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId())"><small class="fac--lbl">Subsidized Units</small><span id="spanSubsidizedUnit" class="fac--count">0</span></li>
+<div style="display: none" data-bind="attr: { id: 'single_' + propertyDetailsModel.domain.singleUnitModelId() },visible:helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) && propertyDetailsModel.domain.submittedPropertybyTenantCount() > 0" class="one--click--apply--hint">
+<div id="availablePropertyColumnMobile" class="avl--prop--col" data-bind="visible: helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()), css:{'mob-hide' : IsTMLPEnabled}">
+<div id="SubsidizedUnitMobile" class="avl--prop--col" data-bind="visible: !helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) && propertyDetailsModel.domain.isSingleUnit()">
+<button data-bind="visible: helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()), click: function () { $('#directInquiry').addClass('directInquiry--show');  $('#directInquiry').show();}" class="cmn--btn">Send Message</button></li>
+<div style="display: none" data-bind="attr: { id: 'single_' + propertyDetailsModel.domain.singleUnitModelId() },visible: helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) && propertyDetailsModel.domain.submittedPropertybyTenantCount() > 0" class="one--click--apply--hint">
+<ul data-bind="visible: propertyDetailsModel.domain.serverSideVariables.propertyStateName() == 'Minnesota' || propertyDetailsModel.domain.serverSideVariables.propertyStateName() == 'Nevada'" class="ah--accord minnesota--price--option" id="accordion1">
+<div data-bind="visible: propertyDetailsModel.domain.serverSideVariables.propertyStateName() == 'Minnesota'">
+<div data-bind="visible: propertyDetailsModel.domain.serverSideVariables.propertyStateName() == 'Nevada'">
+This disclosure is provided to comply with pricing transparency requirements in the State of <!-- ko text: propertyDetailsModel.domain.serverSideVariables.propertyStateName() --><!-- /ko -->.
+<div data-bind="visible: propertyDetailsModel.domain.serverSideVariables.propertyStateName() !== 'Minnesota' && propertyDetailsModel.domain.serverSideVariables.propertyStateName() !== 'Nevada'" class="pricing--disclosures--text">Total Monthly Leasing Price includes base rent, all mandatory monthly fees and any user-selected optional fees. Excludes variable or usage-based fees and required charges due at or prior to move-in or at move-out.
+<!--ko if: propertyDetailsModel.domain.isEligibilityCalc() === true || !helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) -->
+<!--ko ifnot: helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) -->
+<!--ko if: helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) -->
+<!--ko if: !helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) -->
+<!--ko if: propertyDetailsModel.domain.calculator.affordabilityResult() && helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) -->
+<!--ko if: propertyDetailsModel.view.calculator.type() === propertyDetailsModel.view.calculatorType.incomebased && propertyDetailsModel.domain.isEligibilityCalc() !== true && helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId())-->
+<!--ko ifnot: helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) -->
+<!--ko if: helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) -->
+<!--ko if: !helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) -->
+<!--ko if: propertyDetailsModel.domain.calculator.affordabilityResult() && helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) -->
+<!--ko if: propertyDetailsModel.view.calculator.type() === propertyDetailsModel.view.calculatorType.section8 && propertyDetailsModel.domain.isEligibilityCalc() !== true && helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId())-->
+<!--ko if: !helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) -->
+<!--ko if: propertyDetailsModel.domain.calculator.affordabilityResult() && helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()) -->
+<button class="cmn--btn" data-bind="visible: helper.isUndefinedOrNullOrEmpty(propertyDetailsModel.domain.serverSideVariables.publicHousingHaId()), click: function () { propertyDetails.showInquiryFormModal(); }">Message</button>
+<!--ko if: propertyDetailsModel.domain.appFeeAmount() == null && propertyDetailsModel.domain.serverSideVariables.isEnterpriseOwner() == 'True' -->
+<!--ko ifnot: propertyDetailsModel.domain.appFeeAmount() == null && propertyDetailsModel.domain.serverSideVariables.isEnterpriseOwner() == 'True' -->
+propertyDetailsModel.domain.isIncomeRestricted(true);
+propertyDetailsModel.domain.serverSideVariables.propertyCity("Bronx");
+propertyDetailsModel.domain.serverSideVariables.proposedCounty("Bronx");
+propertyDetailsModel.domain.serverSideVariables.propertyState("NY");
+propertyDetailsModel.domain.serverSideVariables.propertyStateName("New York");
+propertyDetailsModel.domain.serverSideVariables.propertyLatitude("40.8185831");
+propertyDetailsModel.domain.serverSideVariables.propertyLongitude("-73.9089778");
+propertyDetailsModel.domain.serverSideVariables.propertyAddress("735 Cauldwell Ave");
+propertyDetailsModel.domain.serverSideVariables.communityName("");
+propertyDetailsModel.domain.serverSideVariables.listingStatus("1");
+propertyDetailsModel.domain.serverSideVariables.listingStatusCode("active");
+propertyDetailsModel.domain.serverSideVariables.deactivedOwner("False");
+propertyDetailsModel.domain.serverSideVariables.publicHousingHaId("");
+propertyDetailsModel.domain.serverSideVariables.isEnterpriseOwner("False");
+var searchedText = propertyDetailsModel.domain.serverSideVariables.propertyCity() + ', ' + propertyDetailsModel.domain.serverSideVariables.propertyState();
+locationHelper.addRecentSearchItem(propertyDetailsModel.domain.serverSideVariables.propertyCity(), searchedText, "city", propertyDetailsModel.domain.serverSideVariables.propertyState(), propertyDetailsModel.domain.serverSideVariables.propertyStateName(), 0);
+</script>
+<h1 class="prop--adrs">
+                                                        2 Bedroom Apartment
+                                                        735 Cauldwell Ave in Bronx, NY 10455
+                                                    <i class="prop--go8--icon">
+</i>
+</h1>
+<div class="prop--facl--col cmn--blk--shadow" data-bind="css :{'prop--facl--col--new': IsTMLPEnabled}" id="divsinglePropertyDetail">
+<ul>
+<li id="liBedCount"><small class="fac--lbl">Beds</small><span class="fac--count" id="spanBedCount">2</span></li>
+<li id="liBathCount"><small class="fac--lbl">Baths</small><span class="fac--count" id="spanBathCount">1</span></li>
+<li id="liRentRange">
+<small class="fac--lbl">
+                                        Total Monthly
+                                      </small>
+<span class="fac--count">
+                                            $2,573
+<b><span></span></b>
+</span>
+</li>
+<li class="avl--prop--col" id="availablePropertyColumn"><small class="fac--lbl">Availability</small>
+<span class="fac--count avl--lbl" id="spanAvailable">Available Now</span>
+</li>
+<li id="SubsidizedUnits"><small class="fac--lbl">Subsidized Units</small><span class="fac--count" id="spanSubsidizedUnit">0</span></li>
+<li id="desktop-applied-stub">
+</li>
+<li id="liAvailable">
+<div class="one--click--apply--hint">
+                                            One-click Apply
+                                        </div>
+</li>
+</ul>
+</div>
+<div class="prop--dtls--blk cmn--blk--shadow scroll--section" data-section="details" id="pdpDetails">
+<div class="dtl--cmn--hdr">
+<h2 class="dtl--cmn--ttl">Property details</h2>
+</div>
+<div class="prop--cont--blk no-padding-bottom">
+<ul class="prop--dtls--opt">
+<li>
+<div class="opt--icon"><i class="details-sprite property-type--icon"></i></div>
+<div class="dtls--opt--cont"><span>Apartment</span><small> Type</small></div>
+</li>
+<li>
+<div class="opt--icon">
+<i class="pets--icon">
+</i>
+</div>
+<div class="dtls--opt--cont"><span>No</span><small>Pets Allowed </small></div>
+</li>
+<li>
+<div class="opt--icon">
+<i class="age--icon">
+</i>
+</div>
+<div class="dtls--opt--cont"><span>No</span><small>Age Restrictions</small></div>
+</li>
+</ul>
+</div>
+<div class="prop--cont--divider"></div>
+<div class="prop--cont--blk">
+<p id="communityTitle">Available 2 bedroom mobility disability apartment </p>
+<p class="community-desc" id="communityDescription">2 bedroom mobility disability apartment </p>
+</div>
+</div>
+</body></html>

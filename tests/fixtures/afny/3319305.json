@@ -1,0 +1,197 @@
+{
+ "data": {
+  "record": {
+   "address": "153-10 88th Avenue, Jamaica, NY 11432",
+   "ami_grid": {
+    "130": [
+     {
+      "households": [
+       {
+        "income_max": 154440,
+        "income_min": 96075,
+        "size": 1
+       },
+       {
+        "income_max": 176410,
+        "income_min": 96075,
+        "size": 2
+       },
+       {
+        "income_max": 198510,
+        "income_min": 96075,
+        "size": 3
+       }
+      ],
+      "monthly_rent": 2630.2,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 1340,
+        "monthly_rent": 2630.2,
+        "name": "527"
+       }
+      ],
+      "unit_size": "1 Bedroom"
+     },
+     {
+      "households": [
+       {
+        "income_max": 154440,
+        "income_min": 91577,
+        "size": 1
+       },
+       {
+        "income_max": 176410,
+        "income_min": 91577,
+        "size": 2
+       },
+       {
+        "income_max": 198510,
+        "income_min": 91577,
+        "size": 3
+       }
+      ],
+      "monthly_rent": 2499.0,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 1337,
+        "monthly_rent": 2499.0,
+        "name": "227"
+       }
+      ],
+      "unit_size": "1 Bedroom"
+     },
+     {
+      "households": [
+       {
+        "income_max": 154440,
+        "income_min": 79123,
+        "size": 1
+       },
+       {
+        "income_max": 176410,
+        "income_min": 79123,
+        "size": 2
+       }
+      ],
+      "monthly_rent": 2157.75,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 1397,
+        "monthly_rent": 2157.75,
+        "name": "606"
+       }
+      ],
+      "unit_size": "Studio"
+     },
+     {
+      "households": [
+       {
+        "income_max": 154440,
+        "income_min": 79123,
+        "size": 1
+       },
+       {
+        "income_max": 176410,
+        "income_min": 79123,
+        "size": 2
+       }
+      ],
+      "monthly_rent": 2157.75,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 1399,
+        "monthly_rent": 2157.75,
+        "name": "406"
+       }
+      ],
+      "unit_size": "Studio"
+     }
+    ],
+    "80": [
+     {
+      "households": [
+       {
+        "income_max": 108560,
+        "income_min": 78909,
+        "size": 2
+       },
+       {
+        "income_max": 122160,
+        "income_min": 78909,
+        "size": 3
+       },
+       {
+        "income_max": 135680,
+        "income_min": 78909,
+        "size": 4
+       },
+       {
+        "income_max": 146560,
+        "income_min": 78909,
+        "size": 5
+       }
+      ],
+      "monthly_rent": 2073.5,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 1345,
+        "monthly_rent": 2073.5,
+        "name": "400"
+       }
+      ],
+      "unit_size": "2 Bedrooms"
+     },
+     {
+      "households": [
+       {
+        "income_max": 95040,
+        "income_min": 60980,
+        "size": 1
+       },
+       {
+        "income_max": 108560,
+        "income_min": 60980,
+        "size": 2
+       }
+      ],
+      "monthly_rent": 1628.59,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 1381,
+        "monthly_rent": 1628.59,
+        "name": "617"
+       }
+      ],
+      "unit_size": "Studio"
+     }
+    ]
+   },
+   "borough_title": "Queens",
+   "details": "<p>153-10 88th Avenue introduces a new standard for luxury in Queens, a unique combination of style, convenience and elevated living with infinite possibilities. Positioned on one of the most charming and quiet streets in all of Jamaica. Studios, various one-bedroom layouts and expansive two-bedroom residences boast open concept layouts. Residents enjoy spaces for fitness, fun, and relaxation within this intimately sized building. Indoor amenities including a library lounge and fitness center with a yoga studio, and gaming room. Just past the lobby is THE 88\u2019s 10,000 square foot Infinity Garden that is as serene as it is beautiful. At the top of the building are two expansive Resort-style Roof Decks featuring pergola-shaded dining areas and grilling stations, multiple lounging options, an open lawn space and open vistas capturing the hills of Jamaica. (Fees apply)&nbsp;</p><p><br></p><p>The actual rent may vary based on lease terms. The NYC Rent Guidelines Board approved rent increases for rent-stabilized apartments of:</p><p>For one-year leases, there is a 3% increase commencing on or after October 1, 2025, and on or before September 30, 2026,</p><p>and a 4.50% increase for a two-year lease commencing on or after October 1, 2025, and on or before September 30, 2026.</p><p><br></p><p>Tenants are responsible for electricity and heat.</p>",
+   "end_date": "",
+   "featured_photo": "https://a806-housingconnectapi.nyc.gov/MailTemplates/photos/22625136.png",
+   "hc_property_id": "3319305",
+   "housing_connect_property_url": null,
+   "how_to_apply": {},
+   "id": "3319305",
+   "latitude": "40.70252440980011",
+   "longitude": "-73.80177004739026",
+   "mail_address": "The 88 aka 153-10 88th Avenue Apartments - 0326 Multiple Units\nC/O Iafford NY\n365 Flushing Avenue Suite 503\nBrooklyn NY 11205",
+   "pets_allowed": null,
+   "project_file": "https://iafford.s3.amazonaws.com/projects/3033285-Attachment_G-1_-_AFNY.pdf",
+   "project_file_link": "",
+   "rules": null,
+   "title": "The 88 aka 153-10 88th Avenue Apartments - 0326 Multiple Units",
+   "units_count": 6
+  }
+ },
+ "error": 0,
+ "errorCode": 0,
+ "success": 1
+}

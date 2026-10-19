@@ -1,0 +1,221 @@
+{
+"lotteryId": 7659,
+"lotteryNumber": "87357659",
+"lotteryName": "345 East 17th Street Apartments",
+"lotteryDescription": "This building is being constructed through the 485 X Program, UAP, of the New York City Department of Housing Preservation and Development. The project is 100% on-site and comprises 65 units. The lottery will market 13 units: 10 will be permanently affordable at 60% AMI, and 3 will be affordable at 100% AMI.",
+"endDate": "2026-11-09T00:00:00",
+"isPhasedLottery": false,
+"isPaperAppsEntered": false,
+"isMiniLottery": false,
+"isMitchelLamaLottery": false,
+"ownerTypeId": null,
+"propertyTypeId": 2,
+"isFormerSiteTenant": false,
+"photos": [],
+"lotteryBuildings": [
+{
+"buildingId": 8196,
+"address": "345 E 17th St",
+"city": "New York",
+"state": "NY",
+"zip": "10003",
+"latitude": "40.7335309",
+"longitude": "-73.9818093",
+"nearbyPlaces": []
+}
+],
+"amenities": [
+{
+"isBuildingLevel": false,
+"name": "Pet-friendly"
+},
+{
+"isBuildingLevel": false,
+"name": "Washers and dryers in units"
+}
+],
+"units": [
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1542.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 1,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 2,
+"unitLayoutTypeName": "Studio",
+"address": "345 E 17th St",
+"city": "New York",
+"unitRegulatoryMechanismAmi": 60,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 61269.0,
+"maximumIncome": 71280.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 61269.0,
+"maximumIncome": 81420.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1542.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 1,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 2,
+"unitLayoutTypeName": "Studio",
+"address": "345 E 17th St",
+"city": "New York",
+"unitRegulatoryMechanismAmi": 60,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 61269.0,
+"maximumIncome": 71280.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 61269.0,
+"maximumIncome": 81420.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2596.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 1,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 2,
+"unitLayoutTypeName": "Studio",
+"address": "345 E 17th St",
+"city": "New York",
+"unitRegulatoryMechanismAmi": 100,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 97406.0,
+"maximumIncome": 118800.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 97406.0,
+"maximumIncome": 135700.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2596.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 1,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 2,
+"unitLayoutTypeName": "Studio",
+"address": "345 E 17th St",
+"city": "New York",
+"unitRegulatoryMechanismAmi": 100,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 97406.0,
+"maximumIncome": 118800.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 97406.0,
+"maximumIncome": 135700.0
+}
+]
+}
+],
+"lotterySetAsidePreferences": [
+{
+"requirementAllocation": 20.0,
+"name": "Community Board Resident (Manhattan CB 06)",
+"priority": 1,
+"preferenceTypeId": 3,
+"minAgePreference": null,
+"isSetAside": false,
+"lotterySetAsidePreferenceId": 5018
+},
+{
+"requirementAllocation": 10.0,
+"name": "Municipal Employee/ Military Veteran",
+"priority": 2,
+"preferenceTypeId": 15,
+"minAgePreference": null,
+"isSetAside": false,
+"lotterySetAsidePreferenceId": 5019
+}
+],
+"lotteryTasks": [
+{
+"taskInventoryId": 7,
+"advertisementContent": null,
+"paperApplicationDelivery": [
+{
+"paperApplicationId": 6215,
+"lotteryTaskId": 65472,
+"poBoxNumber": "",
+"address": "345 East 17Th Street Apartments C/O Reside New York 349 Keap Street",
+"city": "Brooklyn",
+"state": "NY",
+"zip": "11211",
+"supervisingAgencyId": 1,
+"poLocationId": null,
+"openedDate": null,
+"deadLineDate": null
+}
+]
+},
+{
+"taskInventoryId": 10,
+"advertisementContent": {
+"advertisementContentId": 7724,
+"lotteryTaskId": 65475,
+"developmentWebsite": "https://bit.ly/4xhY75d",
+"projectSpecificDetails": "345 East 17th Street Apartments brings a modern, boutique living experience to the rich streetscape of Gramercy. From its elegant fa\u00e7ade and oversized windows to its inviting double-height lobby and serene interiors \u2014 with a fresh, contemporary point of view. It features Air Conditioning, Accessibility, Dishwashers in unit, Washers and dryers in units, High-end countertops and finishes, Split unit heating and cooling, High-end kitchen appliances, Smoke free, Pet friendly with a weight limit of 45 LBS. Service animals are an exception. Common area Wi-Fi, Elevator, Online payment options, High-speed internet, Security cameras, **Gym-spa-yoga, **Rooftop terrace, **Business Center, **Podcast room**Additional fee. Tenants are responsible for electric, electric stove, electric heat:ccASHP, and electric hot water.\n",
+"affordableHousingProgram": "This building is anticipated to receive Tax Exemption through the Universal\nAffordability Preference Program and the 485x Tax Incentive program of the\nNew York City Department of Housing Preservation and Development.",
+"depositsAndOrApplicationFees": false,
+"refundable": null,
+"amount": null,
+"adContentAgency": [
+"Department of Housing Preservation and Development"
+]
+},
+"paperApplicationDelivery": null
+}
+]
+}

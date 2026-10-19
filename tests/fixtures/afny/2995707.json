@@ -1,0 +1,60 @@
+{
+ "data": {
+  "record": {
+   "address": "75 Dupont St, Brooklyn, NY 11222",
+   "ami_grid": {
+    "130": [
+     {
+      "households": [
+       {
+        "income_max": 154440,
+        "income_min": 131143,
+        "size": 1
+       },
+       {
+        "income_max": 176410,
+        "income_min": 131143,
+        "size": 2
+       },
+       {
+        "income_max": 198510,
+        "income_min": 131143,
+        "size": 3
+       }
+      ],
+      "monthly_rent": 3661.0,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 7798,
+        "monthly_rent": 3661.0,
+        "name": "421"
+       }
+      ],
+      "unit_size": "1 Bedroom"
+     }
+    ]
+   },
+   "borough_title": "Brooklyn",
+   "details": "<p>Experience the charm of urban living in this stunning apartment located at 75 Dupont Street in Brooklyn. Enjoy spacious interiors, high-end finishes, and an abundance of natural light, making it an ideal sanctuary in the heart of the city.</p><p><br></p><p>The actual rent may vary based on lease terms. The NYC Rent Guidelines Board approved rent increases for rent-stabilized apartments of:</p><p>For one-year leases, there is a 3% increase commencing on or after October 1, 2025, and on or before September 30, 2026,</p><p>and a 4.5% increase for a two-year lease commencing on or after October 1, 2025, and on or before September 30, 2026.</p><p><br></p><h3>Tenants are responsible for electricity including electric stove and heat.</h3>",
+   "end_date": "",
+   "featured_photo": "https://a806-housingconnectapi.nyc.gov/MailTemplates/photos/28452849.png",
+   "hc_property_id": "2995707",
+   "housing_connect_property_url": null,
+   "how_to_apply": {},
+   "id": "2995707",
+   "latitude": "40.73626629026491",
+   "longitude": "-73.95726501321707",
+   "mail_address": "75 Dupont Street Unit 421 0826\nC/O Affordable For New York\n365 Flushing Avenue Suite 505\nBrooklyn NY 11205",
+   "pets_allowed": null,
+   "project_file": "https://iafford.s3.amazonaws.com/projects/3433373--Attachment_G-1_-_75_Dupont_Unit_421_0726.pdf",
+   "project_file_link": "",
+   "rules": null,
+   "title": "75 Dupont Street Unit 421 0826",
+   "units_count": 1
+  }
+ },
+ "error": 0,
+ "errorCode": 0,
+ "success": 1
+}

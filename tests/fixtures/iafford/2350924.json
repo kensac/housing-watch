@@ -1,0 +1,75 @@
+{
+ "data": {
+  "record": {
+   "address": "151 Carlton Ave, Brooklyn, NY 11205",
+   "ami_grid": {
+    "130": [
+     {
+      "households": [
+       {
+        "income_max": 154440,
+        "income_min": 125623,
+        "size": 1
+       },
+       {
+        "income_max": 176410,
+        "income_min": 125623,
+        "size": 2
+       },
+       {
+        "income_max": 198510,
+        "income_min": 125623,
+        "size": 3
+       }
+      ],
+      "monthly_rent": 3500.0,
+      "unit_count": 4,
+      "unit_ids": [
+       {
+        "id": 6292,
+        "monthly_rent": 3500.0,
+        "name": "2F"
+       },
+       {
+        "id": 6290,
+        "monthly_rent": 3500.0,
+        "name": "2J"
+       },
+       {
+        "id": 6287,
+        "monthly_rent": 3500.0,
+        "name": "4E"
+       },
+       {
+        "id": 6280,
+        "monthly_rent": 3500.0,
+        "name": "8H"
+       }
+      ],
+      "unit_size": "1 Bedroom"
+     }
+    ]
+   },
+   "borough_title": "Brooklyn",
+   "details": "<p><strong>For inquires please reach out to Fradyj@iafford.nyc</strong></p><p><br></p><p><strong>Incentive: Receive one month of free early occupancy!</strong></p><p><br></p><p>Welcome to <em>THE GARRISON</em>, Fort Greene\u2019s newest luxury residence, perfectly positioned steps from Fort Greene Park and the neighborhood\u2019s most sought-after hotspots. This 63-unit masterpiece blends sleek modern design with breathtaking Manhattan skyline views, setting a new standard for upscale Brooklyn living.</p><p>Wake up to skyline views. Unwind in style. Your home at The Garrison is designed for the way you live. Expansive floor-to-ceiling windows bathe each space in natural light, while private glass balconies offer the perfect spot for morning coffee or sunset cocktails. Inside, every detail speaks of effortless luxury, from chef-inspired kitchens with elegant islands and premium finishes to spa-like bathrooms designed for relaxation and the everyday convenience of in-unit laundry.</p><p>Next-level amenities, right at home. Life at The Garrison is more than just a stunning apartment\u2014it\u2019s a lifestyle upgrade. Work, relax, and entertain with a furnished rooftop lounge featuring BBQ grills and an outdoor kitchen, a state-of-the-art fitness center to keep you moving, and a collaborative workspace lounge designed for work-from-home ease. A bike room and secure storage add extra convenience, ensuring everything you need is right at your fingertips.</p><p>Brooklyn\u2019s best, right outside your door. Step outside and find yourself immersed in Fort Greene\u2019s vibrant culture\u2014from farmers\u2019 markets in the park to buzzing caf\u00e9s, Michelin-starred dining, and boutique shopping. With easy access to public transportation, the entire city is just minutes away.</p>",
+   "end_date": "",
+   "featured_photo": "https://a806-housingconnectapi.nyc.gov/MailTemplates/photos/34864720.png",
+   "hc_property_id": "2350924",
+   "housing_connect_property_url": null,
+   "how_to_apply": {},
+   "id": "2350924",
+   "latitude": "40.69333750478299",
+   "longitude": " -73.97257081855565",
+   "mail_address": "",
+   "pets_allowed": "1",
+   "project_file": "https://iafford.s3.amazonaws.com/projects/3777644-Attachment_G-1_1.pdf",
+   "project_file_link": "",
+   "rules": null,
+   "title": "The Garrison -  OM Units",
+   "units_count": 4
+  }
+ },
+ "error": 0,
+ "errorCode": 0,
+ "success": 1
+}

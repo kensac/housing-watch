@@ -1,0 +1,382 @@
+{
+"lotteryId": 7494,
+"lotteryNumber": "75417494",
+"lotteryName": "42-78 65 Place Apartments ",
+"lotteryDescription": "MIH and 421a",
+"endDate": "2026-11-02T00:00:00",
+"isPhasedLottery": false,
+"isPaperAppsEntered": false,
+"isMiniLottery": false,
+"isMitchelLamaLottery": false,
+"ownerTypeId": null,
+"propertyTypeId": 2,
+"isFormerSiteTenant": false,
+"photos": [],
+"lotteryBuildings": [
+{
+"buildingId": 7952,
+"address": "42-78 65 PLACE",
+"city": "WOODSIDE",
+"state": "NY",
+"zip": "11377",
+"latitude": "40.741363",
+"longitude": "-73.899722",
+"nearbyPlaces": []
+}
+],
+"amenities": [
+{
+"isBuildingLevel": false,
+"name": "Smoke-free"
+},
+{
+"isBuildingLevel": false,
+"name": "Smoke-free"
+}
+],
+"units": [
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 869.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "42-78 65 PLACE",
+"city": "WOODSIDE",
+"unitRegulatoryMechanismAmi": 40,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 38435.0,
+"maximumIncome": 47520.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 38435.0,
+"maximumIncome": 54280.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 38435.0,
+"maximumIncome": 61080.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 869.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "42-78 65 PLACE",
+"city": "WOODSIDE",
+"unitRegulatoryMechanismAmi": 40,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 38435.0,
+"maximumIncome": 47520.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 38435.0,
+"maximumIncome": 54280.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 38435.0,
+"maximumIncome": 61080.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1399.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "42-78 65 PLACE",
+"city": "WOODSIDE",
+"unitRegulatoryMechanismAmi": 60,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 56606.0,
+"maximumIncome": 71280.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 56606.0,
+"maximumIncome": 81420.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 56606.0,
+"maximumIncome": 91620.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1399.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "42-78 65 PLACE",
+"city": "WOODSIDE",
+"unitRegulatoryMechanismAmi": 60,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 56606.0,
+"maximumIncome": 71280.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 56606.0,
+"maximumIncome": 81420.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 56606.0,
+"maximumIncome": 91620.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2882.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 3,
+"utilityTypeId": null,
+"minimumHouseholdSize": 2,
+"maximumHouseholdSize": 5,
+"unitLayoutTypeName": "2 Bedroom",
+"address": "42-78 65 PLACE",
+"city": "WOODSIDE",
+"unitRegulatoryMechanismAmi": 100,
+"unitIncome": [
+{
+"houseHoldSize": 2,
+"minimumIncome": 112389.0,
+"maximumIncome": 135700.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 112389.0,
+"maximumIncome": 152700.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 112389.0,
+"maximumIncome": 169600.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 112389.0,
+"maximumIncome": 183200.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1611.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 3,
+"utilityTypeId": null,
+"minimumHouseholdSize": 2,
+"maximumHouseholdSize": 5,
+"unitLayoutTypeName": "2 Bedroom",
+"address": "42-78 65 PLACE",
+"city": "WOODSIDE",
+"unitRegulatoryMechanismAmi": 60,
+"unitIncome": [
+{
+"houseHoldSize": 2,
+"minimumIncome": 68812.0,
+"maximumIncome": 81420.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 68812.0,
+"maximumIncome": 91620.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 68812.0,
+"maximumIncome": 101760.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 68812.0,
+"maximumIncome": 109920.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 3000.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 3,
+"utilityTypeId": null,
+"minimumHouseholdSize": 2,
+"maximumHouseholdSize": 5,
+"unitLayoutTypeName": "2 Bedroom",
+"address": "42-78 65 PLACE",
+"city": "WOODSIDE",
+"unitRegulatoryMechanismAmi": 130,
+"unitIncome": [
+{
+"houseHoldSize": 2,
+"minimumIncome": 116435.0,
+"maximumIncome": 176410.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 116435.0,
+"maximumIncome": 198510.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 116435.0,
+"maximumIncome": 220480.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 116435.0,
+"maximumIncome": 238160.0
+}
+]
+}
+],
+"lotterySetAsidePreferences": [
+{
+"requirementAllocation": 5.0,
+"name": "Mobility",
+"priority": 1,
+"preferenceTypeId": 1,
+"minAgePreference": null,
+"isSetAside": true,
+"lotterySetAsidePreferenceId": 4832
+},
+{
+"requirementAllocation": 2.0,
+"name": "Vision/Hearing",
+"priority": 2,
+"preferenceTypeId": 2,
+"minAgePreference": null,
+"isSetAside": true,
+"lotterySetAsidePreferenceId": 4833
+},
+{
+"requirementAllocation": 20.0,
+"name": "Community Board Resident (Queens CB 02)",
+"priority": 3,
+"preferenceTypeId": 3,
+"minAgePreference": null,
+"isSetAside": false,
+"lotterySetAsidePreferenceId": 4834
+},
+{
+"requirementAllocation": 10.0,
+"name": "Municipal Employee/ Military Veteran",
+"priority": 4,
+"preferenceTypeId": 15,
+"minAgePreference": null,
+"isSetAside": false,
+"lotterySetAsidePreferenceId": 4835
+}
+],
+"lotteryTasks": [
+{
+"taskInventoryId": 7,
+"advertisementContent": null,
+"paperApplicationDelivery": [
+{
+"paperApplicationId": 5941,
+"lotteryTaskId": 63320,
+"poBoxNumber": "",
+"address": "42-78 65 Place Apartments C/O Reside Affordable, 349 Keap Street",
+"city": "Brooklyn",
+"state": "NY",
+"zip": "11211",
+"supervisingAgencyId": 1,
+"poLocationId": null,
+"openedDate": null,
+"deadLineDate": null
+}
+]
+},
+{
+"taskInventoryId": 10,
+"advertisementContent": {
+"advertisementContentId": 7572,
+"lotteryTaskId": 63574,
+"developmentWebsite": "https://bit.ly/4g6un5c",
+"projectSpecificDetails": "Welcome to 42-78 65 Place Apartments \u2014 where modern comfort meets convenience! Enjoy stylish apartments featuring air conditioning, high-end finishes and appliances, in-unit washer and dryer, and private patio or balcony options. Residents can also enjoy a gym and rooftop terrace, elevator, security cameras, and convenient access to public transportation. Pet-friendly \u2014 small pets up to 8 lbs.  Requires a $300 deposit.\nTenant is responsible for electricity including stove, heat (split unit), and hot water.  ",
+"affordableHousingProgram": "This building is being constructed through the Inclusionary Housing Program and is anticipated to receive a Tax Exemption through the 421a Tax Incentive Program through the New York City Department of Housing Preservation and Development",
+"depositsAndOrApplicationFees": false,
+"refundable": null,
+"amount": null,
+"adContentAgency": [
+"Department of Housing Preservation and Development"
+]
+},
+"paperApplicationDelivery": null
+}
+]
+}

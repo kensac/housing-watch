@@ -1,0 +1,55 @@
+{
+ "data": {
+  "record": {
+   "address": "465 W 163rd St, New York, NY 10032",
+   "ami_grid": {
+    "130": [
+     {
+      "households": [
+       {
+        "income_max": 154440,
+        "income_min": 69294,
+        "size": 1
+       },
+       {
+        "income_max": 176410,
+        "income_min": 69294,
+        "size": 2
+       }
+      ],
+      "monthly_rent": 1831.06,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 779,
+        "monthly_rent": 1831.06,
+        "name": "3B"
+       }
+      ],
+      "unit_size": "Studio"
+     }
+    ]
+   },
+   "borough_title": "Manhattan",
+   "details": "<p>Experience the charm of urban living in this stunning apartment located at 465 West 163rd Street in Manhattan. Enjoy spacious interiors, high-end finishes, and an abundance of natural light, making it an ideal sanctuary in the heart of the city.</p><p><br></p><p>Tenants are responsible for electricity including electric stove and heat.</p>",
+   "end_date": "2021-02-10T00:00:00",
+   "featured_photo": "https://a806-housingconnectapi.nyc.gov/MailTemplates/photos/13470121.png",
+   "hc_property_id": "7816340",
+   "housing_connect_property_url": null,
+   "how_to_apply": {},
+   "id": "7816340",
+   "latitude": "40.83655856182688",
+   "longitude": "-73.93855408465791",
+   "mail_address": "465 West 163 Street Unit 3B 1026\nC/O IAfford NY\n365 Flushing Avenue Suite 503\nBrooklyn NY 11205",
+   "pets_allowed": null,
+   "project_file": "https://iafford.s3.amazonaws.com/projects/3470735--Attachment_G-1_-465_West_163_Street_Unit_3B_1026.pdf",
+   "project_file_link": "",
+   "rules": null,
+   "title": "465 West 163 Street Unit 3B 1026",
+   "units_count": 1
+  }
+ },
+ "error": 0,
+ "errorCode": 0,
+ "success": 1
+}

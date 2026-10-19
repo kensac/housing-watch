@@ -1,0 +1,307 @@
+{
+ "a0Ycs000028W6CjEAK": [
+  {
+   "amiCategory": "50%",
+   "householdSize": "1",
+   "id": "a0Xcs00000oBIo1EAG_a0vcs00000XWKyHAAX",
+   "maxHouseholdIncome": 59400,
+   "minHouseholdIncome": 0,
+   "monthlyRent": 0,
+   "unitsAvailable": 71,
+   "unitSize": "Studio"
+  },
+  {
+   "amiCategory": "50%",
+   "householdSize": "1",
+   "id": "a0Xcs00000oBJAbEAO_a0vcs00000XWLCnAAP",
+   "maxHouseholdIncome": 59400,
+   "minHouseholdIncome": 0,
+   "monthlyRent": 0,
+   "unitsAvailable": 27,
+   "unitSize": "1BR",
+   "unitType": "Large"
+  },
+  {
+   "amiCategory": "50%",
+   "householdSize": "2",
+   "id": "a0Xcs00000oBJAbEAO_a0vcs00000XWLHdAAP",
+   "maxHouseholdIncome": 67850,
+   "minHouseholdIncome": 0,
+   "monthlyRent": 0,
+   "unitsAvailable": 27,
+   "unitSize": "1BR",
+   "unitType": "Large"
+  }
+ ],
+ "a0Ycs00001nyK17EAE": [
+  {
+   "households": [
+    {
+     "maxHousehold": 2,
+     "maxIncome": 133488,
+     "minHousehold": 1,
+     "minIncome": 38895
+    }
+   ],
+   "id": "a17cs0000ITrWoWAQV",
+   "maxPurchasePrice": 31722,
+   "maxRent": 1407.13,
+   "minPurchasePrice": 25406,
+   "minRent": 1080.43,
+   "Status": "Open",
+   "unitType": "Studio"
+  },
+  {
+   "households": [
+    {
+     "maxHousehold": 2,
+     "maxIncome": 204983,
+     "minHousehold": 1,
+     "minIncome": 50488
+    }
+   ],
+   "id": "a17cs0000ITrWoXAQV",
+   "maxPurchasePrice": 47454,
+   "maxRent": 2065.97,
+   "minPurchasePrice": 32405,
+   "minRent": 1402.46,
+   "Status": "Open",
+   "unitType": "1BR"
+  },
+  {
+   "households": [
+    {
+     "maxHousehold": 4,
+     "maxIncome": 299551,
+     "minHousehold": 2,
+     "minIncome": 64947
+    }
+   ],
+   "id": "a17cs0000ITrWoYAQV",
+   "maxPurchasePrice": 58921,
+   "maxRent": 2786.67,
+   "minPurchasePrice": 41437,
+   "minRent": 1804.1,
+   "Status": "Open",
+   "unitType": "2BR"
+  },
+  {
+   "households": [
+    {
+     "maxHousehold": 6,
+     "maxIncome": 360704,
+     "minHousehold": 4,
+     "minIncome": 79572
+    }
+   ],
+   "id": "a17cs0000ITrWoZAQV",
+   "maxPurchasePrice": 69082,
+   "maxRent": 3363.03,
+   "minPurchasePrice": 50769,
+   "minRent": 2210.36,
+   "Status": "Open",
+   "unitType": "3BR"
+  }
+ ],
+ "a0Ycs00001nyK1PEAU": [
+  {
+   "bedroomType": "Efficiency",
+   "households": [
+    {
+     "maxHousehold": 3,
+     "maxIncome": 83975,
+     "minHousehold": 1,
+     "minIncome": 31117
+    }
+   ],
+   "id": "a17cs0000IVlcdaAQB",
+   "maxPurchasePrice": 22500,
+   "maxRent": 875.64,
+   "minPurchasePrice": 22500,
+   "minRent": 823.5,
+   "Status": "Closed",
+   "unitType": "1BR"
+  },
+  {
+   "bedroomType": "Standard",
+   "households": [
+    {
+     "maxHousehold": 3,
+     "maxIncome": 97246,
+     "minHousehold": 1,
+     "minIncome": 36183
+    }
+   ],
+   "id": "a17cs0000IVlcdbAQB",
+   "maxPurchasePrice": 26250,
+   "maxRent": 1021.66,
+   "minPurchasePrice": 26250,
+   "minRent": 937.91,
+   "Status": "Open",
+   "unitType": "1BR"
+  },
+  {
+   "bedroomType": "w/ Terrace or Townhouse",
+   "households": [
+    {
+     "maxHousehold": 3,
+     "maxIncome": 112050,
+     "minHousehold": 1,
+     "minIncome": 41280
+    }
+   ],
+   "id": "a17cs0000IVlcdeAQB",
+   "maxPurchasePrice": 30000,
+   "maxRent": 1188.84,
+   "minPurchasePrice": 30000,
+   "minRent": 1097.43,
+   "Status": "Open",
+   "unitType": "1BR"
+  },
+  {
+   "bedroomType": "Standard",
+   "households": [
+    {
+     "maxHousehold": 5,
+     "maxIncome": 136332,
+     "minHousehold": 2,
+     "minIncome": 46412
+    }
+   ],
+   "id": "a17cs0000IVlcdfAQB",
+   "maxPurchasePrice": 33750,
+   "maxRent": 1311.32,
+   "minPurchasePrice": 33750,
+   "minRent": 1175.42,
+   "Status": "Open",
+   "unitType": "2BR"
+  },
+  {
+   "bedroomType": "w/ Terrace",
+   "households": [
+    {
+     "maxHousehold": 5,
+     "maxIncome": 148610,
+     "minHousehold": 2,
+     "minIncome": 51651
+    }
+   ],
+   "id": "a17cs0000IVlcdgAQB",
+   "maxPurchasePrice": 37500,
+   "maxRent": 1466.17,
+   "minPurchasePrice": 37500,
+   "minRent": 1246.27,
+   "Status": "Closed",
+   "unitType": "2BR"
+  },
+  {
+   "households": [
+    {
+     "maxHousehold": 7,
+     "maxIncome": 194327,
+     "minHousehold": 4,
+     "minIncome": 61957
+    }
+   ],
+   "id": "a17cs0000IVlcdkAQB",
+   "maxPurchasePrice": 52500,
+   "maxRent": 1977.05,
+   "minPurchasePrice": 45000,
+   "minRent": 1656.12,
+   "Status": "Open",
+   "unitType": "3BR"
+  }
+ ],
+ "a0Ycs00001UzwGcEAJ": [
+  {
+   "amiCategory": "150%",
+   "householdSize": "1",
+   "id": "a0Xcs00000ajio9EAA_a0vcs00000KhngIAAR",
+   "maxHouseholdIncome": 170100,
+   "minHouseholdIncome": 85633,
+   "monthlyRent": 2569,
+   "unitsAvailable": 1,
+   "unitSize": "Studio"
+  },
+  {
+   "amiCategory": "150%",
+   "householdSize": "2",
+   "id": "a0Xcs00000ajio9EAA_a0vcs00000KiLTRAA3",
+   "maxHouseholdIncome": 194400,
+   "minHouseholdIncome": 85633,
+   "monthlyRent": 2569,
+   "unitsAvailable": 1,
+   "unitSize": "Studio"
+  },
+  {
+   "amiCategory": "150%",
+   "householdSize": "2",
+   "id": "a0Xcs00000ajixpEAA_a0vcs00000Ki25rAAB",
+   "maxHouseholdIncome": 194400,
+   "minHouseholdIncome": 104067,
+   "monthlyRent": 3122,
+   "unitsAvailable": 1,
+   "unitSize": "1BR"
+  },
+  {
+   "amiCategory": "150%",
+   "householdSize": "3",
+   "id": "a0Xcs00000ajixpEAA_a0vcs00000KiLTSAA3",
+   "maxHouseholdIncome": 218700,
+   "minHouseholdIncome": 104067,
+   "monthlyRent": 3122,
+   "unitsAvailable": 1,
+   "unitSize": "1BR"
+  },
+  {
+   "amiCategory": "150%",
+   "householdSize": "1",
+   "id": "a0Xcs00000ajixpEAA_a0vcs00000KiLgLAAV",
+   "maxHouseholdIncome": 170100,
+   "minHouseholdIncome": 104067,
+   "monthlyRent": 3122,
+   "unitsAvailable": 1,
+   "unitSize": "1BR"
+  },
+  {
+   "amiCategory": "150%",
+   "householdSize": "3",
+   "id": "a0Xcs00000ajjlpEAA_a0vcs00000KiKM6AAN",
+   "maxHouseholdIncome": 218700,
+   "minHouseholdIncome": 132267,
+   "monthlyRent": 3968,
+   "unitsAvailable": 1,
+   "unitSize": "2BR"
+  },
+  {
+   "amiCategory": "150%",
+   "householdSize": "2",
+   "id": "a0Xcs00000ajjlpEAA_a0vcs00000KiMAzAAN",
+   "maxHouseholdIncome": 194400,
+   "minHouseholdIncome": 132267,
+   "monthlyRent": 3968,
+   "unitsAvailable": 1,
+   "unitSize": "2BR"
+  },
+  {
+   "amiCategory": "150%",
+   "householdSize": "4",
+   "id": "a0Xcs00000ajjlpEAA_a0vcs00000KiMNtAAN",
+   "maxHouseholdIncome": 243000,
+   "minHouseholdIncome": 132267,
+   "monthlyRent": 3968,
+   "unitsAvailable": 1,
+   "unitSize": "2BR"
+  },
+  {
+   "amiCategory": "150%",
+   "householdSize": "5",
+   "id": "a0Xcs00000ajjlpEAA_a0vcs00000KiMSjAAN",
+   "maxHouseholdIncome": 262500,
+   "minHouseholdIncome": 132267,
+   "monthlyRent": 3968,
+   "unitsAvailable": 1,
+   "unitSize": "2BR"
+  }
+ ]
+}

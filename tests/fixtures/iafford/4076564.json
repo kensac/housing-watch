@@ -1,0 +1,67 @@
+{
+ "data": {
+  "record": {
+   "address": "2250 Clarendon Road ,Brooklyn, NY 11226",
+   "ami_grid": {
+    "130": [
+     {
+      "households": [
+       {
+        "income_max": 176410,
+        "income_min": 100247,
+        "size": 2
+       },
+       {
+        "income_max": 198510,
+        "income_min": 100247,
+        "size": 3
+       },
+       {
+        "income_max": 220480,
+        "income_min": 100247,
+        "size": 4
+       },
+       {
+        "income_max": 238160,
+        "income_min": 100247,
+        "size": 5
+       }
+      ],
+      "monthly_rent": 2500.87,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 3649,
+        "monthly_rent": 2500.87,
+        "name": "6D"
+       }
+      ],
+      "unit_size": "2 Bedrooms"
+     }
+    ]
+   },
+   "borough_title": null,
+   "details": null,
+   "end_date": "",
+   "featured_photo": "",
+   "hc_property_id": "4076564",
+   "housing_connect_property_url": null,
+   "how_to_apply": {
+    "url": ""
+   },
+   "id": "4076564",
+   "latitude": null,
+   "longitude": null,
+   "mail_address": "2250 Clarendon Road - 0626 Unit 6D\nC/O Iafford NY\n365 Flushing Avenue Suite 503\nBrooklyn NY 11205",
+   "pets_allowed": null,
+   "project_file": "https://iafford.s3.amazonaws.com/projects/4485255-Attachment_G-1_5.pdf",
+   "project_file_link": "",
+   "rules": null,
+   "title": "2250 Clarendon Road - 0626 Unit 6D",
+   "units_count": 1
+  }
+ },
+ "error": 0,
+ "errorCode": 0,
+ "success": 1
+}

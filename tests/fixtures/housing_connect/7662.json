@@ -1,0 +1,469 @@
+{
+"lotteryId": 7662,
+"lotteryNumber": "86527662",
+"lotteryName": "1 Gouverneur Lane",
+"lotteryDescription": "162 income restricted units - 467-M",
+"endDate": "2026-11-17T00:00:00",
+"isPhasedLottery": false,
+"isPaperAppsEntered": false,
+"isMiniLottery": false,
+"isMitchelLamaLottery": false,
+"ownerTypeId": null,
+"propertyTypeId": 2,
+"isFormerSiteTenant": false,
+"photos": [],
+"lotteryBuildings": [
+{
+"buildingId": 8205,
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"state": "NY",
+"zip": "10005",
+"latitude": "40.704226",
+"longitude": "-74.008198",
+"nearbyPlaces": []
+}
+],
+"amenities": [
+{
+"isBuildingLevel": false,
+"name": "Pet-friendly"
+},
+{
+"isBuildingLevel": false,
+"name": "Dog park"
+}
+],
+"units": [
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2643.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 1,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 2,
+"unitLayoutTypeName": "Studio",
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"unitRegulatoryMechanismAmi": 100,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 94423.0,
+"maximumIncome": 118800.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 94423.0,
+"maximumIncome": 135700.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2643.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 1,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 2,
+"unitLayoutTypeName": "Studio",
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"unitRegulatoryMechanismAmi": 100,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 94423.0,
+"maximumIncome": 118800.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 94423.0,
+"maximumIncome": 135700.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2643.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 1,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 2,
+"unitLayoutTypeName": "Studio",
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"unitRegulatoryMechanismAmi": 100,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 94903.0,
+"maximumIncome": 118800.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 94903.0,
+"maximumIncome": 135700.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2823.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"unitRegulatoryMechanismAmi": 100,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 101109.0,
+"maximumIncome": 118800.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 101109.0,
+"maximumIncome": 135700.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 101109.0,
+"maximumIncome": 152700.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2823.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"unitRegulatoryMechanismAmi": 100,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 101109.0,
+"maximumIncome": 118800.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 101109.0,
+"maximumIncome": 135700.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 101109.0,
+"maximumIncome": 152700.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1056.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"unitRegulatoryMechanismAmi": 40,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 40526.0,
+"maximumIncome": 47520.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 40526.0,
+"maximumIncome": 54280.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 40526.0,
+"maximumIncome": 61080.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 1056.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"unitRegulatoryMechanismAmi": 40,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 40526.0,
+"maximumIncome": 47520.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 40526.0,
+"maximumIncome": 54280.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 40526.0,
+"maximumIncome": 61080.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2234.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"unitRegulatoryMechanismAmi": 80,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 80915.0,
+"maximumIncome": 95040.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 80915.0,
+"maximumIncome": 108560.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 80915.0,
+"maximumIncome": 122160.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2234.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 2,
+"utilityTypeId": null,
+"minimumHouseholdSize": 1,
+"maximumHouseholdSize": 3,
+"unitLayoutTypeName": "1 Bedroom",
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"unitRegulatoryMechanismAmi": 80,
+"unitIncome": [
+{
+"houseHoldSize": 1,
+"minimumIncome": 80915.0,
+"maximumIncome": 95040.0
+},
+{
+"houseHoldSize": 2,
+"minimumIncome": 80915.0,
+"maximumIncome": 108560.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 80915.0,
+"maximumIncome": 122160.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2664.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 3,
+"utilityTypeId": null,
+"minimumHouseholdSize": 2,
+"maximumHouseholdSize": 5,
+"unitLayoutTypeName": "2 Bedroom",
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"unitRegulatoryMechanismAmi": 80,
+"unitIncome": [
+{
+"houseHoldSize": 2,
+"minimumIncome": 97063.0,
+"maximumIncome": 108560.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 97063.0,
+"maximumIncome": 122160.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 97063.0,
+"maximumIncome": 135680.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 97063.0,
+"maximumIncome": 146560.0
+}
+]
+},
+{
+"householdSize": 0,
+"estimatedSalePrice": 0.0,
+"hasPlusOneRule": false,
+"maximumAssetCap": 0.0,
+"carryingCost": 0.0,
+"numberOfSmallHomeUnits": 0,
+"actualRent": 2664.0,
+"minimumDownPayment": 0,
+"bathrooms": 0.0,
+"unitLayoutTypeId": 3,
+"utilityTypeId": null,
+"minimumHouseholdSize": 2,
+"maximumHouseholdSize": 5,
+"unitLayoutTypeName": "2 Bedroom",
+"address": "1 GOUVERNEUR LANE",
+"city": "NEW YORK",
+"unitRegulatoryMechanismAmi": 80,
+"unitIncome": [
+{
+"houseHoldSize": 2,
+"minimumIncome": 97063.0,
+"maximumIncome": 108560.0
+},
+{
+"houseHoldSize": 3,
+"minimumIncome": 97063.0,
+"maximumIncome": 122160.0
+},
+{
+"houseHoldSize": 4,
+"minimumIncome": 97063.0,
+"maximumIncome": 135680.0
+},
+{
+"houseHoldSize": 5,
+"minimumIncome": 97063.0,
+"maximumIncome": 146560.0
+}
+]
+}
+],
+"lotterySetAsidePreferences": [],
+"lotteryTasks": [
+{
+"taskInventoryId": 7,
+"advertisementContent": null,
+"paperApplicationDelivery": [
+{
+"paperApplicationId": 6240,
+"lotteryTaskId": 65534,
+"poBoxNumber": "",
+"address": "109 E 9th St, Storefront",
+"city": "Manhattan",
+"state": "NY",
+"zip": "10003",
+"supervisingAgencyId": 1,
+"poLocationId": null,
+"openedDate": null,
+"deadLineDate": null
+}
+]
+},
+{
+"taskInventoryId": 10,
+"advertisementContent": {
+"advertisementContentId": 7727,
+"lotteryTaskId": 65537,
+"developmentWebsite": "https://mgnyconsulting.com/",
+"projectSpecificDetails": "1 Gouverneur Lane is the most anticipated lottery of the year, located in the heart of Downtown Manhattan. Residential interiors are designed for comfort and purpose, offering a sleek and stylish way to entertain, gather, and live. \n\nService/Support animals are allowed a maximum of 2 Pets of any kind. The Pet, or two Pets may not weigh no more than 50 pounds combined at full maturity. No dogs of the Rottweiler, Doberman, Pitbull, German Shepherd variety, mixed or pedigreed with an aggressive nature as determined by Owner in its discretion will be permitted without written consent. There will be no cat breeds with an aggressive nature, or caged birds permitted in an Apartment without the express written consent of the Owner\u2019s agent. No fish tanks are permitted in the building.\n\nTenant responsible for electricity including stove. Rent includes water, gas and heat.",
+"affordableHousingProgram": "This building is anticipated to receive a Tax Exemption through the 467-m Program of the New York City Department of Housing Preservation and Development.",
+"depositsAndOrApplicationFees": false,
+"refundable": null,
+"amount": null,
+"adContentAgency": [
+"Department of Housing Preservation and Development"
+]
+},
+"paperApplicationDelivery": null
+}
+]
+}

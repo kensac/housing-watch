@@ -1,0 +1,213 @@
+{
+ "data": {
+  "record": {
+   "address": "65 Dupont St, Brooklyn, NY 11222",
+   "ami_grid": {
+    "130": [
+     {
+      "households": [
+       {
+        "income_max": 154440,
+        "income_min": 125520,
+        "size": 1
+       },
+       {
+        "income_max": 176410,
+        "income_min": 125520,
+        "size": 2
+       },
+       {
+        "income_max": 198510,
+        "income_min": 125520,
+        "size": 3
+       }
+      ],
+      "monthly_rent": 3661.0,
+      "unit_count": 11,
+      "unit_ids": [
+       {
+        "id": 4925,
+        "monthly_rent": 3661.0,
+        "name": "115"
+       },
+       {
+        "id": 4929,
+        "monthly_rent": 3661.0,
+        "name": "220"
+       },
+       {
+        "id": 4931,
+        "monthly_rent": 3661.0,
+        "name": "225"
+       },
+       {
+        "id": 4932,
+        "monthly_rent": 3661.0,
+        "name": "226"
+       },
+       {
+        "id": 4933,
+        "monthly_rent": 3661.0,
+        "name": "228"
+       },
+       {
+        "id": 4939,
+        "monthly_rent": 3661.0,
+        "name": "320"
+       },
+       {
+        "id": 4941,
+        "monthly_rent": 3661.0,
+        "name": "325"
+       },
+       {
+        "id": 4943,
+        "monthly_rent": 3661.0,
+        "name": "328"
+       },
+       {
+        "id": 4950,
+        "monthly_rent": 3661.0,
+        "name": "425"
+       },
+       {
+        "id": 4951,
+        "monthly_rent": 3661.0,
+        "name": "428"
+       },
+       {
+        "id": 4966,
+        "monthly_rent": 3661.0,
+        "name": "628"
+       }
+      ],
+      "unit_size": "1 Bedroom"
+     },
+     {
+      "households": [
+       {
+        "income_max": 154440,
+        "income_min": 117360,
+        "size": 1
+       },
+       {
+        "income_max": 176410,
+        "income_min": 117360,
+        "size": 2
+       }
+      ],
+      "monthly_rent": 3423.0,
+      "unit_count": 10,
+      "unit_ids": [
+       {
+        "id": 4900,
+        "monthly_rent": 3423.0,
+        "name": "202"
+       },
+       {
+        "id": 4905,
+        "monthly_rent": 3423.0,
+        "name": "302"
+       },
+       {
+        "id": 4910,
+        "monthly_rent": 3423.0,
+        "name": "324"
+       },
+       {
+        "id": 4911,
+        "monthly_rent": 3423.0,
+        "name": "329"
+       },
+       {
+        "id": 4912,
+        "monthly_rent": 3423.0,
+        "name": "402"
+       },
+       {
+        "id": 4917,
+        "monthly_rent": 3423.0,
+        "name": "424"
+       },
+       {
+        "id": 4918,
+        "monthly_rent": 3423.0,
+        "name": "518"
+       },
+       {
+        "id": 4920,
+        "monthly_rent": 3423.0,
+        "name": "524"
+       },
+       {
+        "id": 4921,
+        "monthly_rent": 3423.0,
+        "name": "622"
+       },
+       {
+        "id": 4922,
+        "monthly_rent": 3423.0,
+        "name": "624"
+       }
+      ],
+      "unit_size": "Studio"
+     },
+     {
+      "households": [
+       {
+        "income_max": 176410,
+        "income_min": 150035,
+        "size": 2
+       },
+       {
+        "income_max": 198510,
+        "income_min": 150035,
+        "size": 3
+       },
+       {
+        "income_max": 220480,
+        "income_min": 150035,
+        "size": 4
+       },
+       {
+        "income_max": 238160,
+        "income_min": 150035,
+        "size": 5
+       }
+      ],
+      "monthly_rent": 4376.0,
+      "unit_count": 1,
+      "unit_ids": [
+       {
+        "id": 4977,
+        "monthly_rent": 4376.0,
+        "name": "331"
+       }
+      ],
+      "unit_size": "2 Bedrooms"
+     }
+    ]
+   },
+   "borough_title": "Brooklyn",
+   "details": "<p>Experience sophisticated living in Greenpoint's vibrant core. This brand new development presents a range of studio, one-bedroom, and two-bedroom homes, each meticulously designed to enhance comfort and convenience. Indulge in premium amenities that enhance your lifestyle. Begin your day with a coffee at the lobby caf\u00e9, then head to the co-working space, where innovative design boosts productivity. Relax on the sun deck, host gatherings at the BBQ grills, or enjoy an outdoor yoga session. For recreation, play on the pickleball court, unwind in the game room, or create music in the dedicated music room. When it\u2019s time to relax, retreat to the resident lounge or pamper your pet at the on-site pet spa. The building is pet-friendly with one pet allowed per household (50 lb. weight limit, some breed restrictions apply). The tenant is responsible for electricity, including stove and heat. The rent includes hot water.</p>",
+   "end_date": "2025-07-07T00:00:00",
+   "featured_photo": "https://a806-housingconnectapi.nyc.gov/MailTemplates/photos/30697033.png",
+   "hc_property_id": "3399348",
+   "housing_connect_property_url": null,
+   "how_to_apply": {},
+   "id": "3399348",
+   "latitude": "40.73588470760883",
+   "longitude": "-73.9579358",
+   "mail_address": "Greenpoint Central Apartments - 65 Dupont Street Units Still Available \nC/O Affordable for New York \n365 Flushing Avenue Suite 505\nBrooklyn NY 11205\n",
+   "pets_allowed": null,
+   "project_file": "",
+   "project_file_link": "https://streeteasy.com/building/greenpoint-central-65-dupont-street-brooklyn",
+   "rules": null,
+   "title": "Greenpoint Central Apartments - 65 Dupont Street Units Still Available",
+   "units_count": 22
+  }
+ },
+ "error": 0,
+ "errorCode": 0,
+ "success": 1
+}

@@ -1,0 +1,65 @@
+{
+ "count": 2,
+ "unitModels": [
+  {
+   "unitSpk": "P~NYPC21~123456789",
+   "unitFloor": "0M",
+   "name": "0M-C",
+   "property": {
+    "name": "Peter Cooper Village",
+    "propertySpk": "P~102PCV",
+    "commonImages": []
+   },
+   "building": {
+    "address": "431 EAST 20TH STREET",
+    "latitude": "40.73482",
+    "longitude": "-73.97841",
+    "buildingId": "265",
+    "buildingName": "431 EAST 20TH STREET",
+    "transports": []
+   },
+   "finish": "Affordable Housing",
+   "incomeRequirement": 4300,
+   "bedrooms": 1,
+   "bathrooms": 1,
+   "sqft": 700,
+   "availableDate": "2026-11-01T00:00:00Z",
+   "price": 3850.0,
+   "unitRates": {
+    "12": 3850.0
+   },
+   "isFlex": false,
+   "description": null,
+   "version": 1,
+   "amenities": [],
+   "images": []
+  },
+  {
+   "unitSpk": "P~STUY~SYNTH0",
+   "unitFloor": "0M",
+   "name": "5A",
+   "property": {
+    "name": "StuyTown"
+   },
+   "building": {
+    "address": "271 AVENUE C"
+   },
+   "finish": "Affordable Housing",
+   "incomeRequirement": 4300,
+   "bedrooms": 0,
+   "bathrooms": 1,
+   "sqft": 700,
+   "availableDate": "2026-11-01T00:00:00Z",
+   "price": 3100.0,
+   "unitRates": {
+    "12": 3850.0
+   },
+   "isFlex": false,
+   "description": null,
+   "version": 1,
+   "amenities": [],
+   "images": []
+  }
+ ],
+ "totalCount": 2
+}
