@@ -22,6 +22,7 @@ class Adapter:
     url: ClassVar[str]  # page a human would open
     every_hours: ClassVar[float] = 24  # run cadence
     min_listings: ClassVar[int] = 0  # fewer results than this is treated as a broken adapter
+    parallel: ClassVar[int] = 1  # how many of this source's chunks may run at once (each on a different worker)
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
@@ -38,6 +39,26 @@ class Adapter:
 
     def fetch(self) -> Result:  # pragma: no cover - abstract
         raise NotImplementedError
+
+    # Optional chunking, for sources big enough to spread across the worker fleet (Reside, SANEL).
+    # A run plans chunks, workers fetch them independently (each with a copy of the cache), and the
+    # run merges every chunk's Result before recording, so "gone" detection still sees the whole source.
+    # The defaults make every adapter one chunk; override all three together.
+
+    def chunks(self) -> list[str]:
+        """Chunk keys for this run, decided from the cache and/or a cheap index fetch."""
+        return [""]
+
+    def fetch_chunk(self, key: str) -> Result:
+        """Fetch one chunk; may update self.cache, which is returned to the run as this chunk's delta."""
+        return self.fetch()
+
+    def merge_cache(self, parts: list[dict]) -> dict:
+        """Combine the caches the chunks returned (default: a key-wise update, later chunks win)."""
+        out = dict(self.cache)
+        for p in parts:
+            out.update(p)
+        return out
 
 
 def load_all() -> dict[str, type[Adapter]]:
