@@ -1,5 +1,6 @@
 import pytest
 
+from housing_watch import filters as F
 from housing_watch import queries as Q
 from seed import seed, seed_jobs
 
@@ -14,32 +15,67 @@ def keys(page):
     return [x.key for x in page.items]
 
 
+def search(db, *fs, **kw):
+    return keys(Q.search_listings(db, Q.ListingQuery(F.parse(list(fs), F.LISTING_FIELDS), **kw)))
+
+
 def test_search_filters(db):
-    res = Q.search_listings(db, Q.ListingFilters())
-    assert set(keys(res)) == {"a:1", "a:2", "b:1", "b:2"}  # gone is hidden unless asked for
+    res = Q.search_listings(db, Q.ListingQuery())
+    assert set(keys(res)) == {"a:1", "a:2", "b:1", "b:2"}  # gone is hidden unless a filter asks about removal
     assert keys(res)[0] == "a:1" and res.verdict_counts == {"eligible": 1, "possible": 1, "excluded": 2}
-    assert keys(Q.search_listings(db, Q.ListingFilters(verdict="possible"))) == ["b:1"]
-    assert keys(Q.search_listings(db, Q.ListingFilters(status="gone"))) == ["b:3"]
-    assert keys(Q.search_listings(db, Q.ListingFilters(status="waitlist"))) == ["b:1"]
-    assert set(keys(Q.search_listings(db, Q.ListingFilters(source="a")))) == {"a:1", "a:2"}
-    assert keys(Q.search_listings(db, Q.ListingFilters(borough="Bronx"))) == ["a:2"]
-    assert keys(Q.search_listings(db, Q.ListingFilters(q="main st"))) == ["a:1"]
-    assert keys(Q.search_listings(db, Q.ListingFilters(q="mail"))) == ["a:1"]  # notes are searched too
-    assert set(keys(Q.search_listings(db, Q.ListingFilters(size="studio", max_rent=2500)))) == {"a:1", "a:2", "b:2"}
-    assert keys(Q.search_listings(db, Q.ListingFilters(max_rent=2000))) == []
-    assert "b:1" not in keys(Q.search_listings(db, Q.ListingFilters(since="24h")))  # changed 3 days ago
-    assert keys(Q.search_listings(db, Q.ListingFilters(sort="title")))[0] == "a:1"
-    assert keys(Q.search_listings(db, Q.ListingFilters(sort="-title")))[0] == "b:2"
-    first = Q.search_listings(db, Q.ListingFilters(limit=3, sort="title"))
+    assert search(db, "verdict.in.possible") == ["b:1"]
+    assert search(db, "gone_since.notempty") == ["b:3"]
+    assert search(db, "status.in.waitlist") == ["b:1"]
+    assert set(search(db, "source.in.a")) == {"a:1", "a:2"}
+    assert set(search(db, "borough.in.Bronx,Brooklyn")) == {"a:2", "b:1"}
+    assert set(search(db, "borough.nin.Bronx,Brooklyn")) == {"a:1", "b:2"}
+    assert search(db, q="main st") == ["a:1"] and search(db, q="mail") == ["a:1"]  # notes are searched too
+    assert search(db, "notes.contains.MAIL") == ["a:1"] and "a:1" not in search(db, "notes.ncontains.mail")
+    assert set(search(db, "address.empty")) == {"a:2", "b:1", "b:2"} and search(db, "address.notempty") == ["a:1"]
+    assert set(search(db, "units.size.in.studio", "units.rent.le.2500")) == {"a:1", "a:2", "b:2"}
+    assert search(db, "units.rent.lt.2000") == []
+    assert search(db, "units.rent.between.2000,2500", "verdict.in.eligible") == ["a:1"]
+    assert "b:1" not in search(db, "last_changed.last.24h")  # changed 3 days ago
+    assert search(db, "first_seen.before.2000-01-01") == []
+    assert search(db, "senior_only.is.yes") == []
+    assert search(db, "eligible_units.ge.1", "verdict.in.eligible") == ["a:1"]
+    assert search(db, "unit_count.eq.0") == ["b:1"]
+    assert search(db, "reason.contains.bronx") == ["a:2"]
+    assert search(db, sort="title")[0] == "a:1" and search(db, sort="-title")[0] == "b:2"
+    first = Q.search_listings(db, Q.ListingQuery(limit=3, sort="title"))
     assert (first.total, first.next_offset, len(first.items)) == (4, 3, 3)
-    rest = Q.search_listings(db, Q.ListingFilters(limit=3, offset=3, sort="title"))
+    rest = Q.search_listings(db, Q.ListingQuery(limit=3, offset=3, sort="title"))
     assert (keys(rest), rest.next_offset) == (["b:2"], None)
+    tabs = Q.search_listings(db, Q.ListingQuery(F.parse(["verdict.in.eligible", "source.in.a"], F.LISTING_FIELDS)))
+    assert tabs.verdict_counts == {"eligible": 1, "possible": 0, "excluded": 1}  # tabs ignore the verdict filter
 
 
-def test_parse_since():
-    assert Q.parse_since("") is None and Q.parse_since("junk") is None
-    assert (Q.now() - Q.parse_since("2h")).total_seconds() == pytest.approx(7200, abs=5)
-    assert Q.parse_since("2026-10-01").year == 2026
+def test_same_unit_semantics(db):
+    from housing_watch.models import Unit
+    from seed import L, Session, add_listing
+
+    with Session(db) as s, s.begin():  # a studio at $3,000 and a 1br at $2,000: no single cheap studio
+        add_listing(s, L("c", "1", "Queens", units=[Unit("studio", 3000.0), Unit("1br", 2000.0)]))
+    assert "c:1" not in search(db, "units.size.in.studio", "units.rent.le.2500")
+    assert "c:1" in search(db, "units.size.in.studio", "units.rent.ge.2500")
+    assert "c:1" in search(db, "units.size.in.1br", "units.rent.le.2500")
+    # bands: both conditions on one band (a:1 has 1p max $154,440 and 2p max $176,410)
+    assert "a:1" not in search(db, "bands.household.eq.1", "bands.income_max.gt.160000")
+    assert "a:1" in search(db, "bands.household.eq.2", "bands.income_max.gt.160000")
+
+
+def test_value_counts(db):
+    fs = F.LISTING_FIELDS
+    assert Q.is_enum(db, fs["borough"]) and not Q.is_enum(db, fs["units.rent"]) and Q.is_enum(db, fs["verdict"])
+    counts = dict(Q.value_counts(db, "listings", fs["borough"], F.parse(["verdict.in.eligible"], fs)))
+    assert counts == {"Queens": 1}  # under the other filters
+    counts = dict(Q.value_counts(db, "listings", fs["borough"], F.parse(["borough.in.Queens"], fs)))
+    assert counts["Bronx"] == 1 and counts["Queens"] == 1  # a field's own filter doesn't narrow its counts
+    assert dict(Q.value_counts(db, "listings", fs["verdict"], [])) == {"eligible": 1, "possible": 1, "excluded": 2}
+    assert dict(Q.value_counts(db, "listings", fs["units.size"], []))["studio"] == 3
+    ev = dict(Q.value_counts(db, "events", F.EVENT_FIELDS["type"], []))
+    assert ev["new"] == 3 and ev["source_failed"] == 1
+    assert dict(Q.value_counts(db, "events", F.EVENT_FIELDS["listing.borough"], []))["Queens"] == 2  # a:1, b:3
 
 
 def test_listing_detail(db):
@@ -58,7 +94,7 @@ def test_verdicts_follow_the_profile(db):
     from housing_watch.criteria import PROFILE
 
     rich = replace(PROFILE, income=500_000)
-    assert Q.search_listings(db, Q.ListingFilters(), rich).verdict_counts["eligible"] == 0
+    assert Q.search_listings(db, Q.ListingQuery(), rich).verdict_counts["eligible"] == 0
 
 
 def test_overview(db):
@@ -82,13 +118,16 @@ def test_sources(db):
 def test_events(db):
     page = Q.events(db)
     assert [e.type for e in page.items][:2] == ["source_failed", "gone"]
-    assert page.type_counts["new"] == 3 and page.next_before is None
+    assert page.total == 6 and page.next_before is None
     assert next(e for e in page.items if e.key == "a:1").verdict == "eligible"
-    assert [e.key for e in Q.events(db, type="new", baseline=False).items] == ["a:2", "a:1"]
+    ev = lambda *fs: [e.key for e in Q.events(db, F.parse(list(fs), F.EVENT_FIELDS)).items]  # noqa: E731
+    assert ev("type.in.new", "first_run.is.no") == ["a:2", "a:1"]
+    assert ev("listing.borough.in.Queens") == ["b:3", "a:1"] and ev("verdict.in.eligible") == ["b:3", "a:1"]
+    assert ev("units.size.in.studio", "type.in.closed") == ["b:2"] and ev("at.last.1m") == []
     first = Q.events(db, limit=2)
     assert len(first.items) == 2 and first.next_before
     assert Q.events(db, before=first.next_before, limit=10).items[0].id < first.next_before
-    assert {e.source for e in Q.events(db, source="a").items} == {"a"}
+    assert {e.source for e in Q.events(db, F.parse(["source.in.a"], F.EVENT_FIELDS)).items} == {"a"}
 
 
 def test_fleet_without_procrastinate(db, monkeypatch):

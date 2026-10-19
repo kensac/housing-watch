@@ -7,8 +7,8 @@ filter and sort a few thousand listings in Python without reloading them.
 
 from __future__ import annotations
 
-import re
 import threading
+import time
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 
@@ -16,10 +16,11 @@ from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, selectinload
 
+from . import filters as F
 from .criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, listing_verdict, unit_verdict
 from .mapping import listing_from_row
 from .models import Listing
-from .orm import EventRow, ListingRow, RunRow, SourceStateRow, UnitRow
+from .orm import BandRow, EventRow, ListingRow, RunRow, SourceStateRow, UnitRow
 
 VERDICTS = (ELIGIBLE, POSSIBLE, EXCLUDED)
 STATUSES = ("open", "waitlist", "upcoming", "closed", "gone")
@@ -138,31 +139,18 @@ def judged(engine: Engine, p: Profile = PROFILE) -> list[ListingSummary]:
         return out
 
 
-def parse_since(v: str | None) -> datetime | None:
-    """ "24h", "7d", "30m" or an ISO date/time; None when empty or unparseable."""
-    if not v:
-        return None
-    m = re.fullmatch(r"(\d+)\s*([mhd])", v.strip())
-    if m:
-        n, u = int(m[1]), m[2]
-        return now() - timedelta(**{{"m": "minutes", "h": "hours", "d": "days"}[u]: n})
-    try:
-        d = datetime.fromisoformat(v)
-    except ValueError:
-        return None
-    return d if d.tzinfo else d.replace(tzinfo=UTC)
+COMPUTED = {  # read-time values behind filters.COMPUTED
+    "verdict": lambda x: x.verdict,
+    "reason": lambda x: x.reason,
+    "eligible_units": lambda x: x.eligible_units,
+    "unit_count": lambda x: x.units,
+}
 
 
 @dataclass
-class ListingFilters:
-    verdict: str = ""
-    status: str = ""  # "" = everything still listed (not gone)
-    source: str = ""
-    borough: str = ""  # "unknown" matches listings with no borough
-    size: str = ""
-    max_rent: float | None = None
-    q: str = ""
-    since: str = ""  # changed since, see parse_since
+class ListingQuery:
+    filters: list[F.Cond] = field(default_factory=list)
+    q: str = ""  # quick search over title, address, borough and notes
     sort: str = "verdict"
     offset: int = 0  # the list scrolls: each batch starts where the last one ended
     limit: int = 200
@@ -174,8 +162,33 @@ class ListingPage:
     total: int
     next_offset: int | None  # None once the last batch is out
     verdict_counts: dict[str, int]  # over everything matching the other filters, for the verdict tabs
-    sources: list[str]
-    boroughs: list[str]
+
+
+def hides_gone(conds: list[F.Cond]) -> bool:
+    """Removed listings stay out of the way unless a filter asks about removal."""
+    return not any(c.field.name.removeprefix("listing.") == "gone_since" for c in conds)
+
+
+def filter_listings(
+    engine: Engine, conds: list[F.Cond], q: str = "", p: Profile = PROFILE, hide_gone: bool | None = None
+) -> list[ListingSummary]:
+    """SQL for the column conditions, then the computed ones in Python over the cached verdicts."""
+    allx = judged(engine, p)
+    where = F.listing_where(conds)
+    if where:
+        with Session(engine) as s:
+            keys = set(s.scalars(select(ListingRow.key).where(*where)))
+        allx = [x for x in allx if x.key in keys]
+    hide = hides_gone(conds) if hide_gone is None else hide_gone
+    comp = [c for c in conds if c.field.scope == "computed"]
+    words = q.strip().lower().split()
+    return [
+        x
+        for x in allx
+        if not (hide and x.gone_since)
+        and all(F.match(c, COMPUTED[c.field.name](x)) for c in comp)
+        and all(w in x.haystack for w in words)
+    ]
 
 
 def _sort_key(sort: str):
@@ -187,51 +200,88 @@ def _sort_key(sort: str):
         "deadline": lambda x: (x.deadline is None, x.deadline or ""),
         "title": lambda x: x.title.lower(),
         "source": lambda x: (x.source, x.title.lower()),
+        "borough": lambda x: (x.borough or "~", x.title.lower()),
     }.get(sort, lambda x: (_VRANK[x.verdict], -x.last_changed.timestamp()))
 
 
-def search_listings(engine: Engine, f: ListingFilters, p: Profile = PROFILE) -> ListingPage:
-    allx = judged(engine, p)
-    since = parse_since(f.since)
-    q = f.q.strip().lower()
-
-    def keep(x: ListingSummary) -> bool:
-        if f.status == "gone":
-            if x.status != "gone":
-                return False
-        elif f.status:
-            if x.status != f.status:
-                return False
-        elif x.status == "gone":
-            return False
-        if f.source and x.source != f.source:
-            return False
-        if f.borough and (x.borough or "unknown") != f.borough:
-            return False
-        if f.size and f.size not in x.unit_sizes:
-            return False
-        if f.max_rent is not None and not any(r <= f.max_rent for r in x.unit_rents):
-            return False
-        if since and x.last_changed < since:
-            return False
-        return not q or all(w in x.haystack for w in q.split())
-
-    base = [x for x in allx if keep(x)]
+def search_listings(engine: Engine, f: ListingQuery, p: Profile = PROFILE) -> ListingPage:
+    verdict = [c for c in f.filters if c.field.name == "verdict"]
+    base = filter_listings(engine, [c for c in f.filters if c not in verdict], f.q, p, hides_gone(f.filters))
     counts = {v: 0 for v in VERDICTS}
     for x in base:
         counts[x.verdict] += 1
-    rows = [x for x in base if not f.verdict or x.verdict == f.verdict]
+    rows = [x for x in base if all(F.match(c, x.verdict) for c in verdict)]
     name = f.sort.lstrip("-")
     rows.sort(key=_sort_key(name), reverse=(name in _NEWEST_FIRST) != f.sort.startswith("-"))
     start, end = max(0, f.offset), max(0, f.offset) + max(1, min(f.limit, 1000))
-    return ListingPage(
-        items=rows[start:end],
-        total=len(rows),
-        next_offset=end if end < len(rows) else None,
-        verdict_counts=counts,
-        sources=sorted({x.source for x in allx}),
-        boroughs=sorted({x.borough or "unknown" for x in allx}),
-    )
+    return ListingPage(rows[start:end], len(rows), end if end < len(rows) else None, counts)
+
+
+# --- value counts for the filter builder ---------------------------------------------------------------
+
+ENUM_MAX = 40  # a text field with at most this many distinct values is offered as a checkbox list
+_distinct: dict[tuple, tuple[float, int]] = {}
+
+
+def is_enum(engine: Engine, fld: F.Field, p: Profile = PROFILE) -> bool:
+    if fld.choices:
+        return True
+    if fld.type != "text":
+        return False
+    ck = (str(engine.url), fld.name)
+    hit = _distinct.get(ck)
+    if hit and time.monotonic() - hit[0] < 300:
+        return hit[1] <= ENUM_MAX
+    if fld.scope == "computed":
+        n = len({COMPUTED[fld.name](x) for x in judged(engine, p)})
+    else:
+        with Session(engine) as s:
+            n = s.scalar(select(func.count(fld.column.distinct())))
+    _distinct[ck] = (time.monotonic(), n)
+    return n <= ENUM_MAX
+
+
+def _values_by_key(s: Session, fld: F.Field, keys: list[str], p: Profile, engine: Engine):
+    """(listing key, value) pairs for one listing/unit/band/computed field over the given listings."""
+    if fld.scope == "computed":
+        by = {x.key: x for x in judged(engine, p)}
+        return [(k, COMPUTED[fld.name](by[k])) for k in keys if k in by]
+    u, b, ls = UnitRow.__table__, BandRow.__table__, ListingRow.__table__
+    if fld.scope == "listing":
+        q = select(ls.c.key, fld.column).where(ls.c.key.in_(keys))
+    elif fld.scope == "unit":
+        q = select(u.c.listing_key, fld.column).distinct().where(u.c.listing_key.in_(keys))
+    else:
+        q = select(u.c.listing_key, fld.column).distinct().join(b, b.c.unit_id == u.c.id)
+        q = q.where(u.c.listing_key.in_(keys))
+    return s.execute(q).all()
+
+
+def value_counts(
+    engine: Engine, target: str, fld: F.Field, conds: list[F.Cond], q: str = "", p: Profile = PROFILE
+) -> list[tuple[str | None, int]]:
+    """Each value of an enum field with how many results it would give, under the other filters."""
+    others = [c for c in conds if c.field is not fld]
+    counts: dict = {}
+    with Session(engine) as s:
+        if target == "events" and fld.scope == "event":
+            q = select(fld.column, func.count()).where(*event_where(engine, others, p)).group_by(fld.column)
+            counts = dict(s.execute(q).all())
+        else:
+            if target == "events":
+                w = select(EventRow.key, func.count()).where(*event_where(engine, others, p), EventRow.key.isnot(None))
+                weights = dict(s.execute(w.group_by(EventRow.key)).all())
+            else:
+                weights = {x.key: 1 for x in filter_listings(engine, others, q, p, hides_gone(conds))}
+            seen: set = set()
+            for k, v in _values_by_key(s, fld, list(weights), p, engine):
+                if (k, v) not in seen:
+                    seen.add((k, v))
+                    counts[v] = counts.get(v, 0) + weights[k]
+    for v in fld.choices:
+        counts.setdefault(v, 0)
+    order = {v: i for i, v in enumerate(fld.choices)}
+    return sorted(counts.items(), key=lambda kv: (order.get(kv[0], 99), -kv[1], str(kv[0])))
 
 
 @dataclass
@@ -245,6 +295,7 @@ class UnitView:
     bands: list[tuple[int, int | None, int | None]]
     verdict: str
     reason: str
+    chart_year: int | None = None  # HUD chart the ad's printed income caps come from
 
 
 @dataclass
@@ -294,6 +345,7 @@ def listing_detail(engine: Engine, key: str, p: Profile = PROFILE) -> ListingDet
                 u.available,
                 [(b.household, b.income_min, b.income_max) for b in u.bands],
                 *unit_verdict(u, p),
+                u.chart_year,
             )
             for u in lst.units
         ]
@@ -316,7 +368,7 @@ def listing_detail(engine: Engine, key: str, p: Profile = PROFILE) -> ListingDet
 class EventPage:
     items: list[EventView]
     next_before: int | None  # pass as `before` for the next (older) batch
-    type_counts: dict[str, int]
+    total: int
 
 
 def _attach(engine: Engine, evs: list[EventView], p: Profile) -> list[EventView]:
@@ -328,32 +380,29 @@ def _attach(engine: Engine, evs: list[EventView], p: Profile) -> list[EventView]
     return evs
 
 
+def event_where(engine: Engine, conds: list[F.Cond], p: Profile = PROFILE) -> list:
+    """Event columns in SQL; listing, unit, band and verdict conditions through the event's listing."""
+    out = [F.sql(c) for c in conds if c.field.scope == "event"]
+    via = [c for c in conds if c.field.scope != "event"]
+    if via:
+        out.append(EventRow.key.in_([x.key for x in filter_listings(engine, via, p=p, hide_gone=False)]))
+    return out
+
+
 def events(
-    engine: Engine,
-    type: str = "",
-    source: str = "",
-    key: str = "",
-    baseline: bool = True,
-    before: int | None = None,
-    limit: int = 200,
+    engine: Engine, conds: list[F.Cond] = (), key: str = "", before: int | None = None, limit: int = 200,
     p: Profile = PROFILE,
-) -> EventPage:
-    conds = []  # every filter but type, which the type counts ignore
-    if source:
-        conds.append(EventRow.source == source)
-    if key:
-        conds.append(EventRow.key == key)
-    if not baseline:
-        conds.append(func.coalesce(EventRow.detail["baseline"].astext, "false") != "true")
+) -> EventPage:  # fmt: skip
+    where = event_where(engine, list(conds), p) + ([EventRow.key == key] if key else [])
     with Session(engine) as s:
-        q = select(EventRow).where(*conds, *([EventRow.type == type] if type else []))
+        q = select(EventRow).where(*where)
         if before:
             q = q.where(EventRow.id < before)
         rows = list(s.scalars(q.order_by(EventRow.id.desc()).limit(limit + 1)))
-        tc = dict(s.execute(select(EventRow.type, func.count()).where(*conds).group_by(EventRow.type)).all())
+        total = s.scalar(select(func.count()).select_from(EventRow).where(*where))
     more = len(rows) > limit
     rows = rows[:limit]
-    return EventPage(_attach(engine, [_event_view(e) for e in rows], p), rows[-1].id if more else None, tc)
+    return EventPage(_attach(engine, [_event_view(e) for e in rows], p), rows[-1].id if more else None, total)
 
 
 def pending_events(s: Session) -> list[EventRow]:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session  # noqa: F401 - re-exported for tests
 
 from housing_watch.mapping import apply_listing
 from housing_watch.models import Band, Listing, Unit
