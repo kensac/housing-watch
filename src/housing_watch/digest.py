@@ -1,4 +1,8 @@
-"""Turn un-notified events into one email. Nothing is sent when nothing worth reading happened."""
+"""Turn un-notified events into one email. Nothing is sent when nothing worth reading happened.
+
+A source's first run (events marked `baseline`) is its starting inventory, not news: it becomes one
+summary line with counts, and only its eligible listings are shown individually.
+"""
 
 from __future__ import annotations
 
@@ -8,27 +12,27 @@ import smtplib
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid
 
-from sqlalchemy import Engine, select, update
+from sqlalchemy import func, select, update
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from . import db
-from .criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, listing_verdict, unit_verdict
+from . import queries
+from .criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, listing_verdict, unit_verdict
 from .models import Listing
-from .orm import EventRow, ListingRow
+from .orm import EventRow
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "localhost")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 
-LISTING_EVENTS = ("new", "reopened", "changed", "closed", "gone")
 TITLES = {"new": "New", "reopened": "Reopened", "changed": "Changed", "closed": "Closed", "gone": "Removed"}
 
 
-def _units(lst: Listing) -> list[str]:
+def _units(lst: Listing, p: Profile) -> list[str]:
     out = []
     for unit in lst.units:
-        v, why = unit_verdict(unit)
-        band = next((b for b in unit.bands if b.household == PROFILE.household), None)
-        inc = f"${band.income_min or 0:,}-${band.income_max or 0:,}" if band else f"no {PROFILE.household}-person band"
+        v, why = unit_verdict(unit, p)
+        band = next((b for b in unit.bands if b.household == p.household), None)
+        inc = f"${band.income_min or 0:,}-${band.income_max or 0:,}" if band else f"no {p.household}-person band"
         rent = f"${unit.rent:,.0f}" if unit.rent else "rent ?"
         out.append(
             f"{v.upper():8} {unit.size} {('#' + unit.unit_no) if unit.unit_no else ''} {rent}"
@@ -37,98 +41,97 @@ def _units(lst: Listing) -> list[str]:
     return out
 
 
-def urgent(engine: Engine) -> bool:
+def _names(xs: set[str], n: int = 6) -> str:
+    xs = sorted(xs)
+    return ", ".join(xs[:n]) + (f" and {len(xs) - n} more" if len(xs) > n else "")
+
+
+def urgent(engine: Engine, p: Profile = PROFILE) -> bool:
     """An open listing became eligible and nobody was told yet: first come, first served, so mail now."""
     with Session(engine) as s:
         keys = s.scalars(
             select(EventRow.key)
-            .where(EventRow.notified.is_(None), EventRow.type.in_(("new", "reopened", "changed")))
             .distinct()
+            .where(EventRow.notified.is_(None), EventRow.type.in_(("new", "reopened", "changed")))
         ).all()
-        for key in keys:
-            lst = db.load_listing(s, key)
-            if lst and lst.status == "open" and listing_verdict(lst).verdict == ELIGIBLE:
-                return True
-    return False
+        lsts = queries.load_listings(s, keys).values()
+    return any(lst.status == "open" and listing_verdict(lst, p).verdict == ELIGIBLE for lst in lsts)
 
 
-def build(s: Session) -> tuple[str, str, str, list[int]] | None:
-    rows = [
-        {"id": e.id, "key": e.key, "type": e.type, "source": e.source, "summary": e.summary, "detail": e.detail}
-        for e in s.scalars(select(EventRow).where(EventRow.notified.is_(None)).order_by(EventRow.at, EventRow.id))
-    ]
-    if not rows:
-        return None
-    ids = [r["id"] for r in rows]
-    listing_rows = {r.key: {"status": r.status} for r in s.scalars(select(ListingRow))}
-    sections: dict[str, list[tuple[str, str, list[str]]]] = {
-        "eligible": [],
-        "possible": [],
-        "pages": [],
-        "failed": [],
-        "recovered": [],
-        "closed": [],
+def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int]] | None:
+    """(subject, plain, html, event ids) for the pending events; subject "" means mark read, send nothing."""
+    with Session(engine) as s:
+        rows = queries.pending_events(s)
+        if not rows:
+            return None
+        listings = queries.load_listings(s, (r.key for r in rows if r.type in queries.LISTING_EVENTS))
+    ids = [r.id for r in rows]
+    sections: dict[str, list[tuple[str, list[str]]]] = {
+        k: [] for k in ("eligible", "possible", "pages", "failed", "recovered", "closed")
     }
-    counts = {"excluded_new": 0, "watching": 0, "baseline": 0}
-    seen_keys: set[str] = set()
+    excluded_new = watching = 0
+    base = {"sources": set(), "listings": 0, ELIGIBLE: 0, POSSIBLE: 0, EXCLUDED: 0, "pages": 0}
+    seen: set[str] = set()
     for r in reversed(rows):  # newest event per key wins
-        if r["key"] and r["key"] in seen_keys:
-            continue
-        if r["key"]:
-            seen_keys.add(r["key"])
-        typ = r["type"]
-        base = bool((r["detail"] or {}).get("baseline"))  # a source's first run: only eligible ones are listed
-        if base and typ in ("watching", "page_changed"):
-            counts["baseline"] += 1
+        if r.key:
+            if r.key in seen:
+                continue
+            seen.add(r.key)
+        typ, d, baseline = r.type, r.detail or {}, queries.is_baseline(r.detail)
+        if baseline:
+            base["sources"].add(r.source)
+        if typ in ("watching", "page_changed") and baseline:  # a first run's pages: counted, not listed
+            base["pages"] += 1
             continue
         if typ == "watching":
-            counts["watching"] += 1
+            watching += 1
             continue
         if typ == "source_failed":
-            d = r["detail"] or {}
-            sections["failed"].append((r["source"], f"{d.get('fails')} failures in a row: {d.get('error')}", []))
+            sections["failed"].append((f"{r.source}: {d.get('fails')} failures in a row: {d.get('error')}", []))
             continue
         if typ == "source_recovered":
-            sections["recovered"].append((r["source"], "working again", []))
+            sections["recovered"].append((f"{r.source}: working again", []))
             continue
         if typ == "page_changed":
-            d = r["detail"] or {}
             lines = [f"+ {x}" for x in d.get("added", [])[:15]] + [f"new link: {x}" for x in d.get("new_links", [])]
-            sections["pages"].append((r["source"], r["summary"], lines))
+            sections["pages"].append((f"{r.source}: {r.summary}", lines))
             continue
-        lst = db.load_listing(s, r["key"])
-        lr = listing_rows.get(r["key"])
-        if lst is None or lr is None:
+        lst = listings.get(r.key)
+        if lst is None:
             continue
-        v = listing_verdict(lst)  # business rule applied now, to stored data
-        head = f"[{TITLES.get(typ, typ)}] {lst.title} ({lst.borough or 'borough ?'}) {lst.url}"
-        detail = [f"source: {r['source']}  verdict: {v.verdict} ({v.reason})  status: {lst.status}"]
+        v = listing_verdict(lst, p)  # business rule applied now, to stored data
+        if baseline:
+            base["listings"] += 1
+            base[v.verdict] += 1
+            if v.verdict != ELIGIBLE:
+                continue
+        label = "First seen" if baseline else TITLES.get(typ, typ)
+        head = f"[{label}] {lst.title} ({lst.borough or 'borough ?'}) {lst.url}"
+        if typ in ("closed", "gone"):
+            if listing_verdict(queries.as_open(lst), p).verdict != EXCLUDED:  # was it worth knowing about?
+                sections["closed"].append((head, []))
+            continue
+        detail = [f"source: {r.source}  verdict: {v.verdict} ({v.reason})  status: {lst.status}"]
         if lst.deadline:
             detail.append(f"deadline: {lst.deadline}")
         if lst.notes:
             detail.append(lst.notes)
-        detail += _units(lst)
-        if typ in ("closed", "gone"):
-            if v.verdict != EXCLUDED or lr["status"] != "closed":
-                sections["closed"].append((head, "", []))
-            continue
-        if base and v.verdict != ELIGIBLE:
-            counts["baseline"] += 1
-            continue
+        detail += _units(lst, p)
         if v.verdict == ELIGIBLE:
-            sections["eligible"].append((head, "", detail))
+            sections["eligible"].append((head, detail))
         elif v.verdict == POSSIBLE:
-            sections["possible"].append((head, "", detail))
+            sections["possible"].append((head, detail))
         elif typ == "new":
-            counts["excluded_new"] += 1
+            excluded_new += 1
     if not any(sections.values()):
-        return "", "", "", ids  # only noise: mark read, send nothing
+        return "", "", "", ids  # only noise (a first run with nothing eligible is noise too): mark read
     n_e, n_p = len(sections["eligible"]), len(sections["possible"])
     subject = f"Housing watch: {n_e} eligible, {n_p} to check"
     if sections["pages"]:
         subject += f", {len(sections['pages'])} page changes"
     if sections["failed"]:
-        subject += f", {len(sections['failed'])} sources failing"
+        n = len(sections["failed"])
+        subject += f", {n} source{'s' if n != 1 else ''} failing"
     order = [
         ("eligible", "Eligible"),
         ("possible", "Possible: check these"),
@@ -143,27 +146,30 @@ def build(s: Session) -> tuple[str, str, str, list[int]] | None:
             continue
         plain += [f"== {title} ({len(sections[k])})"]
         htm += [f"<h3>{html.escape(title)} ({len(sections[k])})</h3><ul>"]
-        for head, sub, lines in sections[k]:
-            plain += [f"* {head} {sub}".rstrip()] + [f"    {x}" for x in lines] + [""]
+        for head, lines in sections[k]:
+            plain += [f"* {head}"] + [f"    {x}" for x in lines] + [""]
             htm += [
-                f"<li><b>{html.escape(head)}</b> {html.escape(sub)}<br>"
+                f"<li><b>{html.escape(head)}</b><br>"
                 + "<br>".join(f"<code>{html.escape(x)}</code>" for x in lines)
                 + "</li>"
             ]
         htm += ["</ul>"]
-    tail = (
-        f"Also: {counts['excluded_new']} new listings filtered out (over income, Bronx, 2BR+, set-aside),"
-        f" {counts['watching']} pages now watched,"
-        f" {counts['baseline']} first-run listings and pages recorded (eligible ones listed above)."
-    )
-    plain += [tail]
-    htm += [f"<p><small>{html.escape(tail)}</small></p>"]
+    tail = []
+    if base["sources"]:
+        tail.append(
+            f"First run of {len(base['sources'])} source(s) ({_names(base['sources'])}):"
+            f" {base['listings']} listings ({base[ELIGIBLE]} eligible, shown above; {base[POSSIBLE]} possible;"
+            f" {base[EXCLUDED]} excluded), {base['pages']} pages now watched."
+        )
+    if excluded_new or watching:
+        tail.append(f"Also: {excluded_new} new listings filtered out, {watching} pages now watched.")
+    plain += tail
+    htm += [f"<p><small>{html.escape(t)}</small></p>" for t in tail]
     return subject, "\n".join(plain), "\n".join(htm), ids
 
 
 def send(engine: Engine, dry_run: bool = False) -> str:
-    with Session(engine) as s:
-        built = build(s)
+    built = build(engine)
     if built is None:
         return "no events"
     subject, plain, htm, ids = built
@@ -182,5 +188,5 @@ def send(engine: Engine, dry_run: bool = False) -> str:
             s.send_message(msg)
     if not dry_run:
         with Session(engine) as s, s.begin():
-            s.execute(update(EventRow).where(EventRow.id.in_(ids)).values(notified=db.utcnow()))
+            s.execute(update(EventRow).where(EventRow.id.in_(ids)).values(notified=func.now()))
     return plain if dry_run else (f"sent: {subject}" if subject else "nothing notable; events marked read")
