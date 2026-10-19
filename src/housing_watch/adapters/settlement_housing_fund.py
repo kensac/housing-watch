@@ -25,7 +25,7 @@ import uuid
 import zlib
 from collections import Counter
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from ._page import PageAdapter
 
@@ -251,9 +251,9 @@ def read_blocks(blocks: list[list[list[str]]], ami_pct: int | None) -> list[dict
         for s, (lo, hi) in zip(sizes, ranges, strict=True):
             if not s:
                 continue
-            cap = parse.ami_max(ami_pct, s)
-            if cap and hi != cap:
-                hi = cap  # these tables print HUD's exact AMI caps; a mismatch is an OCR misread
+            cap = ami.cap(ami_pct, s)
+            if cap and hi not in {ami.cap(ami_pct, s, y) for y in ami.CHARTS}:
+                hi = cap  # these tables print HUD's exact AMI caps (some year's); a mismatch is an OCR misread
             if mins and mins[common] >= 2 and lo != common:
                 lo = common  # every row of a block shares one minimum
             bands.append(Band(s, lo, hi))

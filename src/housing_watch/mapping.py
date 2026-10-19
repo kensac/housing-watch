@@ -27,6 +27,7 @@ def listing_from_row(r: ListingRow) -> Listing:
                 unit_no=u.unit_no,
                 set_aside=u.set_aside,
                 available=u.available,
+                chart_year=u.chart_year,
                 bands=[Band(b.household, b.income_min, b.income_max) for b in u.bands],
             )
             for u in r.units
@@ -56,6 +57,7 @@ def apply_listing(lst: Listing, r: ListingRow, units: bool = True) -> ListingRow
             unit_no=u.unit_no,
             set_aside=u.set_aside,
             available=u.available,
+            chart_year=u.chart_year,
             bands=[BandRow(household=b.household, income_min=b.income_min, income_max=b.income_max) for b in u.bands],
         )
         for i, u in enumerate(lst.units)

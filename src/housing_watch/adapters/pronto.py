@@ -2,11 +2,13 @@
 
 The search endpoint lists ~3,200 properties nationwide (mostly PadSplit); only `source == "pronto"` in NYC
 counts. Each building's detail gives named units (rent, AMI, availability) and, for waitlists, income
-bands per household size with no rent or size ("unit information subject to change"). A tier's size is
-taken from a named unit with the same minimum income, else from a household range only one HPD unit type
-allows (1-3 = 1BR, 2-5 = 2BR, 3-7 = 3BR; 1-2 fits a studio or a 1BR, so it stays "unknown"). Some
-waitlists carry placeholder bands ("$100-$150"), dropped; some publish no tiers at all (said in notes).
-Details are re-read only when the building's search record changes, or once a day.
+bands per household size with no rent or size ("unit information subject to change"). Rows that all
+repeat the unit's top cap (SVEN: $168,480 on every household = 2025, 2 people) are re-derived per
+household by ami.rows. A tier's size is taken from a named unit with the same minimum income, else from
+a household range only one HPD unit type allows (1-3 = 1BR, 2-5 = 2BR, 3-7 = 3BR; 1-2 fits a studio or
+a 1BR, so it stays "unknown"). Some waitlists carry placeholder bands ("$100-$150"), dropped; some
+publish no tiers at all (said in notes). Details are re-read only when the building's search record
+changes, or once a day.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ import re
 import time
 from dataclasses import asdict
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from . import Adapter
 
@@ -36,7 +38,8 @@ def _pct(v) -> int | None:
     return int(round(v * 100)) if v < 5 else int(round(v))
 
 
-def _bands(ranges: list[dict]) -> list[Band]:
+def _bands(ranges: list[dict], a: int | None) -> tuple[list[Band], int | None]:
+    """Income rows -> (Bands, chart year). Pronto often stamps the unit's top cap on every household row."""
     out = {}
     for r in ranges:
         hh = int(r.get("household_size") or r.get("householdSize") or 0)
@@ -44,7 +47,7 @@ def _bands(ranges: list[dict]) -> list[Band]:
         hi = parse.whole(r.get("max_income", r.get("maxIncome")))
         if hh and hh not in out:
             out[hh] = Band(hh, lo, hi)
-    return [out[h] for h in sorted(out)]
+    return ami.rows([out[h] for h in sorted(out)], a)
 
 
 def _real(r: dict) -> bool:
@@ -64,9 +67,10 @@ def _waitlist_tiers(ranges: list[dict], named: list[Unit] = ()) -> list[Unit]:
     by_min = {(u.ami, b.income_min): u.size for u in named for b in u.bands if b.income_min}
     out = []
     for (a, lo), rs in tiers.items():
-        bands = _bands(rs)
+        bands, year = _bands(rs, a)
         hh = (bands[0].household, bands[-1].household) if bands else None
-        out.append(Unit(size=by_min.get((a, lo)) or OCCUPANCY.get(hh, "unknown"), ami=a, bands=bands))
+        size = by_min.get((a, lo)) or OCCUPANCY.get(hh, "unknown")
+        out.append(Unit(size=size, ami=a, bands=bands, chart_year=year))
     return out
 
 
@@ -95,11 +99,11 @@ def parse_property(detail: dict) -> Listing | None:
             None,
         )
         if off and off.get("income_ranges"):
-            bands = _bands(off["income_ranges"])
+            bands, year = _bands(off["income_ranges"], a)
         else:
             lo_hh, hi_hh = u.get("min_household_size"), u.get("max_household_size")
-            hh = f"{lo_hh}-{hi_hh}" if lo_hh and hi_hh and hi_hh != lo_hh else str(lo_hh or "")
-            bands = parse.bands_from_row(hh, f"${u.get('min_income') or 0:,.0f} - ${u.get('max_income') or 0:,.0f}", a)
+            hh = range(lo_hh, (hi_hh or lo_hh) + 1) if lo_hh else []
+            bands, year = ami.bands(hh, parse.whole(u.get("min_income")), parse.whole(u.get("max_income")), a)
         unit = Unit(
             size=size,
             rent=rent,
@@ -108,20 +112,17 @@ def parse_property(detail: dict) -> Listing | None:
             bands=bands,
             set_aside="disability" if u.get("accessibility_features") else None,
             available=bool(u.get("is_available", True)),
+            chart_year=year,
         )
         if unit.key() not in seen:  # Eastchester lists the same unit number twice in one tier
             seen.add(unit.key())
             units.append(unit)
     if not units:  # offerings without named units: one Unit per tier
         for o in offerings:
-            units.append(
-                Unit(
-                    size=parse.size(str(o.get("bedrooms"))),
-                    rent=parse.money(o.get("rent_min")),
-                    ami=_pct(o.get("ami_pct")),
-                    bands=_bands(o.get("income_ranges") or []),
-                )
-            )
+            a = _pct(o.get("ami_pct"))
+            bands, year = _bands(o.get("income_ranges") or [], a)
+            size, rent = parse.size(str(o.get("bedrooms"))), parse.money(o.get("rent_min"))
+            units.append(Unit(size=size, rent=rent, ami=a, bands=bands, chart_year=year))
     waitlist = bool(p.get("is_waitlist") or p.get("waitlist_only"))
     if waitlist:
         units += _waitlist_tiers(p.get("property_income_ranges") or [], units)

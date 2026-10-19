@@ -24,16 +24,18 @@ def bands(u):
 def test_every_card_captured(listings):
     assert len(listings) == 33
     v = [listing_verdict(x).verdict for x in listings.values()]
-    assert (v.count("eligible"), v.count("excluded")) == (1, 32)
+    assert (v.count("eligible"), v.count("excluded")) == (10, 23)  # 9 Bushwick 1BR/studios on 2025 limits
 
 
-def test_2025_chart_caps_exclude_bushwick(listings):
+def test_2025_chart_caps_judged_on_2026_limits(listings):
     for ext in ("972-bushwick-avenue-1a", "962-bushwick-avenue-2a"):
         lst = listings[ext]
         (u,) = lst.units
         assert lst.borough == "Brooklyn" and (u.size, u.rent, u.ami) == ("1br", 2999.0, 130)
-        assert bands(u) == [(1, 112218, 147420), (2, 112218, 168480), (3, 112218, 189540)]
-        assert listing_verdict(lst).reason == "over income (max $147,420)"
+        assert bands(u) == [(1, 112218, 147420), (2, 112218, 168480), (3, 112218, 189540)] and u.chart_year == 2025
+        # $150,000 is over the printed $147,420 but within 2026's $154,440 at 130%
+        reason = listing_verdict(lst).units[0][2]
+        assert reason == "eligible on 2026 limits (ad prints 2025 limits: max $147,420)"
         assert "2025 HUD chart" in lst.notes
     assert bands(listings["972-bushwick-avenue-7a"].units[0])[0] == (1, 104812, 147420)
 

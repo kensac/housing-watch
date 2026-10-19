@@ -10,7 +10,7 @@ from housing_watch.orm import ListingRow
 def test_roundtrip(pg):
     lst = Listing(
         source="t", ext_id="a", title="T", url="u", borough="Queens", notes="n",
-        units=[Unit("studio", 2400.0, 130, "4B", [Band(1, 82557, 154440)]), Unit("1br")],
+        units=[Unit("studio", 2400.0, 130, "4B", [Band(1, 82557, 147420)], chart_year=2025), Unit("1br")],
     )  # fmt: skip
     now = datetime.now(UTC)
     with Session(pg) as s:

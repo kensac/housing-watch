@@ -21,7 +21,7 @@ import string
 import time
 from urllib.parse import quote
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from . import Adapter
 
@@ -72,11 +72,9 @@ def parse_eligibility(html: str) -> dict:
 
 
 def _ami(caps: dict) -> int | None:
-    """165 when the 1-person cap is $196,020 (exact 2026 HUD caps only)."""
-    for pct in range(30, 205, 5):
-        if caps.get("1") and parse.ami_max(pct, 1) == caps["1"]:
-            return pct
-    return None
+    """165 when the 1-person cap is $196,020 (exact HUD caps only)."""
+    m = caps.get("1") and ami.match(caps["1"], 1, sizes=[1])
+    return m[2] if m else None
 
 
 def parse_unit(m: dict, elig: dict | None) -> Listing:

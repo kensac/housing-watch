@@ -2,7 +2,7 @@
 
 Cards (The Cove, Lyra) link detail pages whose per-household income chart is only a PNG in the header
 slider, so it is OCR'd (tesseract --psm 11 reads every "$154,440"). The chart's rents are "TBD", so only the
-income maxima matter: the AMI % is the one that explains the most maxima under HUD's table, each maximum
+income maxima matter: the AMI % (and HUD chart year) is the one that explains the most maxima, each maximum
 then names its household size, and a household size that does not grow starts the next unit type (sized
 by NYC occupancy: max 2 people = studio, 3 = 1BR, 5 = 2BR). Buttons with no card (Hayden, Tribeca
 Pointe) are paper waitlists whose PDF states "Area Median Income (AMI): 60%". OCR and PDF results are
@@ -19,7 +19,7 @@ import subprocess
 import tempfile
 from urllib.parse import urljoin
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from . import Adapter
 
@@ -66,8 +66,9 @@ def units_from_chart(ocr: str) -> list[Unit]:
     caps = [int(t.replace(",", "").replace(".", "")) if re.fullmatch(r"\d{2,3}[,.]\d{3}", t) else None for t in tokens]
     if not any(caps):
         return []
-    best = max(AMI_GRID, key=lambda p: sum(c in {parse.ami_max(p, h) for h in parse.AMI100} for c in caps))
-    by_cap = {parse.ami_max(best, h): h for h in parse.AMI100}
+    grid = [(y, p) for y in sorted(ami.CHARTS, reverse=True) for p in AMI_GRID]
+    year, best = max(grid, key=lambda yp: sum(c in {ami.cap(yp[1], h, yp[0]) for h in ami.AMI100} for c in caps))
+    by_cap = {ami.cap(best, h, year): h for h in ami.AMI100}
     groups: list[list[tuple[int, int]]] = []
     tainted: set[int] = set()
     for c in caps:
@@ -83,6 +84,7 @@ def units_from_chart(ocr: str) -> list[Unit]:
             size="unknown" if i in tainted else OCCUPANCY.get(g[-1][0], "unknown"),
             ami=best,
             bands=[Band(h, None, c) for h, c in g],
+            chart_year=year,
         )
         for i, g in enumerate(groups)
     ]

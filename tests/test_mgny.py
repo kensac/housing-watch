@@ -33,12 +33,12 @@ def test_spanning_row_gets_one_person_cap():
     assert listing_verdict(lst).verdict == "eligible"
 
 
-def test_old_limits_excluded():
+def test_old_limits_judged_on_current_chart():
     lst = rec("27-15-astoria-boulevard")
     (u,) = lst.units
-    assert u.rent == 2163 and u.bands[0].household == 1 and 147_000 < u.bands[0].income_max < 148_000
-    assert u.bands[-1] == Band(3, 82115, 189540)
-    assert listing_verdict(lst).verdict == "excluded"
+    assert u.rent == 2163 and u.bands[0] == Band(1, 82115, 147420) and u.bands[-1] == Band(3, 82115, 189540)
+    assert u.chart_year == 2025  # over the printed $147,420 but within 2026's $154,440
+    assert listing_verdict(lst).reason == "eligible unit(s)" and "on 2026 limits" in listing_verdict(lst).units[0][2]
 
 
 def test_multi_rent_row_splits_units():

@@ -58,7 +58,7 @@ def test_waitlist_range_rows_never_use_7_person_max_for_1():
     assert (eighty[0].rent, eighty[1].rent, eighty[3].rent) == (1258.0, None, 2349.0)
     one = next(b for b in eighty[0].bands if b.household == 1)
     seven = next(b for b in eighty[0].bands if b.household == 7)
-    assert (one.income_min, seven.income_max) == (46422, 171120)
+    assert (one.income_min, seven.income_max) == (46422, 160800)  # "1-7 people" up to the 2025 8-person cap
     assert one.income_max < 100_000
 
 

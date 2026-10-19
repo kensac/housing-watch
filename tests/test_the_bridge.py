@@ -41,8 +41,8 @@ def test_table_flyer_reversed_ami_and_multi_household_row():
     assert (lst.ext_id, lst.borough, lst.senior_only) == ("203-newport-st-brooklyn-ny-11212", "Brooklyn", False)
     one, three = lst.units
     assert (one.size, one.rent, one.ami) == ("1br", 980.0, 40)
-    # "1 - 3 PERSONS $45,360 - $58,320": the 1-person cap is 40% AMI ($47,520), not the 3-person $58,320
-    assert one.bands[0] == Band(1, 45360, 47520) and one.bands[-1] == Band(3, 45360, 58320)
+    # "1 - 3 PERSONS $45,360 - $58,320": 40% AMI on the 2025 chart from 1 person's cap to 3 people's
+    assert one.bands[0] == Band(1, None, 45360) and one.bands[-1] == Band(3, None, 58320)
     assert (three.size, three.rent) == ("3br", 1334.0)
     assert "standard mail only" in lst.notes and "Bridge Rockaway LP Waiting List" in lst.notes
     assert listing_verdict(lst).verdict == "excluded"

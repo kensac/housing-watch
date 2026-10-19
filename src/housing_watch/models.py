@@ -25,6 +25,7 @@ class Unit:
     bands: list[Band] = field(default_factory=list)
     set_aside: str | None = None  # "mobility", "senior", "disability", ... when the unit is restricted
     available: bool | None = None  # False when the source marks it rented/closed
+    chart_year: int | None = None  # HUD chart year the printed caps match (ami.py), when they match one
 
     def key(self) -> str:
         return f"{self.size}|{self.unit_no or ''}|{self.ami or ''}|{self.set_aside or ''}"

@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 import time
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Snapshot, Unit
 from . import Adapter
 
@@ -22,9 +22,6 @@ CONTACT = "Info@taxaceny.com, 718-908-7003"
 FORM_API = "https://frontdoor-prod-us-east-2-1.clickup.com/ui/v3/workspaces/{team}/forms/{form}?token={token}"
 FORM_TTL = 6 * 3600
 
-# HUD NYC 100% AMI, 2025 (130% of these = the 147,420 / 168,480 / 189,540 / 227,500 seen on older ads)
-AMI100_2025 = {1: 113_400, 2: 129_600, 3: 145_800, 4: 162_000, 5: 175_000}
-CHARTS = [(2026, parse.AMI100), (2025, AMI100_2025)]
 # smallest / largest household HPD lets into each size (studio 69 Amboy 4B prints a 3-person cap)
 HH = {"studio": (1, 3), "1br": (1, 3), "2br": (2, 5), "3br": (3, 7), "unknown": (1, 8)}
 # streets that exist only in the Bronx but appear labelled "Brooklyn" (2775 Reservoir Ave, 2710 Decatur Ave)
@@ -33,36 +30,15 @@ _BLOCKS = {"p", "h1", "h2", "h3", "h4", "h5", "h6", "li"}
 _TITLE = re.compile(r"^(.+?)\.?\s+Unit\s+([\w-]+)\.?$", re.I)
 
 
-def _cap(chart: dict, pct: int, h: int) -> int:
-    return int(round(chart[h] * pct / 100 / 10) * 10)
-
-
-def match_cap(cap: int, size: str) -> tuple[int, int, int] | None:
-    """Printed tier max -> (chart year, household size, AMI %); 2026 and 130% preferred."""
-    lo_h, hi_h = HH.get(size, HH["unknown"])
-    pcts = [130] + [p for p in range(30, 175, 5) if p != 130]
-    for year, chart in CHARTS:
-        for pct in pcts:
-            for h in range(hi_h, lo_h - 1, -1):
-                if h in chart and abs(_cap(chart, pct, h) - cap) <= 10:
-                    return year, h, pct
-    return None
-
-
 def bands_for(size: str, income: str) -> tuple[list[Band], int | None, int | None]:
     """(bands, ami %, chart year) for one card's 'Min Income' text."""
     lo, hi = parse.money_range(income)
     lo_h, top_h = HH.get(size, HH["unknown"])
-    m = match_cap(hi, size) if hi else None
-    if m is None:
-        # unknown chart: let bands_from_row infer the % from the largest household HPD allows
-        return parse.bands_from_row(f"{lo_h}-{top_h}", income, None), None, None
+    m = ami.match(hi, sizes=range(top_h, lo_h - 1, -1)) if hi else None
+    if m is None:  # unknown chart: scale from the largest household HPD allows
+        return ami.bands(range(lo_h, top_h + 1), lo, hi)[0], None, None
     year, h, pct = m
-    if year == 2026:
-        return parse.bands_from_row(f"{lo_h}-{h}" if h > lo_h else str(h), income, pct), pct, year
-    chart = dict(CHARTS)[year]
-    bands = [Band(k, lo, hi if k == h else _cap(chart, pct, k)) for k in range(lo_h, h + 1)]
-    return bands, pct, year
+    return ami.bands(range(lo_h, h + 1), lo, hi, pct)[0], pct, year
 
 
 def _stream(html: str) -> list[tuple[str, str]]:
@@ -111,12 +87,13 @@ def parse_page(html: str, forms: dict[str, bool] | None = None) -> tuple[list[Li
             unit_no=unit_no,
             bands=bands,
             available=None if active else False,
+            chart_year=year,
         )
         notes = [f"Apply: ClickUp form {form} (ID upload for all adults required)" if form else "Apply: no form link"]
         if not active:
             notes.append("Form is unavailable (deleted) although the card is still up.")
-        if year == 2025:
-            notes.append(f"Income caps follow the 2025 HUD chart (1 person ${bands[0].income_max:,}); ask {CONTACT}.")
+        if year and year < ami.CURRENT_YEAR:
+            notes.append(f"Income caps follow the {year} HUD chart (1 person ${bands[0].income_max:,}); ask {CONTACT}.")
         utilities = _field(body, "Utilities")
         if utilities:
             notes.append(f"Utilities: {utilities}.")

@@ -70,6 +70,7 @@ class UnitRow(Base):
     unit_no: Mapped[str | None] = mapped_column(Text)
     set_aside: Mapped[str | None] = mapped_column(Text)
     available: Mapped[bool | None] = mapped_column(Boolean)
+    chart_year: Mapped[int | None] = mapped_column(Integer)  # HUD chart the printed caps are on
     listing: Mapped[ListingRow] = relationship(back_populates="units")
     bands: Mapped[list[BandRow]] = relationship(
         back_populates="unit", cascade="all, delete-orphan", order_by="BandRow.household"

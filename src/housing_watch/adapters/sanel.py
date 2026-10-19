@@ -17,10 +17,10 @@ import json
 import logging
 import re
 import time
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from datetime import datetime
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..fetch import FetchError
 from ..models import Band, Listing, Result, Unit
 from . import Adapter, housing_connect, mitchell_lama, nychdc, nys_housing_search, pronto, reside
@@ -53,11 +53,7 @@ FACT_LABELS = ("Rent", "Bedrooms", "AMI", "Household", "Income", "Available unit
 SENIOR_RE = re.compile(r"\bseniors?\b|62\s*(\+|years|and older)|aged? 62|elderly", re.I)
 SENIOR_PREF_RE = re.compile(r"senior\s+prefere?n?ce?\s*\d*\+?", re.I)  # a preference, not a restriction
 SET_ASIDE_RE = re.compile(r"\b(mobility|hearing|visual|h/v|senior|62\+|mi)\b", re.I)
-# HUD NYC 100% AMI, 2025: older ads still print it (130% for 1 person = $147,420, vs 2026's $154,440)
-AMI100_2025 = {1: 113_400, 2: 129_600, 3: 145_800, 4: 162_000, 5: 175_000, 6: 188_000, 7: 201_000, 8: 213_900}
-CHARTS = ((2026, parse.AMI100), (2025, AMI100_2025))
-PCTS = [130] + [p for p in range(30, 175, 5) if p != 130]
-OLD_CHART = " Income limits are printed on HUD's 2025 chart (2026 caps are higher; confirm which applies)."
+OLD_CHART = " Income limits are printed on HUD's {} chart ({} caps are higher; confirm which applies)."
 # sources with nothing public beyond SANEL's summary
 NOT_PUBLISHED = {
     "St. Nicks Alliance": "St. Nicks' waitlist application lists no rents or income limits (HUD-assisted).",
@@ -99,52 +95,14 @@ def _date(text: str | None) -> str | None:
         return None
 
 
-def _cap(chart: dict, pct: int, h: int) -> int:
-    return int(round(chart[h] * pct / 100 / 10) * 10)  # HUD rounds to $10
+def _old_chart(units: list[Unit]) -> str:
+    old = sorted({u.chart_year for u in units if u.chart_year and u.chart_year < ami.CURRENT_YEAR})
+    return OLD_CHART.format("/".join(map(str, old)), ami.CURRENT_YEAR) if old else ""
 
 
-def _match(hi: int, top: int | None, ami: int | None) -> tuple[int, dict, int, int] | None:
-    """A printed top cap -> (chart year, chart, household, AMI %); the printed household and AMI first."""
-    pcts = [ami, *(p for p in PCTS if p != ami)] if ami else PCTS
-    tries = [(top, p) for p in pcts] if top else []
-    for h, pct in tries + [(h, p) for p in pcts for h in range(8, 0, -1)]:
-        for year, chart in CHARTS:
-            if h in chart and abs(_cap(chart, pct, h) - hi) <= 10:
-                return year, chart, h, pct
-    return None
-
-
-def _bands(hh: list[int], lo: int | None, hi: int, ami: int | None) -> tuple[list[Band], int | None]:
-    """One income range printed over several household sizes -> (per-size Bands, HUD chart year).
-
-    The printed max is the cap of the largest household it covers, on the 2026 or the 2025 chart (SVEN:
-    '130%, 1-2 people, up to $168,480' is 2025, so 1 person caps at $147,420, not 2026's $154,440). With
-    no household range printed, the matched household ends it. An unmatched cap falls back to parse's 2026."""
-    m = _match(hi, max(hh) if hh else None, ami)
-    if m is None:
-        hh = hh or [1]
-        rng = f"{hh[0]}-{hh[-1]}" if len(hh) > 1 else str(hh[0])
-        return parse.bands_from_row(rng, f"${lo or 0:,} - ${hi:,}", ami), None
-    year, chart, top, pct = m
-    hh = hh or list(range(1, top + 1))
-    if lo and hh[0] in chart and abs(_cap(chart, pct, hh[0]) - lo) <= 10:
-        lo = None  # 'Income $45,360-$58,320' (The Bridge) runs from the smallest household's cap, not a minimum
-    return [Band(h, lo, min(_cap(chart, pct, h), hi) if h in chart else hi) for h in hh], year
-
-
-def _restamp(u: Unit) -> tuple[Unit, int | None]:
-    """A unit whose rows all repeat one range (Pronto stamps the unit's top cap on every household) -> real caps."""
-    los, his = {b.income_min for b in u.bands}, {b.income_max for b in u.bands}
-    if len(u.bands) < 2 or len(his) != 1 or None in his or len(los) != 1:
-        return u, None
-    bands, year = _bands([b.household for b in u.bands], los.pop(), his.pop(), u.ami)
-    return replace(u, bands=bands), year
-
-
-def _tiers(s) -> tuple[list[Unit], set[int]]:
+def _tiers(s) -> list[Unit]:
     """Tier table rows (size, rent, AMI, household, income [, notes]) grouped into one Unit per tier."""
     units: dict[tuple, Unit] = {}
-    years: set[int] = set()
     for cells in parse.table_rows(s):
         if len(cells) < 5 or "/mo" not in cells[1] and not re.search(r"\$|not published|—|-", cells[1]):
             continue
@@ -160,19 +118,17 @@ def _tiers(s) -> tuple[list[Unit], set[int]]:
         k = (size, rent, a, set_aside)
         u = units.get(k) or units.setdefault(k, Unit(size=size, rent=rent, ami=a, set_aside=set_aside))
         hh, (lo, hi) = parse.household_range(cells[3]), parse.money_range(cells[4])
-        bands, year = (
-            _bands(hh, lo, hi, a) if len(hh) > 1 and hi else (parse.bands_from_row(cells[3], cells[4], a), None)
-        )
-        years |= {year} - {None}
+        bands, year = ami.bands(hh, lo, hi, a) if hh else ([], None)
+        u.chart_year = u.chart_year or year
         for b in bands:
             if all(x.household != b.household for x in u.bands):
                 u.bands.append(b)
     for u in units.values():
         u.bands.sort(key=lambda b: b.household)
-    return list(units.values()), years
+    return list(units.values())
 
 
-def _from_facts(f: dict[str, str]) -> tuple[list[Unit], set[int]]:
+def _from_facts(f: dict[str, str]) -> list[Unit]:
     """No tier table: one Unit per published size, with what the facts block allows.
 
     Income there runs from the lowest minimum to the highest cap over every tier. One size, rent and AMI
@@ -185,10 +141,9 @@ def _from_facts(f: dict[str, str]) -> tuple[list[Unit], set[int]]:
     hh = parse.household_range(f.get("Household", ""))
     lo, hi = parse.money_range(f.get("Income", ""))
     single = len(sizes) == 1 and len(rents) <= 1 and len(amis) <= 1
-    years: set[int] = set()
+    year = None
     if hi and hi > (lo or 0):
-        bands, year = _bands(hh, lo if single else None, hi, max(amis) if amis else None)
-        years |= {year} - {None}
+        bands, year = ami.bands(hh, lo if single else None, hi, max(amis) if amis else None)
     else:  # no income: the household range can only prove a minimum, never a 1-person cap
         bands = [Band(h, None, None) for h in hh] if hh and min(hh) > 1 else []
     units = [
@@ -197,10 +152,11 @@ def _from_facts(f: dict[str, str]) -> tuple[list[Unit], set[int]]:
             rent=rents[0] if len(rents) == 1 and len(sizes) == 1 else None,
             ami=max(amis) if amis else None,
             bands=list(bands),
+            chart_year=year,
         )
         for z in sizes
     ]
-    return units, years
+    return units
 
 
 def doc_links(html: str) -> list[str]:
@@ -241,14 +197,10 @@ def parse_page(url: str, html: str) -> Listing:
     flat = " ".join(
         lines[: lines.index("About this opportunity") + 3] if "About this opportunity" in lines else lines[:60]
     )
-    units, years = _tiers(s)
-    if not units:
-        units, years = _from_facts(f)
+    units = _tiers(s) or _from_facts(f)
     src = f.get("Source")
     official = ld.get("isBasedOn")
-    notes = f"Apply via the official source ({src or 'unknown'}): {official or url}." + (
-        OLD_CHART if 2025 in years else ""
-    )
+    notes = f"Apply via the official source ({src or 'unknown'}): {official or url}." + _old_chart(units)
     if "upcoming" in badge:
         notes = "Upcoming. " + notes
     return Listing(
@@ -404,7 +356,7 @@ class Sanel(Adapter):
 
     def enrich(self, lst: Listing, html: str) -> Listing:
         """A listing SANEL only summarises (no tier table) -> the official source's units, or a note why not."""
-        if lst.status == "closed" or lst.kind == "homeownership" or _tiers(parse.soup(html))[0]:
+        if lst.status == "closed" or lst.kind == "homeownership" or _tiers(parse.soup(html)):
             return lst
         try:
             units, note = self._official_units(lst, doc_links(html))
@@ -412,14 +364,19 @@ class Sanel(Adapter):
             log.warning("sanel: official source for %s: %s", lst.url, e)
             units, note = None, "Official source unreadable this run; units are SANEL's summary."
         if units:
-            fixed = [_restamp(u) for u in units]
-            for u, _ in fixed:  # rows without any income say nothing the printed AMI does not
-                if u.bands and min(b.household for b in u.bands) == 1:
-                    u.bands = [] if not any(b.income_min or b.income_max for b in u.bands) else u.bands
-            lst.units = [u for u, _ in fixed]
-            lst.notes = (lst.notes or "").replace(OLD_CHART, "")
-            if 2025 in {y for _, y in fixed}:
-                note += OLD_CHART
+            old = _old_chart(lst.units)
+            for u in units:
+                bands, year = ami.rows(u.bands, u.ami)  # Pronto stamps a unit's top cap on every household
+                u.bands, u.chart_year = bands, u.chart_year or year
+                if (
+                    u.bands
+                    and min(b.household for b in u.bands) == 1
+                    and not any(b.income_min or b.income_max for b in u.bands)
+                ):
+                    u.bands = []  # rows without any income say nothing the printed AMI does not
+            lst.units = units
+            lst.notes = (lst.notes or "").replace(old, "") if old else lst.notes
+            note += _old_chart(units)
         elif all(u.size != "unknown" and any(b.income_max for b in u.bands) for u in lst.units):
             return lst  # the facts block already had every size and cap
         lst.notes = f"{lst.notes} {note}"

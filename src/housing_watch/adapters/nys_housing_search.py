@@ -31,7 +31,7 @@ from datetime import datetime
 
 import httpx
 
-from .. import fetch, parse
+from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from . import Adapter
 
@@ -131,15 +131,15 @@ def rule_units(rows: list[dict]) -> list[Unit]:
     for r in rows:
         groups[(r.get("unitSize"), r.get("amiCategory"), r.get("unitType"))].append(r)
     out = []
-    for (size, ami, utype), rs in groups.items():
+    for (size, cat, utype), rs in groups.items():
         bands = []
         for r in rs:
             for n in parse.household_range(str(r.get("householdSize") or "")):
                 lo, hi = parse.whole(r.get("minHouseholdIncome")), parse.whole(r.get("maxHouseholdIncome"))
                 # some rules print only the AMI category (Inwood 405-407 W 206th): the cap follows from it
-                bands.append(Band(n, lo, hi if hi is not None else parse.ami_max(parse.ami(ami), n)))
+                bands.append(Band(n, lo, hi if hi is not None else ami.cap(parse.ami(cat), n)))
         rent = next((r["monthlyRent"] for r in rs if r.get("monthlyRent")), None)
-        out.append(Unit(size=parse.size(size), rent=rent, ami=parse.ami(ami), unit_no=utype or None, bands=bands))
+        out.append(Unit(size=parse.size(size), rent=rent, ami=parse.ami(cat), unit_no=utype or None, bands=bands))
     return merge_units(out)
 
 

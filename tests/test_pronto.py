@@ -38,12 +38,15 @@ def test_open_units_plus_waitlist_tiers():
     lst = prop(4934)  # SVEN: 2 open units and a waitlist
     assert lst.borough == "Queens" and lst.status == "open"
     named = {u.unit_no: u for u in lst.units if u.unit_no}
-    assert (named["21N"].size, named["21N"].rent, named["21N"].bands[0]) == ("studio", 2189.0, Band(1, 77303, 168480))
+    # Pronto stamps the 2-person 2025 cap ($168,480) on both rows: 1 person is $147,420 on that chart
+    assert (named["21N"].size, named["21N"].rent, named["21N"].chart_year) == ("studio", 2189.0, 2025)
+    assert named["21N"].bands == [Band(1, 77303, 147420), Band(2, 77303, 168480)]
     assert named["55L"].size == "1br"
     tiers = [(u.size, u.bands[0].income_min) for u in lst.units if u.unit_no is None]
     # waitlist tiers are sized by the named unit sharing their minimum; the 1-4 person tier stays unknown
     assert tiers == [("unknown", 117526), ("1br", 85089), ("studio", 77303)]
-    assert listing_verdict(lst).verdict == "eligible"
+    v = listing_verdict(lst)  # over 2025's $147,420, within 2026's $154,440: same verdict as SANEL's copy
+    assert v.verdict == "eligible" and v.units[0][2] == "eligible on 2026 limits (ad prints 2025 limits: max $147,420)"
 
 
 def test_waitlist_tiers_sized_by_household_range_and_junk_rows_dropped():
