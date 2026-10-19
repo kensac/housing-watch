@@ -1,0 +1,9 @@
+{%- import "_macros.html" as m -%}
+{% if page.items %}
+<div class="table-wrap fill">
+<table class="tbl events">
+  <thead><tr><th class="num">When</th><th>Type</th><th>Subject</th><th class="hide-sm">Verdict</th><th class="hide-sm">Source</th><th class="hide-md">Mailed</th></tr></thead>
+  <tbody>{% include "_event_rows.html" %}</tbody>
+</table>
+</div>
+{% else %}{{ m.empty("No events match", "Nothing recorded for these filters yet. Clear them, or wait for the next source run.") }}{% endif %}

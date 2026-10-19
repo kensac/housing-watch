@@ -1,0 +1,37 @@
+{%- import "_macros.html" as m -%}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{% endblock %} · housing-watch</title>
+<link rel="stylesheet" href="{{ url_for('static', path='app.css') }}">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%235b5bd6'/%3E%3Cpath d='M4 8.5 8 5l4 3.5V12H4z' fill='white'/%3E%3C/svg%3E">
+<script src="{{ url_for('static', path='htmx.min.js') }}" defer></script>
+<script src="{{ url_for('static', path='app.js') }}" defer></script>
+</head>
+<body>
+<div class="shell">
+  <nav class="nav">
+    <a class="brand" href="/"><span class="logo"></span>housing-watch</a>
+    <ul>
+      {%- for id, label, href in [("overview", "Overview", "/"), ("listings", "Listings", "/listings"), ("sources", "Sources", "/sources"), ("fleet", "Fleet", "/fleet"), ("events", "Events", "/events")] %}
+      <li><a href="{{ href }}" class="{{ 'on' if nav == id }}">{{ m.icon(id) }}<span>{{ label }}</span></a></li>
+      {%- endfor %}
+    </ul>
+    <div class="profile" title="Eligibility profile (HW_* environment)"><span class="lbl">Profile</span>{{ profile_line }}</div>
+  </nav>
+  <main class="main {% block mainclass %}{% endblock %}">
+    <header class="page-head">
+      <div>
+        <h1>{{ self.title() }}</h1>
+        {% block sub %}{% endblock %}
+      </div>
+      <div class="head-actions">{% block actions %}{% endblock %}</div>
+    </header>
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<div id="drawer">{% block drawer %}{% endblock %}</div>
+</body>
+</html>

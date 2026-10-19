@@ -1,0 +1,16 @@
+{%- import "_macros.html" as m -%}
+{% for e in page.items %}
+<tr>
+  <td class="num nowrap muted">{{ m.t(e.at) }}</td>
+  <td class="nowrap">{{ m.etype(e) }}</td>
+  <td class="title-cell">{% if e.title %}<a class="t1" href="/listings?open={{ e.key | urlencode }}">{{ e.title }}</a>{% elif e.type == "page_changed" or e.type == "watching" %}<a class="t1" href="{{ e.summary }}" target="_blank" rel="noopener noreferrer">{{ e.summary }}</a>{% else %}<span class="t1">{{ e.summary or e.source }}</span>{% endif %}
+    {% if e.type == "source_failed" and e.detail %}<span class="err">{{ e.detail.fails }} failures in a row: {{ e.detail.error }}</span>{% endif %}
+    {% if e.type == "page_changed" and e.detail and e.detail.added %}<span class="t2">+ {{ e.detail.added[:2] | join(" · ") }}</span>{% endif %}</td>
+  <td class="hide-sm">{% if e.verdict %}{{ m.verdict(e.verdict) }}{% endif %}</td>
+  <td class="hide-sm"><a class="muted" href="/events?source={{ e.source }}">{{ e.source }}</a></td>
+  <td class="hide-md muted nowrap">{% if e.notified %}{{ m.t(e.notified) }}{% else %}pending{% endif %}</td>
+</tr>
+{% endfor %}
+{% if page.next_before %}
+<tr class="more-row"><td colspan="6"><button class="btn sm" hx-get="{{ more }}" hx-target="closest tr" hx-swap="outerHTML">Load older events</button></td></tr>
+{% endif %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Sources{% endblock %}
+{% block sub %}{% set failing = rows | selectattr("health", "equalto", "failing") | list %}<p class="sub">{{ rows | length }} sources · {% if failing %}<span class="bad-text">{{ failing | length }} failing</span>{% else %}all healthy{% endif %} · a source is reported in the digest on its 2nd and 10th consecutive failure</p>{% endblock %}
+{% block mainclass %}fit{% endblock %}
+{% block content %}
+{% if rows %}
+<div class="card flush grow">
+<div class="table-wrap fill">
+<table class="tbl sources">
+  <thead><tr>
+    <th>Source</th><th>Health</th><th class="num">Streak</th><th class="num">Last ok</th><th class="num hide-sm">Last attempt</th>
+    <th class="num hide-md">Duration</th><th class="num">Listed</th><th class="num hide-sm">Eligible</th><th class="num hide-md">Possible</th>
+    <th class="hide-md">Workers (7d)</th><th class="num hide-sm">Next due</th>
+  </tr></thead>
+  <tbody>
+  {% for s in rows %}
+  <tr class="{{ 'row-bad' if s.health == 'failing' }}">
+    <td class="title-cell"><a class="t1" href="/listings?source={{ s.source }}">{{ s.source }}</a><span class="t2">{{ s.title or "" }}{% if s.every_hours %} · every {{ s.every_hours | round(1) | string | replace(".0", "") }}h{% endif %}</span>
+      {% if s.last_error %}<span class="err" title="{{ s.last_error }}">{{ s.last_error }}</span>{% endif %}</td>
+    <td>{% if s.health == "failing" %}<span class="pill bad">failing</span>{% elif s.health == "ok" %}<span class="pill ok">ok</span>{% else %}<span class="pill v-excluded">never run</span>{% endif %}</td>
+    <td class="num">{% if s.consecutive_failures %}<span class="streak" title="failing since {{ s.failing_since | ny }}">{{ s.consecutive_failures }}×</span>{% else %}<span class="muted">0</span>{% endif %}</td>
+    <td class="num nowrap">{{ m.t(s.last_ok) }}</td>
+    <td class="num nowrap hide-sm">{{ m.t(s.last_attempt) }}</td>
+    <td class="num hide-md">{{ s.last_duration | duration }}</td>
+    <td class="num">{{ "{:,}".format(s.listings) }}</td>
+    <td class="num hide-sm">{% if s.eligible %}<a class="good-text" href="/listings?source={{ s.source }}&verdict=eligible">{{ s.eligible }}</a>{% else %}<span class="muted">0</span>{% endif %}</td>
+    <td class="num hide-md">{% if s.possible %}{{ s.possible }}{% else %}<span class="muted">0</span>{% endif %}</td>
+    <td class="hide-md">{% for w in s.workers %}<span class="tag">{{ w }}</span>{% else %}<span class="muted">—</span>{% endfor %}</td>
+    <td class="num nowrap hide-sm">{% if s.next_due %}<time datetime="{{ s.next_due.isoformat() }}" title="{{ s.next_due | ny }}">{{ s.next_due | ago }}</time>{% else %}<span class="muted">—</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+</div>
+{% else %}{{ m.empty("No sources yet", "No adapter is registered and nothing has run. Sources appear once the worker fleet runs its first tick.") }}{% endif %}
+{% endblock %}
