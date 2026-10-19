@@ -8,6 +8,7 @@ same-origin POST/PATCH/DELETE (tailnet-only and single-user, so there is no logi
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit
@@ -19,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.engine import Engine
 
-from .. import digest, queries, views
+from .. import applications, digest, queries, views
 from .. import filters as F
 from ..criteria import PROFILE, Profile
 
@@ -148,6 +149,42 @@ def create_app(engine: Engine, profile: Profile = PROFILE) -> FastAPI:
             return RedirectResponse("/listings?" + urlencode({"open": key}))
         d = queries.listing_detail(engine, key, profile)
         return render(req, "_drawer.html", "listings", detail=d, key=key)
+
+    def application_pdf(key: str, n: int) -> tuple[str, bytes] | None:
+        d = queries.listing_detail(engine, key, profile)
+        urls = applications.pdf_urls(d.notes) if d else []
+        return (urls[n], applications.blank(urls[n])) if 0 <= n < len(urls) else None
+
+    @app.get("/listings/application/panel", response_class=HTMLResponse)
+    def application_panel(req: Request, key: str):
+        """The drawer's application section, loaded after the drawer: it fetches each linked PDF to see
+        whether it is a form we can fill."""
+        d = queries.listing_detail(engine, key, profile)
+        pdfs = []
+        for n, url in enumerate(applications.pdf_urls(d.notes) if d else []):
+            try:
+                form = applications.detect(applications.blank(url))
+                pdfs.append((n, url, form.name if form else None, None))
+            except Exception as e:  # noqa: BLE001 — a dead link is shown, not raised
+                pdfs.append((n, url, None, str(e)))
+        ctx = dict(key=key, pdfs=pdfs, ready=applications.applicant() is not None)
+        return tpl.TemplateResponse(req, "_application.html", ctx)
+
+    @app.get("/listings/application")
+    def application(key: str, n: int = 0):
+        """The listing's n-th application PDF, filled from the applicant file. Built per request, never stored."""
+        a = applications.applicant()
+        if a is None:
+            return PlainTextResponse("No applicant file is configured (HW_APPLICANT_FILE).", 404)
+        got = application_pdf(key, n)
+        if got is None:
+            return PlainTextResponse("This listing has no such application PDF.", 404)
+        filled = applications.fill(got[1], a)
+        if filled is None:
+            return PlainTextResponse(f"{got[0]} is not a form housing-watch knows how to fill.", 422)
+        name = re.sub(r"[^\w.-]+", "-", key.split(":", 1)[-1]).strip("-")[:60] or "listing"
+        headers = {"Content-Disposition": f'attachment; filename="application-{name}.pdf"', "Cache-Control": "no-store"}
+        return Response(filled, media_type="application/pdf", headers=headers)
 
     @app.get("/sources", response_class=HTMLResponse)
     def sources(req: Request):

@@ -23,6 +23,9 @@ tables), so the same input always gives the same output.
 - `criteria.py` labels each listing **eligible**, **possible** or **excluded**
   when it is read, and gives a reason. Anything it cannot rule out counts as
   possible and is still reported.
+- `applications.py` pre-fills paper application PDFs that are a known form (today HPD's HC2.0
+  application, used by Tax Solute, iAfford, AFNY and others) from `HW_APPLICANT_FILE`. The UI
+  generates the filled PDF on request and stores nothing.
 - `digest.py` sends a digest at `HW_DIGEST_HOURS`. When a new eligible unit is
   open, it sends right away instead.
 
@@ -46,6 +49,7 @@ tables), so the same input always gives the same output.
 | `HW_RUN_TIMEOUT_HOURS` | an unfinished run older than this is failed as abandoned (default 6) |
 | `HW_HOST_GAP` | minimum seconds between requests to one host (default 0.5) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | STARTTLS SMTP |
+| `HW_APPLICANT_FILE` | applicant JSON for pre-filling known paper application forms (UI only; schema: `tests/fixtures/applications/applicant.example.json`). No SSN; signatures and dates are left blank |
 | `BYPARR_URL` | FlareSolverr-compatible renderer for JS/Cloudflare pages |
 
 ## Running

@@ -50,6 +50,8 @@
     </div>
     {% else %}<p class="muted">The source publishes no unit details for this listing.</p>{% endif %}
 
+    {% if detail.notes and "http" in detail.notes %}<div hx-get="/listings/application/panel?key={{ x.key | urlencode }}" hx-trigger="load" hx-swap="outerHTML"><h3>Application</h3><p class="muted">Checking the application PDF…</p></div>{% endif %}
+
     {% if detail.notes %}
     <h3>Notes</h3>
     <div class="notes">{{ detail.notes }}</div>
