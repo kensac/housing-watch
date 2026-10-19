@@ -153,7 +153,8 @@ def build(s: Session) -> tuple[str, str, str, list[int]] | None:
         htm += ["</ul>"]
     tail = (
         f"Also: {counts['excluded_new']} new listings filtered out (over income, Bronx, 2BR+, set-aside),"
-        f" {counts['watching']} pages now watched, {counts['baseline']} first-run listings and pages recorded (eligible ones listed above)."
+        f" {counts['watching']} pages now watched,"
+        f" {counts['baseline']} first-run listings and pages recorded (eligible ones listed above)."
     )
     plain += [tail]
     htm += [f"<p><small>{html.escape(tail)}</small></p>"]
