@@ -1,12 +1,20 @@
-"""HTTP, JS/Cloudflare rendering (byparr), PDF text and OCR. All deterministic, no AI."""
+"""HTTP, JS/Cloudflare rendering (byparr), PDF text and OCR. All deterministic, no AI.
+
+Politeness is per process, shared by every worker thread: at most one request in flight to a host,
+a minimum gap between request starts to it, and one byparr render at a time. More threads therefore
+never mean a higher rate for any one site.
+"""
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
+from collections import defaultdict
 from urllib.parse import urlparse
 
 import httpx
@@ -18,6 +26,8 @@ UA = (
 BYPARR_URL = os.environ.get("BYPARR_URL", "")  # e.g. http://byparr:8191 on hetzner's proxy network
 _MIN_GAP = float(os.environ.get("HW_HOST_GAP", "0.5"))  # politeness per host, seconds
 _last: dict[str, float] = {}
+_host_locks: defaultdict[str, threading.Lock] = defaultdict(threading.Lock)
+_render_lock = threading.Lock()
 
 _client = httpx.Client(
     headers={"User-Agent": UA, "Accept-Language": "en-US,en;q=0.9"},
@@ -30,21 +40,43 @@ class FetchError(RuntimeError):
     pass
 
 
-def _polite(url: str) -> None:
-    host = urlparse(url).netloc
+class NeedsByparr(Exception):
+    """fetch.rendered() was called on a worker without BYPARR_URL; the fleet re-queues the job on `byparr`.
+
+    Not a FetchError, so adapters that skip one failed page do not swallow it.
+    """
+
+
+def _wait_gap(host: str) -> None:
     wait = _last.get(host, 0) + _MIN_GAP - time.monotonic()
     if wait > 0:
         time.sleep(wait)
     _last[host] = time.monotonic()
 
 
+@contextlib.contextmanager
+def _slot(url: str):
+    """Hold the host's one in-flight slot for the duration of a request."""
+    host = urlparse(url).netloc
+    with _host_locks[host]:
+        _wait_gap(host)
+        yield
+
+
+def _polite(url: str) -> None:
+    """Gap only, for callers that use _client directly; waits out any request in flight to the host."""
+    host = urlparse(url).netloc
+    with _host_locks[host]:
+        _wait_gap(host)
+
+
 def get(url: str, *, headers: dict | None = None, retries: int = 2, allow_304: bool = False) -> httpx.Response:
     """GET with retries. allow_304=True returns a 304 (send If-None-Match / If-Modified-Since in headers)."""
     err: Exception | None = None
     for attempt in range(retries + 1):
-        _polite(url)
         try:
-            r = _client.get(url, headers=headers)
+            with _slot(url):
+                r = _client.get(url, headers=headers)
             if r.status_code in (429, 502, 503, 504) and attempt < retries:
                 time.sleep(3 * (attempt + 1))
                 continue
@@ -60,9 +92,9 @@ def get(url: str, *, headers: dict | None = None, retries: int = 2, allow_304: b
 
 
 def post_json(url: str, body: dict, *, headers: dict | None = None) -> dict:
-    _polite(url)
     try:
-        r = _client.post(url, json=body, headers=headers)
+        with _slot(url):
+            r = _client.post(url, json=body, headers=headers)
         r.raise_for_status()
         return r.json()
     except (httpx.HTTPError, ValueError) as e:
@@ -101,14 +133,14 @@ def json(url: str, **kw):
 def rendered(url: str, wait_ms: int = 4000) -> str:
     """HTML after JavaScript (and any Cloudflare challenge) ran, via byparr (FlareSolverr API)."""
     if not BYPARR_URL:
-        raise FetchError(f"render {url}: BYPARR_URL not set")
-    _polite(url)
+        raise NeedsByparr(f"render {url}: BYPARR_URL not set on this worker")
     try:
-        r = httpx.post(
-            f"{BYPARR_URL.rstrip('/')}/v1",
-            json={"cmd": "request.get", "url": url, "maxTimeout": 90000, "waitInSeconds": wait_ms // 1000},
-            timeout=120,
-        )
+        with _render_lock, _slot(url):  # byparr drives one browser: one render at a time
+            r = httpx.post(
+                f"{BYPARR_URL.rstrip('/')}/v1",
+                json={"cmd": "request.get", "url": url, "maxTimeout": 90000, "waitInSeconds": wait_ms // 1000},
+                timeout=120,
+            )
         r.raise_for_status()
         sol = r.json().get("solution") or {}
         body = sol.get("response") or ""
