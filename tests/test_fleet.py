@@ -285,6 +285,46 @@ async def _open_and(app, coro):
         return await coro
 
 
+def test_reside_spreads_changed_pages_over_chunks_and_merges(fleet, pg, monkeypatch):
+    from housing_watch import adapters
+    from housing_watch.adapters import reside
+
+    page = (Path(__file__).parent / "fixtures" / "reside" / "115-stanwix-st-apartment-unit-218.html").read_text()
+    pages = {f"https://residenewyork.com/property/p{i}/": "2026-10-01" for i in range(12)}
+    calls: list[str] = []
+
+    def html(u, **kw):
+        if u in reside.SITEMAPS:
+            return "".join(f"<loc>{x}</loc><lastmod>{lm}</lastmod>" for x, lm in pages.items()) * (
+                u == reside.SITEMAPS[0]
+            )
+        calls.append(u)
+        return page
+
+    monkeypatch.setattr(fetch, "html", html)
+    monkeypatch.setattr(reside.Reside, "min_listings", 1)
+    monkeypatch.setattr(adapters, "CHUNK_LEAST", 3)
+    monkeypatch.setattr(tasks, "load_all", lambda: {**FAKES, "reside": reside.Reside})
+    tasks.source_run.defer(source="reside")
+    drain(fleet, pg)
+    run = run_of(pg, "reside")
+    assert run.ok and run.chunks == 4 and run.listings == 12, run.error
+    assert sorted(calls) == sorted(pages)  # every page fetched exactly once, across the chunks
+    with Session(pg) as s:
+        assert set(db.load_cache(s, "reside")) == set(pages)  # every chunk's pages merged; the plan is not saved
+    calls.clear()
+    moved, gone = list(pages)[0], list(pages)[-1]
+    pages[moved] = "2026-10-02"
+    del pages[gone]
+    tasks.source_run.defer(source="reside")
+    drain(fleet, pg)
+    run = run_of(pg, "reside")
+    assert run.ok and run.chunks is None and run.listings == 11 and calls == [moved]  # one small chunk, inline
+    with Session(pg) as s:
+        assert s.scalars(select(EventRow.key).where(EventRow.type == "gone")).all() == ["reside:p11"]
+        assert set(db.load_cache(s, "reside")) == set(pages)
+
+
 def test_inline_run_handles_chunks_and_byparr(fleet, pg):
     assert runner.run_inline(pg, "t_chunky").startswith("ok 4L")
     assert runner.run_inline(pg, "t_rendered").startswith("SKIP")

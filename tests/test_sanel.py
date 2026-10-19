@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from housing_watch.adapters import sanel
+from housing_watch import adapters, runner
+from housing_watch.adapters import PLAN, sanel
 from housing_watch.adapters.sanel import Sanel, parse_page, reside_match
 from housing_watch.criteria import listing_verdict
 from housing_watch.fetch import FetchError
@@ -189,7 +190,7 @@ def test_hdc_flyer_replaces_summary(monkeypatch):
     lst, a = enriched("queens__apex-place-apartments-lsp339", monkeypatch, nychdc="hdc-apex-flyer.txt")
     assert [(u.size, u.rent, u.ami) for u in lst.units] == [("1br", 2206, 110), ("2br", 2550, 110), ("1br", 2618, 140)]
     assert listing_verdict(lst).verdict == "eligible" and "HDC's flyer" in lst.notes
-    assert any(k.startswith("hdc:") for k in a.cache["docs"])  # cached: the next run does not re-read it
+    assert any(k.startswith("doc:hdc:") for k in a.cache)  # cached: the next run does not re-read it
 
 
 def test_housing_connect_ad_replaces_summary(monkeypatch):
@@ -260,3 +261,21 @@ def test_official_source_down_keeps_summary(monkeypatch):
         page("queens__apex-place-apartments-lsp339"), (F / "queens__apex-place-apartments-lsp339.html").read_text()
     )
     assert [u.size for u in lst.units] == ["1br", "2br"] and "unreadable" in lst.notes
+
+
+def test_concurrent_chunks_keep_each_others_documents(monkeypatch):
+    names = ["queens__domi-1224sz", "queens__aura-1bpj4o", "queens__apex-place-apartments-lsp339"]
+    sitemap = "".join(f"<url><loc>{url(n)}</loc></url>" for n in names)
+    monkeypatch.setattr(sanel.fetch, "html", lambda u, **kw: sitemap)
+    monkeypatch.setattr(sanel.fetch, "json", lambda u, **kw: doc("pronto-12030.json"))
+    monkeypatch.setattr(sanel.fetch, "pdf_text", lambda u, **kw: doc("hdc-apex-flyer.txt"))
+    monkeypatch.setattr(sanel, "_get", lambda u: (F / (u.removeprefix(BASE).replace("/", "__") + ".html")).read_text())
+    monkeypatch.setattr(sanel, "GAP_S", 0)
+    monkeypatch.setattr(Sanel, "min_listings", 1)
+    monkeypatch.setattr(adapters, "CHUNK_LEAST", 1)
+    a = Sanel({"docs": {"ml": {"fetched": 0, "data": {}}}})  # older layout, and a document unused for a week
+    assert a.chunks() == ["1/3", "2/3", "3/3"] and "docs" not in a.cache and "doc:ml" not in a.cache
+    res, cache = runner.fetch_all(Sanel())  # one page per chunk, each chunk on its own copy of the cache
+    assert sorted(x.title for x in res.listings) == ["APEX PLACE APARTMENTS", "Aura", "DOMI"]
+    assert {k.split(":")[1] for k in cache if k.startswith("doc:")} == {"pronto", "hdc"}  # both chunks' documents
+    assert set(cache) - {PLAN} >= {url(n) for n in names}

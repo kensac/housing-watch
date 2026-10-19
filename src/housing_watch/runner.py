@@ -17,7 +17,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from . import db
-from .adapters import Adapter, load_all
+from .adapters import PLAN, Adapter, load_all
 from .fetch import NeedsByparr
 from .models import Result
 
@@ -67,7 +67,7 @@ def record(eng: Engine, run_id: int, name: str, res: Result, cache: dict, worker
         baseline = db.is_baseline(s, name)
         n = db.record_listings(s, name, res.listings, baseline=baseline)  # an empty list marks the old ones gone
         n += db.record_snapshots(s, name, res.snapshots, baseline=baseline)
-        db.save_cache(s, name, cache)
+        db.save_cache(s, name, {k: v for k, v in cache.items() if k != PLAN})
         db.finish_run(
             s, run_id, name, True, listings=len(res.listings), snapshots=len(res.snapshots), events=n,
             every_hours=cls.every_hours, workers=workers,
