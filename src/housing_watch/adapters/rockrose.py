@@ -176,7 +176,7 @@ class Rockrose(Adapter):
     name = "rockrose"
     title = "Rockrose affordable waitlists"
     url = INDEX
-    every_hours = 24  # waitlists, logged in order received
+    every_hours = 4  # waitlists, logged in order received
     min_listings = 1
 
     def _cached(self, url: str, kind: str, make) -> str:

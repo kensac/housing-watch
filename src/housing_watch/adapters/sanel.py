@@ -47,7 +47,7 @@ KINDS = {
 }
 GAP_S = 1.0  # SANEL asks nothing, but it is a small site: 1 request per second per worker
 MAX_AGE_H = 48  # every cached page is re-read at least this often
-REFRESH_SHARE = 8  # each run re-reads the stalest 1/8 of known pages (every_hours=6 -> all within 48h)
+REFRESH_SHARE = 8  # each run re-reads the stalest 1/8 of known pages (every 4h -> all within 32h)
 MAX_FAILED = 20  # more fetch failures than this in one run = something is wrong with the site
 DOC_TTL_H = 24  # an official document (API answer, flyer, list) is re-read at most this often
 DOC_DROP_H = 7 * 24  # a document no listing has needed for this long leaves the cache
@@ -258,7 +258,7 @@ class Sanel(Adapter):
     name = "sanel"
     title = "SANEL (aggregator)"
     url = "https://sanel.nyc/listings"
-    every_hours = 6
+    every_hours = 4
     min_listings = 150
     parallel = 4
     _aura = None

@@ -7,15 +7,15 @@
 {% else %}
 <div class="grid-2">
   <section class="card">
-    <header class="card-head"><h2>Workers</h2><span class="muted">heartbeat every few seconds; stale after 1m</span></header>
+    <header class="card-head"><h2>Workers</h2><span class="muted">heartbeat every 30s</span></header>
     {% if fl.workers %}
     <div class="table-wrap"><table class="tbl">
-      <thead><tr><th>Worker</th><th>Host</th><th class="num">Heartbeat</th><th>Running</th></tr></thead>
+      <thead><tr><th>Host</th><th>Queues</th><th class="num">Heartbeat</th><th>Running</th></tr></thead>
       <tbody>
       {% for w in fl.workers %}
       <tr class="{{ 'dim' if w.age > 600 }}">
-        <td class="nowrap"><span class="hb {{ 'ok' if w.age < 60 else ('warn' if w.age < 600 else 'bad') }}"></span>#{{ w.id }}</td>
-        <td>{{ w.host or "—" }}</td>
+        <td class="nowrap"><span class="hb {{ 'ok' if w.age < 60 else ('warn' if w.age < 600 else 'bad') }}"></span>{{ w.name }}</td>
+        <td>{{ w.queues | join(", ") }} · {{ w.concurrency }} slots</td>
         <td class="num nowrap">{{ m.t(w.last_heartbeat) }}</td>
         <td>{% for d in w.doing %}<span class="tag">{{ d }}</span>{% else %}<span class="muted">idle</span>{% endfor %}</td>
       </tr>

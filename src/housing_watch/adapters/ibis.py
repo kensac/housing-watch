@@ -131,7 +131,7 @@ class Ibis(Adapter):
     name = "ibis"
     title = "Ibis Advisors"
     url = BASE
-    every_hours = 6  # first come, first served
+    every_hours = 4  # first come, first served
     min_listings = 1  # listings, or the home-page snapshot when no card is up
 
     def _ocr(self, img_url: str) -> str:

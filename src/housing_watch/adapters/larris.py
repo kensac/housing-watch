@@ -14,6 +14,6 @@ class Larris(GoDaddyPage):
     title = "LARRIS Marketing & Compliance"
     url = "https://larrismarketing.com/re-rentals"
     pages = [url]
-    every_hours = 12
+    every_hours = 4
     ignore = GODADDY_IGNORE
     min_text = 600  # the empty page's boilerplate alone is ~1,400 chars

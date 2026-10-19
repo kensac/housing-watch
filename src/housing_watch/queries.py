@@ -579,7 +579,7 @@ def sources(engine: Engine, p: Profile = PROFILE) -> list[SourceHealth]:
 @dataclass
 class Fleet:
     available: bool
-    workers: list[dict] = field(default_factory=list)  # id, last_heartbeat, age (s), host, doing
+    workers: list[dict] = field(default_factory=list)  # fleet_workers: name (host), queues, concurrency, age (s), doing
     queues: dict[str, dict[str, int]] = field(default_factory=dict)  # queue -> status -> count
     failures: list[dict] = field(default_factory=list)
     hosts: list[dict] = field(default_factory=list)  # from runs.workers: name, last_run, runs/fails 24h
@@ -608,15 +608,14 @@ def fleet(engine: Engine) -> Fleet:
         workers = []
         for r in c.execute(
             text(
-                "SELECT w.id, w.last_heartbeat,"
-                " (SELECT r.workers[1] FROM procrastinate_jobs j JOIN runs r ON r.job_id = j.id"
-                "   WHERE j.worker_id = w.id ORDER BY r.started DESC LIMIT 1) AS host,"
-                " (SELECT array_agg(j.task_name || coalesce(' ' || (j.args->>'source'), '') ORDER BY j.id)"
-                "   FROM procrastinate_jobs j WHERE j.worker_id = w.id AND j.status = 'doing') AS doing"
-                " FROM procrastinate_workers w ORDER BY w.last_heartbeat DESC"
+                "SELECT w.name, w.queues, w.concurrency, w.started, w.last_seen,"
+                " (SELECT array_agg(r.source ORDER BY r.started) FROM runs r WHERE r.finished IS NULL"
+                "   AND w.name = ANY(r.workers) AND r.started > now() - interval '6 hours') AS doing"
+                " FROM fleet_workers w ORDER BY w.last_seen DESC, w.name"
             )
         ):
-            workers.append({**r._mapping, "age": (t - r.last_heartbeat).total_seconds(), "doing": r.doing or []})
+            workers.append({**r._mapping, "host": r.name, "last_heartbeat": r.last_seen,
+                            "age": (t - r.last_seen).total_seconds(), "doing": r.doing or []})  # fmt: skip
         queues: dict[str, dict[str, int]] = {}
         for q, st, n in c.execute(
             text("SELECT queue_name, status::text, count(*) FROM procrastinate_jobs GROUP BY 1, 2 ORDER BY 1")

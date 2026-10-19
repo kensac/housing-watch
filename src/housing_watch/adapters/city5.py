@@ -29,7 +29,7 @@ class City5(PageAdapter):
     title = "City5"
     url = URL
     pages = [URL]
-    every_hours = 24
+    every_hours = 4
     min_text = 1  # once it resolves, even a one-line "coming soon" page is news
 
     def fetch(self) -> Result:

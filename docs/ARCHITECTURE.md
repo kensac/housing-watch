@@ -43,7 +43,7 @@ everything.
 ## Store (Postgres, SQLAlchemy 2.0, Alembic)
 
 - `orm.py` is the schema: `listings → units → bands`, `snapshots`, `events`, `runs`, `source_state`,
-  `adapter_cache`, `chunk_results`. Alembic owns all DDL, Procrastinate's included (revision 0002 runs
+  `adapter_cache`, `chunk_results`, `fleet_workers`. Alembic owns all DDL, Procrastinate's included (revision 0002 runs
   its `SchemaManager.get_schema()`). Workers run `alembic upgrade head` at start under a Postgres
   advisory lock, so any worker can migrate. A Procrastinate upgrade that ships SQL migrations needs a
   new revision that applies them; `tests/test_fleet.py::test_procrastinate_schema_is_current` fails
@@ -66,7 +66,8 @@ provides `SKIP LOCKED` claiming, LISTEN/NOTIFY, periodic tasks, `queueing_lock` 
 serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are not in `orm.py`.
 
 - **Workers** are the same image on every host: `python -m housing_watch worker`. `HW_WORKER_NAME`
-  names the worker (the host). Each worker runs `HW_WORKER_CONCURRENCY` threads; politeness is in
+  names the worker (the host); each worker upserts itself into `fleet_workers` every 30s, because
+  Procrastinate's own workers table has no name. Each worker runs `HW_WORKER_CONCURRENCY` threads; politeness is in
   `fetch.py`, so that is safe.
 - **Queues:** `sources` (every worker), `byparr` (workers whose `HW_WORKER_CAPS` include `byparr`, i.e.
   hetzner) and `digest` (cap `digest`: the worker with the profile and SMTP credentials, also hetzner).
