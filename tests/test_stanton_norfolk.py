@@ -38,7 +38,7 @@ def test_east_village_140_1br_eligible():
     assert "PO Box 981" in lst.notes and "guestlogin.aspx" in lst.notes
 
 
-def test_one_flushing_stale_ad_is_possible_not_excluded():
+def test_one_flushing_stale_ad_gets_current_maxima():
     units = parse_ad((F / "ofowner3-ny.ad.txt").read_text())
     assert [(u.size, u.rent, u.ami) for u in units] == [
         ("studio", 1884.0, 130),
@@ -50,7 +50,9 @@ def test_one_flushing_stale_ad_is_possible_not_excluded():
     lst = site("ofowner3-ny")
     assert lst.borough == "Queens" and "old income limits" in lst.notes
     assert "oneflushing@stantonnorfolk.org" in lst.notes
-    assert listing_verdict(lst).verdict == "possible"
+    # maxima move to today's 130% limits; the rent-based minimums stay
+    assert bands(lst.units[1]) == [(1, 84412, 154440), (2, 84412, 176410), (3, 84412, 198510)]
+    assert listing_verdict(lst).verdict == "eligible"
     two = next(x for x in lst.units if x.size == "2br")
     assert two.available is True  # "(1 Available)" on floorplans.aspx
 

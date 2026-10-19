@@ -70,8 +70,9 @@ def test_fetch(offline):
     assert cove.units[1].bands == [Band(1, None, 154440), Band(2, None, 176410), Band(3, None, 198510)]
     assert [b.income_max for b in cove.units[2].bands] == [176410, 198510, 220480, 238160]
     assert "covererental@housingpartnership.com" in cove.notes and "Attachment-G-1.pdf" in cove.notes
-    # minimum income is "TBD": possible, not eligible
+    # minimum income is "TBD": possible, not eligible, and the notes say why
     assert listing_verdict(cove).verdict == "possible"
+    assert "minimum incomes are not published (charts say TBD)" in cove.notes
 
     lyra = by["lyra-waiting-list"]
     assert [(u.size, u.ami) for u in lyra.units] == [

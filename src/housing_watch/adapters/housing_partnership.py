@@ -3,7 +3,8 @@
 The index splits "Active Listings" from "Properties With No Current Vacancies"; a detail page of the
 latter carries a "No vacancies at the moment" banner. Each detail page has one table per AMI band
 (the % is in the table caption): a unit row (size, an "Available" tag, rent, total units) followed by
-one row per household size. A lone income figure is the maximum. Within an active property only rows
+one row per household size. A lone income figure is the maximum (the minimum is then unpublished, and
+said so in notes). Within an active property only rows
 tagged "Available" with a nonzero count are open. No-vacancy rentals are kept as waitlists (HP logs
 applications in order received), so their 130% tiers still show up. The footer holds HP's own office
 address (Manhattan 10001): the borough comes from the "Property Overview" block instead.
@@ -152,6 +153,8 @@ def parse_detail(url: str, html: str, active: bool = True, name: str | None = No
         how = f"Contact {', '.join(emails)}; or " + how[0].lower() + how[1:]
     if not active:
         how = "No vacancies at the moment (applications logged in order received). " + how
+    if any(b.income_min is None for u in units for b in u.bands):
+        how += ". Some tiers print only a maximum income: HP publishes no minimum for them"
     return Listing(
         source="housing_partnership",
         ext_id=url.rstrip("/").rsplit("/", 1)[-1],

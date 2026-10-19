@@ -107,10 +107,12 @@ def parse_detail(url: str, html: str, charts: dict[str, str]) -> Listing:
     hp = [e for e in emails if "housingpartnership" in e]
     rr = [e for e in emails if "rockrose" in e] or (["affordablerental@rockrose.com"] if "rockrose.com" in flat else [])
     closed = re.search(r"(no longer|not currently) accepting|waiting list is closed|waitlist is closed", flat, re.I)
+    # the charts print "TBD - $154,440": no per-unit minimum exists anywhere public, only the card's overall low
+    tbd = " Per-unit minimum incomes are not published (charts say TBD)." if "TBD" in "".join(charts.values()) else ""
     notes = (
         f"Apply by email only: get the application (G-1 PDF on {INDEX} or from {', '.join(rr) or 'Rockrose'}), "
         f"email it to {', '.join(hp) or field('schedule_a_visit')}; logged in order received. "
-        f"Card: {field('unit_type')}, rent {field('rent')}, income {field('income_range')}. {QUESTIONS}"
+        f"Card: {field('unit_type')}, rent {field('rent')}, income {field('income_range')}.{tbd} {QUESTIONS}"
     )
     return Listing(
         source="rockrose",

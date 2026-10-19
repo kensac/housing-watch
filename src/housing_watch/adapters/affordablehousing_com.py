@@ -201,6 +201,10 @@ def parse_detail(card: dict, html: str) -> Listing | None:
         "New York": "Manhattan",
     }.get(county, county or None)
     note = " ".join(x for x in (ctitle, desc) if x)
+    note = (note[:400] + ("…" if len(note) > 400 else "")) if note else ""
+    if not any(u.bands or u.ami for u in units):
+        # the page's "Income restrictions" block is a hidden placeholder ($500 - $1000 for every listing)
+        note = (note + " " if note else "") + "The listing publishes no income limits or AMI."
     return Listing(
         source="affordablehousing_com",
         ext_id=card["id"],
@@ -212,7 +216,7 @@ def parse_detail(card: dict, html: str) -> Listing | None:
         kind="waitlist" if status == "waitlist" else "re-rental",
         units=units,
         senior_only=age_restricted or bool(_SENIOR.search(building_text)),
-        notes=(note[:400] + ("…" if len(note) > 400 else "")) or None,
+        notes=note or None,
     )
 
 

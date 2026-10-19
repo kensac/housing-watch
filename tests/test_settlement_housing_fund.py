@@ -11,6 +11,7 @@ from housing_watch.adapters.settlement_housing_fund import (
     parse_form,
     parse_pronto,
     read_blocks,
+    registration_listing,
 )
 from housing_watch.criteria import listing_verdict
 
@@ -103,3 +104,13 @@ def test_pronto_waterside():
 def test_pronto_sawyer_is_outside_nyc():
     lst = parse_pronto(json.loads((F / "pronto-482.json").read_text()), "https://bit.ly/SawyerPlaceListings")
     assert lst.borough is None and "Outside NYC" in lst.notes and len(lst.units) == 16
+
+
+def test_registration_only_link_takes_window_from_form_config():
+    cfg = json.loads((F / "pronto-reg-3333.json").read_text())
+    reg = "https://prontohousing.io/accounts/registration/f680505a-dd30-4f42-8668-a128e4465baf/"
+    lst = registration_listing("3333 Broadway", "3333 Broadway, New York, NY 10031", "https://bit.ly/x", reg, cfg)
+    assert (lst.borough, lst.deadline, lst.units) == ("Manhattan", "2026-12-31", [])
+    assert "2024-10-30 to 2026-12-31" in lst.notes and "first come, first served" in lst.notes
+    assert "3333-broadway@prontohousing.io" in lst.notes and "publishes sizes, rents or income" in lst.notes
+    assert listing_verdict(lst).reason == "no unit details published"

@@ -13,7 +13,8 @@ Cloudflare). Per run:
 3. Per open NYC record, the units table the detail page shows: WaitlistRuleControllerML.
    getWaitlistRulesMLForTable for Mitchell-Lama (per size: rent or carrying charge, purchase price,
    household and income range, per-size Open/Closed), ListingRuleController.getWaitlistRules otherwise
-   (per size x household x AMI: income range, rent). Batched into a few POSTs.
+   (per size x household x AMI: income range, rent; a rule with no income figures gets HUD's cap for
+   its AMI category). Batched into a few POSTs.
 
 Caveats: an ML row's income range spans every unit of that size ("1 to 2, $50,488 to $204,983"), so $150k
 fits only the pricier units, and co-ops need an equity payment and wait years. When a record has no
@@ -134,9 +135,9 @@ def rule_units(rows: list[dict]) -> list[Unit]:
         bands = []
         for r in rs:
             for n in parse.household_range(str(r.get("householdSize") or "")):
-                bands.append(
-                    Band(n, parse.whole(r.get("minHouseholdIncome")), parse.whole(r.get("maxHouseholdIncome")))
-                )
+                lo, hi = parse.whole(r.get("minHouseholdIncome")), parse.whole(r.get("maxHouseholdIncome"))
+                # some rules print only the AMI category (Inwood 405-407 W 206th): the cap follows from it
+                bands.append(Band(n, lo, hi if hi is not None else parse.ami_max(parse.ami(ami), n)))
         rent = next((r["monthlyRent"] for r in rs if r.get("monthlyRent")), None)
         out.append(Unit(size=parse.size(size), rent=rent, ami=parse.ami(ami), unit_no=utype or None, bands=bands))
     return merge_units(out)

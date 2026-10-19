@@ -22,6 +22,7 @@ SALES = f"{BASE}/nme3"
 PAGE_JSON = "https://static.wixstatic.com/sites/{file}.json.z?v=3"
 HOW_RENT = "Contact Us for an Application: 212-694-3893, micki@mickigarciarealty.com, 1355 Park Ave, New York NY 10029"
 HOW_OWN = f"Homeownership (first-time buyers): interest form {BASE}/nmeapplication"
+NO_DETAILS = "The page publishes no unit sizes, rents, AMI or income limits"
 WHERE = {
     "harlem": "Manhattan",
     "east harlem": "Manhattan",
@@ -91,7 +92,7 @@ def parse_project(title: str, url: str, html: str) -> Listing:
         borough=boro,
         status="closed" if closed else "open",
         kind="homeownership" if own else "re-rental",
-        notes=f"{what or '?'}; WHEN: {when}. " + (HOW_OWN if own else HOW_RENT),
+        notes=f"{what or '?'}; WHEN: {when}. " + (HOW_OWN if own else f"{HOW_RENT}. {NO_DETAILS}"),
     )
 
 

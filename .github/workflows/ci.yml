@@ -28,6 +28,7 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils tesseract-ocr
       - run: uv sync --frozen
       - run: uv run ruff check src tests alembic
       - run: uv run ruff format --check src tests alembic

@@ -73,7 +73,7 @@ def listing_verdict(lst: Listing, p: Profile = PROFILE) -> Verdict:
     if lst.senior_only:
         return Verdict(EXCLUDED, "senior only")
     if lst.kind == "homeownership":
-        return Verdict(POSSIBLE, "homeownership (tracked separately)")
+        return Verdict(EXCLUDED, "homeownership, not a rental")
     if not lst.units:
         return Verdict(POSSIBLE, "no unit details published")
     judged = [(u, *unit_verdict(u, p)) for u in lst.units]

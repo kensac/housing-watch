@@ -3,10 +3,11 @@ from pathlib import Path
 import pytest
 
 from housing_watch.adapters._pagekit import snapshot
-from housing_watch.adapters.hudson import Hudson, parse_programs
+from housing_watch.adapters.hudson import AGENTS, Hudson, parse_programs, with_agent_units
 from housing_watch.criteria import listing_verdict
 
-HTML = (Path(__file__).parent / "fixtures" / "hudson" / "availability.html").read_text()
+F = Path(__file__).parent / "fixtures" / "hudson"
+HTML = (F / "availability.html").read_text()
 URL = "https://www.hudsoninc.com/availability/"
 
 
@@ -21,6 +22,16 @@ def test_three_programs():
     assert listing_verdict(bergen).reason == "125% AMI caps 1 person below $150,000"
     assert listing_verdict(clark).verdict == "possible"
     assert listing_verdict(central).reason == "in Bronx"
+
+
+def test_clark_tiers_from_marketing_agent():
+    clark = parse_programs(HTML)[1]
+    with_agent_units(clark, AGENTS["the-clark"], (F / "hp-the-clark.html").read_text())
+    assert [(u.size, u.ami) for u in clark.units] == [("studio", 130), ("1br", 130), ("2br", 130), ("3br", 130)]
+    assert [(b.household, b.income_max) for b in clark.units[0].bands] == [(1, 154440), (2, 176410)]
+    assert clark.status == "open" and "housingpartnership.com" in clark.notes
+    # sizes and maxima now known; Housing Partnership prints no minimum income
+    assert listing_verdict(clark).reason == "income range incomplete"
 
 
 def test_closed_status_and_missing_section():

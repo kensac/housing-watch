@@ -4,8 +4,10 @@ The section is a run of <p><a href=building site>Name</a></p> each followed by <
 the program's AMI range and status ("Affordability 100-125% AMI. Waiting List Open", "... Application
 Period Open Now!"). Each becomes a Listing with one tier Unit (size unknown, ami = top of the range, so a
 range topping out at 125% or less is excluded for a $150k single). Unit sizes, rents and income tables
-live on each building's own leasing site, linked in notes. The borough comes from the market-rate list on
-the same page (BROOKLYN / MANHATTAN headings) or the name/link. The whole page is also snapshotted.
+live on each building's own leasing site, linked in notes; where that site has none (The Clark's lists
+only market-rate units), the affordable tiers come from the marketing agent's page in AGENTS. The borough
+comes from the market-rate list on the same page (BROOKLYN / MANHATTAN headings) or the name/link. The
+whole page is also snapshotted.
 """
 
 from __future__ import annotations
@@ -15,10 +17,13 @@ from urllib.parse import urljoin
 
 from .. import fetch, parse
 from ..models import Listing, Result, Unit
+from . import housing_partnership
 from ._page import PageAdapter
 from ._pagekit import snapshot
 
 URL = "https://www.hudsoninc.com/availability/"
+# programs whose own site publishes no affordable units: slug -> the marketing agent's page (Housing Partnership)
+AGENTS = {"the-clark": "https://www.housingpartnership.com/services/current-vacancies/the-clark-apartments"}
 _AMI = re.compile(r"(\d{2,3})\s*(?:%\s*)?(?:-|–|to)\s*(\d{2,3})\s*%|(\d{2,3})\s*%")
 
 
@@ -97,6 +102,15 @@ def parse_programs(html: str, url: str = URL) -> list[Listing]:
     return out
 
 
+def with_agent_units(lst: Listing, agent_url: str, html: str) -> Listing:
+    """Take the tier table (sizes, AMI, income caps) from the agent's page; status stays Hudson's."""
+    units = housing_partnership.parse_detail(agent_url, html).units
+    if units:
+        lst.units = units
+        lst.notes += f" Unit tiers from the marketing agent: {agent_url}"
+    return lst
+
+
 class Hudson(PageAdapter):
     name = "hudson"
     title = "Hudson Companies"
@@ -111,4 +125,7 @@ class Hudson(PageAdapter):
         listings = parse_programs(body)
         if not listings:
             raise RuntimeError(f"{URL}: no affordable programs listed (layout changed?)")
+        for lst in listings:
+            if lst.ext_id in AGENTS:
+                with_agent_units(lst, AGENTS[lst.ext_id], fetch.html(AGENTS[lst.ext_id]))
         return Result(listings=listings, snapshots=[snapshot(self, URL, body, root="main")])

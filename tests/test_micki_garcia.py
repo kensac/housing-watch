@@ -33,6 +33,7 @@ def test_project_pages():
     cur = parse_project("550 DeKalb Avenue", f"{BASE}/copy-of-1325-southern-blvd", html("copy-of-1325-southern-blvd"))
     assert (cur.status, cur.borough, cur.units) == ("open", "Brooklyn", [])
     assert listing_verdict(cur).verdict == "possible" and "212-694-3893" in cur.notes
+    assert "publishes no unit sizes, rents, AMI or income limits" in cur.notes
     ys = parse_project("69-65 Yellowstone Blvd", f"{BASE}/copy-of-37-05-30th-st", html("copy-of-37-05-30th-st"))
     assert (ys.status, ys.borough) == ("open", "Queens")  # WHERE: "Forrest Hills" (sic)
 
@@ -53,4 +54,4 @@ def test_homeownership_income_table():
 
     sales = parse.text(html("nme3"))
     assert parse_income_page(lst.url, html("nme3-income-requirements-140"), sales).borough == "Manhattan"
-    assert listing_verdict(lst).verdict == "possible"
+    assert listing_verdict(lst).reason == "homeownership, not a rental"

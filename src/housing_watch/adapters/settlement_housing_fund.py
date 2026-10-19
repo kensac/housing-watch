@@ -7,7 +7,8 @@
    alone mis-reads whole rows of this table); results are cached by image URL + sha256.
 2. "New Lotteries and Re-rentals" are bit.ly links to Pronto. Pronto's property JSON gives every unit,
    rent, AMI and per-household income range. A link that lands on a Pronto registration page (3333
-   Broadway) has no public listing and is returned without units.
+   Broadway) has no public listing: the registration form's own config gives the application window
+   and intro text, but Pronto publishes no sizes, rents or income limits for it, so it has no units.
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ FORM_API = (
     "?$expand=questions($expand=choices)"
 )
 PRONTO_API = "https://prontohousing.io/api/listings/properties/{id}/"
+PRONTO_REG = "https://prontohousing.io/api/v2/self-register/{uuid}/config/"  # the registration page's own call
 # bit.ly slugs whose redirect chain cannot be followed by a plain client (Waterside goes through Mimecast)
 KNOWN_PRONTO = {"WatersidePlazaListings": 7409}
 # Buildings SHF markets, for addresses printed without a borough (several street names exist in 2+ boroughs)
@@ -426,7 +428,13 @@ def index_links(html: str) -> tuple[str | None, list[tuple[str, str, str]]]:
     return form, uniq
 
 
-def registration_listing(name: str, addr: str, link: str, target: str) -> Listing:
+def registration_listing(name: str, addr: str, link: str, target: str, cfg: dict | None = None) -> Listing:
+    """A bit.ly link to a Pronto registration form; `cfg` is the form's config JSON when it loaded."""
+    cfg = cfg or {}
+    intro = re.sub(r"\s+", " ", cfg.get("form_text") or "").strip()
+    window = ""
+    if cfg.get("link_closes_date"):
+        window = f" Applications {cfg.get('link_opens_date') or '?'} to {cfg['link_closes_date']}."
     return Listing(
         source=SOURCE,
         ext_id=_slug(name or addr),
@@ -436,8 +444,11 @@ def registration_listing(name: str, addr: str, link: str, target: str) -> Listin
         borough=borough_of(addr or name),
         status="open",
         kind="waitlist",
-        notes=f"No public unit list; Pronto registration only (account required): {target}. "
-        "Questions: marketinginfo@shfinc.org",
+        deadline=cfg.get("link_closes_date") or None,
+        notes=f"No public unit list: neither SHF nor Pronto publishes sizes, rents or income limits. Pronto "
+        f"registration only (account required): {target}.{window}"
+        + (f" Form: {intro}" if intro else "")
+        + f" Questions: {cfg.get('property_email') or 'marketinginfo@shfinc.org'}",
     )
 
 
@@ -487,5 +498,10 @@ class SettlementHousingFund(PageAdapter):
             if pid:
                 listings.append(parse_pronto(fetch.json(PRONTO_API.format(id=pid)), link))
             else:
-                listings.append(registration_listing(name, addr, link, target))
+                m = re.search(r"/registration/([0-9a-f-]{36})", target)
+                try:
+                    cfg = fetch.json(PRONTO_REG.format(uuid=m.group(1))) if m else None
+                except fetch.FetchError:
+                    cfg = None  # the listing still stands on the link alone
+                listings.append(registration_listing(name, addr, link, target, cfg))
         return Result(listings=listings, snapshots=snaps)

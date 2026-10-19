@@ -93,6 +93,8 @@ def test_studio_without_income_data_is_possible():
     (u,) = lst.units
     assert (u.size, u.rent, u.unit_no, u.bands) == ("studio", 2624.0, "902-217", [])
     assert listing_verdict(lst).verdict == "possible"
+    assert lst.notes.endswith("The listing publishes no income limits or AMI.")
+    assert "no income limits" not in detail("980978").notes
 
 
 def test_waiting_list_takes_rent_from_card():

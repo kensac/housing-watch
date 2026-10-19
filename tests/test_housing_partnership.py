@@ -61,6 +61,7 @@ def test_lyra_waitlist_130_tier():
     assert bands(by[("1br", 130)])[0] == (1, None, 154440)
     v = listing_verdict(lst)
     assert v.verdict == "possible"  # 130% max fits; no minimum printed
+    assert "HP publishes no minimum" in lst.notes
     # the page's own "No vacancies" banner wins even if the index card said active
     assert page("lyra", active=True).status == "waitlist"
 
