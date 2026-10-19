@@ -5,7 +5,7 @@ description = "Deterministic watcher for NYC affordable-housing listings"
 requires-python = ">=3.13"
 dependencies = [
     "httpx==0.28.1",
-    "beautifulsoup4==4.13.4",
+    "beautifulsoup4==4.15.0",
     "lxml==6.0.2",
     "sqlalchemy==2.0.43",
     "alembic==1.20.0",
