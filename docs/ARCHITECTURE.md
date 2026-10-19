@@ -26,6 +26,13 @@ queries.py  digest.py  web/        READ      what changed, what fits            
 - Chunk caches: each chunk gets a copy of the planned cache and hands back the top-level keys it
   changed; the default `merge_cache()` applies those in chunk order. An adapter whose chunks write
   into one shared nested key must override `merge_cache()`.
+- Paged sources (Reside, SANEL; `parallel = 4`, one in-flight request per worker IP) read their index
+  in `chunks()`, deal only the pages due for a fetch over up to `parallel` chunks of at least
+  `CHUNK_LEAST` (25) with `adapters.spread()`, and deal the cached rest over the same chunks, so the
+  merged Result is still the whole source. The plan travels in `cache[PLAN]` (never saved). Every page,
+  and every SANEL official document (`doc:<key>`), is its own top-level cache key, so chunk deltas
+  never overlap. A cold Reside run is 4 chunks of ~530 pages; a run with few changed pages is one chunk,
+  recorded inline.
 
 ## Rules (criteria)
 

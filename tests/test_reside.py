@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from housing_watch.adapters.reside import parse_page
+import pytest
+
+from housing_watch import adapters, runner
+from housing_watch.adapters import PLAN, reside
+from housing_watch.adapters.reside import Reside, parse_page
 from housing_watch.criteria import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "reside"
@@ -109,3 +113,76 @@ def test_bronx_by_address_zip_over_wrong_city_term():
 def test_status_from_article_terms():
     # no visible label; the property-status-closed-project term on the <article> decides
     assert page("379-harman-street-apartment-unit-4h").status == "closed"
+
+
+FIX = sorted(p.stem for p in F.glob("*.html"))
+
+
+@pytest.fixture
+def site(monkeypatch):
+    """A fake Reside of 40 pages (the fixtures, repeated) over its two sitemaps: (url -> lastmod, fetched urls)."""
+    pages = {f"https://residenewyork.com/property/p{i}-{FIX[i % len(FIX)]}/": "2026-10-01" for i in range(40)}
+    calls: list[str] = []
+
+    def html(u, **kw):
+        if u in reside.SITEMAPS:
+            items = list(pages.items())[::2] if u == reside.SITEMAPS[0] else list(pages.items())[1::2]
+            return "".join(f"<url><loc>{x}</loc><lastmod>{lm}</lastmod></url>" for x, lm in items)
+        calls.append(u)
+        return (F / f"{u.rstrip('/').rsplit('/', 1)[-1].split('-', 1)[1]}.html").read_text()
+
+    monkeypatch.setattr(reside.fetch, "html", html)
+    monkeypatch.setattr(Reside, "min_listings", 1)
+    monkeypatch.setattr(adapters, "CHUNK_LEAST", 5)
+    return pages, calls
+
+
+def test_cold_run_spreads_every_page_over_parallel_chunks(site):
+    pages, _ = site
+    a = Reside()
+    assert a.chunks() == ["1/4", "2/4", "3/4", "4/4"]
+    plan = a.cache[PLAN]
+    assert [len(p["fetch"]) for p in plan.values()] == [10, 10, 10, 10]
+    assert sorted(u for p in plan.values() for u, _ in p["fetch"]) == sorted(pages)
+
+
+def test_warm_run_fetches_only_changed_pages_and_keeps_the_rest(site):
+    pages, calls = site
+    a = Reside()
+    assert len(a.fetch().listings) == 40 and len(calls) == 40
+    calls.clear()
+    b = Reside(dict(a.cache))
+    assert b.chunks() == ["1/1"] and b.cache[PLAN]["1/1"]["fetch"] == []  # nothing changed: cached listings only
+    assert len(b.fetch_chunk("1/1").listings) == 40 and calls == []
+    moved, gone = list(pages)[:2], list(pages)[-1]
+    for u in moved:
+        pages[u] = "2026-10-02"
+    del pages[gone]
+    c = Reside(dict(a.cache))
+    assert c.chunks() == ["1/1"]  # 2 pages are below CHUNK_LEAST: one chunk
+    res = c.fetch_chunk("1/1")
+    assert sorted(calls) == sorted(moved) and gone not in c.cache  # gone from the sitemap: dropped
+    assert len(res.listings) == 39 and gone.rstrip("/").rsplit("/", 1)[-1] not in {x.ext_id for x in res.listings}
+
+
+def test_parser_bump_and_old_layout(site, monkeypatch):
+    pages, calls = site
+    a = Reside()
+    a.fetch()
+    calls.clear()
+    old = {"pages": {u: a.cache[u] for u in pages}}  # the layout before chunking: one key for every page
+    b = Reside(old)
+    assert b.chunks() == ["1/1"] and "pages" not in b.cache and len(b.fetch_chunk("1/1").listings) == 40
+    assert calls == []
+    monkeypatch.setattr(reside, "PARSER", reside.PARSER + 1)
+    assert len(Reside(dict(a.cache)).chunks()) == 4  # every page re-parsed
+
+
+def test_chunks_merged_from_separate_workers_match_one_process(site):
+    pages, _ = site
+    serial = Reside()
+    want = serial.fetch()
+    res, cache = runner.fetch_all(Reside())  # each chunk on its own copy of the cache, then merge_cache()
+    assert sorted(x.ext_id for x in res.listings) == sorted(x.ext_id for x in want.listings)
+    assert {k: v for k, v in cache.items() if k != PLAN} == {k: v for k, v in serial.cache.items() if k != PLAN}
+    assert set(cache) - {PLAN} == set(pages)

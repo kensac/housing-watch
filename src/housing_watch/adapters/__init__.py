@@ -14,6 +14,8 @@ from typing import ClassVar
 from ..models import Result
 
 REGISTRY: dict[str, type[Adapter]] = {}
+PLAN = "_plan"  # cache key where chunks() leaves its plan for the chunks; runner.record never saves it
+CHUNK_LEAST = 25  # spread() makes no chunk with fewer pages to fetch than this
 
 
 class Adapter:
@@ -43,7 +45,8 @@ class Adapter:
     # Optional chunking, for sources big enough to spread across the worker fleet (Reside, SANEL).
     # A run plans chunks, workers fetch them independently (each with a copy of the cache), and the
     # run merges every chunk's Result before recording, so "gone" detection still sees the whole source.
-    # The defaults make every adapter one chunk; override all three together.
+    # The defaults make every adapter one chunk; override all three together. Paged sources (Reside, SANEL)
+    # keep one top-level cache key per page, plan with spread() into self.cache[PLAN], and use fetch_serial().
 
     def chunks(self) -> list[str]:
         """Chunk keys for this run, decided from the cache and/or a cheap index fetch."""
@@ -59,6 +62,21 @@ class Adapter:
         for p in parts:
             out.update(p)
         return out
+
+    def fetch_serial(self) -> Result:
+        """Every chunk in turn on this instance: fetch() for a chunked adapter whose chunks write only their own
+        top-level cache keys (so one instance ends with the cache the fleet's merge would produce)."""
+        res = Result()
+        for k in self.chunks():
+            res.extend(self.fetch_chunk(k))
+        return res
+
+
+def spread(todo: list, keep: list, parallel: int) -> dict[str, dict]:
+    """A paged source's plan: pages to fetch dealt round-robin into up to `parallel` chunks of at least CHUNK_LEAST
+    each, and pages served from the cache dealt over the same chunks. Keys are 'i/n'."""
+    n = max(1, min(parallel, len(todo) // CHUNK_LEAST))
+    return {f"{i + 1}/{n}": {"fetch": todo[i::n], "keep": keep[i::n]} for i in range(n)}
 
 
 def load_all() -> dict[str, type[Adapter]]:

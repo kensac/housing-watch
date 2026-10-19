@@ -1,9 +1,10 @@
 """Reside New York: ~2,100 WordPress property pages, listed with lastmod in two sitemaps.
 
-Only pages whose lastmod moved (or parsed by an older PARSER) are re-fetched (cache: url -> {lastmod, v,
-listing}). Status and city come from the WordPress terms on the page's <article>, else the label right before
-the title. Units come from the page's table; without one, from the header (household range, required income,
-rent) every page prints, with sizes taken from the copy and floor-plan images. Applying is one shared Airtable form.
+Only pages whose lastmod moved (or parsed by an older PARSER) are re-fetched, spread over chunks on different
+workers (cache: one top-level key per page url -> {lastmod, v, listing}, so chunks' deltas never overlap).
+Status and city come from the WordPress terms on the page's <article>, else the label right before the title.
+Units come from the page's table; without one, from the header (household range, required income, rent) every
+page prints, with sizes taken from the copy and floor-plan images. Applying is one shared Airtable form.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from dataclasses import asdict
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter
+from . import PLAN, Adapter, spread
 
 SITEMAPS = [f"https://residenewyork.com/wp-sitemap-posts-property-{i}.xml" for i in (1, 2)]
 APPLY = "https://airtable.com/appsseXTOVx59HC0W/pagcVengefPFQvMZC/form"
@@ -233,24 +234,40 @@ class Reside(Adapter):
     every_hours = 3
     min_listings = 1000
 
-    def fetch(self) -> Result:
+    parallel = 4
+
+    def chunks(self) -> list[str]:
+        """Read the sitemaps and plan: pages new, with a moved lastmod or an older PARSER are spread over chunks."""
         entries = []
         for sm in SITEMAPS:
             xml = fetch.html(sm)
             entries += re.findall(r"<loc>([^<]+)</loc>\s*(?:<lastmod>([^<]+)</lastmod>)?", xml)
         if len(entries) < self.min_listings:
             raise RuntimeError(f"sitemaps list only {len(entries)} properties")
-        cache: dict = self.cache.setdefault("pages", {})
-        out = []
-        for url, lastmod in entries:
-            hit = cache.get(url)
-            if hit and hit.get("lastmod") == lastmod and lastmod and hit.get("v") == PARSER:
-                out.append(_from_dict(hit["listing"]))
-                continue
-            lst = parse_page(url, fetch.html(url))
-            cache[url] = {"lastmod": lastmod, "v": PARSER, "listing": asdict(lst)}
-            out.append(lst)
+        c = self.cache
+        for u, e in c.pop("pages", {}).items():  # older layout: every page under one key
+            c.setdefault(u, e)
         live = {u for u, _ in entries}
-        for u in [u for u in cache if u not in live]:
-            del cache[u]
+        for u in [u for u in c if u.startswith("http") and u not in live]:
+            del c[u]
+
+        def fresh(u: str, lastmod: str) -> bool:
+            hit = c.get(u)
+            return bool(hit and lastmod and hit.get("lastmod") == lastmod and hit.get("v") == PARSER)
+
+        todo = [[u, lm] for u, lm in entries if not fresh(u, lm)]
+        c[PLAN] = spread(todo, [u for u, lm in entries if fresh(u, lm)], self.parallel)
+        return list(c[PLAN])
+
+    def fetch_chunk(self, key: str) -> Result:
+        """Cached listings for the chunk's unchanged pages; its changed pages fetched, each cached under its url."""
+        part = self.cache[PLAN][key]
+        out = [_from_dict(self.cache[u]["listing"]) for u in part["keep"]]
+        for url, lastmod in part["fetch"]:
+            lst = parse_page(url, fetch.html(url))
+            self.cache[url] = {"lastmod": lastmod, "v": PARSER, "listing": asdict(lst)}
+            out.append(lst)
         return Result(listings=out)
+
+    def fetch(self) -> Result:
+        return self.fetch_serial()
