@@ -141,8 +141,13 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   and notes) into `tracker_rows` every 5 minutes, read-only via a service account, and matches rows to
   listings at read time: the row's own source link (only when that link is one row's and one listing's),
   else a normalized street address, else the building name; a manual link in `tracker_links` wins.
-  The UI shows the status and notes on listings and units (`application` filter field and column) and
-  has a Tracker page for unmatched rows.
+  A Status is read as one of the dropdown's nine stages (`tracker.STAGES`, each your move / their move /
+  done; legacy statuses mapped, unknown ones kept as written). The sheet holds only the current Status, so
+  each sync appends a `tracker_events` row when a row's Status differs from its last event; a row's first
+  event is a baseline when it predates tracking, so the UI says "since <date>" rather than inventing a start.
+  The UI shows stage, whose move and days in stage on listings and units (`application` and
+  `application_group` filter fields, `application` column sorted by stage order) and the stage history in
+  the drawer; the Tracker page lists rows by stage, longest waiting first, and links unmatched ones.
 - `applications.py` recognises known paper application forms by their fillable field names (today HPD's
   HC2.0 application) and fills them from the applicant file (`HW_APPLICANT_FILE`, private, host-only;
   signs and dates the applicant's line; never the SSN). The drawer checks a listing's linked PDFs lazily; a download is built

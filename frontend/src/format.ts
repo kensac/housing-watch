@@ -46,6 +46,18 @@ export function ago(t: string | null | undefined): string {
 
 export const when = (t: string | null | undefined) => (t ? dateTime.format(new Date(t)) : '—')
 
+const dayMonth = new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' })
+
+/** How long a tracker row has been in its stage: "for 12 days", or "since 20 Oct" when the stage predates
+ * tracking (only the first sync's date is known). */
+export function stageAge(since: string | null | undefined, baseline?: boolean): string | null {
+  if (!since) return null
+  if (baseline) return `since ${dayMonth.format(new Date(since))}`
+  const days = Math.floor((Date.now() - new Date(since).getTime()) / 86_400_000)
+  if (Number.isNaN(days)) return null
+  return days < 1 ? 'since today' : `for ${integer.format(days)} day${days === 1 ? '' : 's'}`
+}
+
 /** A calendar date as sources give it (YYYY-MM-DD), formatted without shifting it across time zones. */
 export function date(d: string | null | undefined): string {
   if (!d) return '—'

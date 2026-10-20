@@ -2,6 +2,7 @@
 
 export type Page = 'listings' | 'units' | 'events'
 export type Verdict = 'eligible' | 'possible' | 'excluded'
+export type StageGroup = 'your move' | 'their move' | 'done' // whose move an application stage is
 
 export interface Field {
   name: string
@@ -75,7 +76,10 @@ export interface Listing {
   ami_max: number | null
   commute?: number | null // transit minutes to work; only eligible listings get one
   commute_route?: CommuteRoute | null
-  application?: string | null // the tracker sheet's Status for this listing's row
+  application?: string | null // the stage of this listing's tracker row (its sheet Status, legacy names mapped)
+  application_group?: StageGroup | null // null for a status that is not a known stage
+  application_since?: string | null // when the row entered that stage
+  application_since_baseline?: boolean // the stage predates tracking, so it began before application_since
   application_notes?: string | null
   tracker_row?: string | null // that row's Property
   tracker_match?: 'url' | 'address' | 'name' | 'manual' | null
@@ -109,6 +113,9 @@ export interface Unit {
   reason: string
   commute?: number | null
   application?: string | null
+  application_group?: StageGroup | null
+  application_since?: string | null
+  application_since_baseline?: boolean
 }
 
 export interface Event {
@@ -228,11 +235,19 @@ export interface Fleet {
   hosts: { name: string; last_run: string; runs_24h: number; fails_24h: number; sources: number }[]
 }
 
+// a stage change recorded by a sync; `baseline`: the stage was already set when tracking began
+export interface StageStep { at: string; stage_from: string | null; stage_to: string | null; group: StageGroup | null; baseline: boolean }
+
 export interface TrackerRow {
   row_key: string
   position: number
   property: string
-  status: string | null
+  status: string | null // as written in the sheet
+  stage: string | null
+  group: StageGroup | null
+  stage_since: string | null
+  stage_since_baseline: boolean
+  events: StageStep[] // oldest first
   notes: string | null
   source_url: string | null
   page_url: string | null

@@ -50,18 +50,20 @@ export function TrackerPage() {
   if (q.isLoading) return <Loading rows={12} label="Loading the tracker…" />
   const t = q.data!
   const unmatched = t.rows.filter((r) => !r.listings.length).length
+  const yours = t.rows.filter((r) => r.group === 'your move').length
+  const theirs = t.rows.filter((r) => r.group === 'their move').length
   return (
     <Stack gap="sm">
       <Title order={1} size="h3">Tracker</Title>
       <Text size="sm" c="dimmed">
         {t.configured
-          ? <>Your Apartment Search Tracker sheet, read-only, synced every 5 minutes (last <span title={when(t.synced)}>{ago(t.synced)}</span>) · {num(t.rows.length)} rows · {num(unmatched)} not matched to a listing</>
+          ? <>Your Apartment Search Tracker sheet, read-only, synced every 5 minutes (last <span title={when(t.synced)}>{ago(t.synced)}</span>) · {num(t.rows.length)} rows by stage, longest waiting first · {num(yours)} your move · {num(theirs)} their move · {num(unmatched)} not matched to a listing</>
           : 'The tracker sheet isn’t connected (HW_TRACKER_SHEET).'}
       </Text>
       <Table.ScrollContainer minWidth={1000}>
         <Table highlightOnHover verticalSpacing={6} aria-label="Tracker rows">
           <Table.Thead>
-            <Table.Tr><Table.Th ta="right">Row</Table.Th><Table.Th>Property</Table.Th><Table.Th>Status</Table.Th><Table.Th>Listings</Table.Th><Table.Th>Notes</Table.Th></Table.Tr>
+            <Table.Tr><Table.Th ta="right">Row</Table.Th><Table.Th>Property</Table.Th><Table.Th>Stage</Table.Th><Table.Th>Listings</Table.Th><Table.Th>Notes</Table.Th></Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {t.rows.length === 0 && (
@@ -74,7 +76,11 @@ export function TrackerPage() {
                   <Text size="sm" fw={500}>{r.page_url ? <Anchor href={r.page_url} target="_blank" rel="noopener noreferrer" inherit>{r.property}</Anchor> : r.property}</Text>
                   {r.cells.Borough && <Text size="xs" c="dimmed">{r.cells.Borough}</Text>}
                 </Table.Td>
-                <Table.Td><ApplicationBadge s={r.status} /></Table.Td>
+                <Table.Td>
+                  <ApplicationBadge s={r.stage} group={r.group} since={r.stage_since} baseline={r.stage_since_baseline} />
+                  {r.group && <Text size="xs" c="dimmed">{r.group}</Text>}
+                  {r.status && r.status !== r.stage && <Text size="xs" c="dimmed">sheet: {r.status}</Text>}
+                </Table.Td>
                 <Table.Td maw={340}>
                   {r.listings.length ? (
                     <Stack gap={4}>

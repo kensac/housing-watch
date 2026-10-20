@@ -1,8 +1,9 @@
-import { Button, Group, Select, Stack, Text } from '@mantine/core'
+import { Button, Group, Select, Stack, Text, Timeline } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
 
-import { api, qs, type Listing } from '../api'
+import { api, qs, type Listing, type StageStep } from '../api'
+import { when } from '../format'
 import { useTracker, useTrackerRefresh } from '../hooks'
 import { ApplicationBadge } from './Badges'
 
@@ -11,7 +12,24 @@ const HOW: Record<string, string> = {
   manual: 'linked by you',
 }
 
-/** The listing's row in the application tracker sheet (status and notes), and ways to fix the match. */
+/** A tracker row's stages as the syncs saw them change, oldest first. */
+function StageTimeline({ steps }: { steps: StageStep[] }) {
+  return (
+    <Timeline bulletSize={14} lineWidth={2} aria-label="Stage history">
+      {steps.map((e, i) => (
+        <Timeline.Item key={i} title={
+          <Group gap="xs">
+            {e.stage_to ? <ApplicationBadge s={e.stage_to} group={e.group} /> : <Text size="sm" c="dimmed">No stage</Text>}
+            <Text size="xs" c="dimmed">{e.baseline ? `already set when tracking began, ${when(e.at)}` : when(e.at)}</Text>
+          </Group>}>
+          {i > 0 && <Text size="xs" c="dimmed">from {e.stage_from ?? 'no stage'}</Text>}
+        </Timeline.Item>
+      ))}
+    </Timeline>
+  )
+}
+
+/** The listing's row in the application tracker sheet (stage, its history and notes), and ways to fix the match. */
 export function TrackerPanel({ x }: { x: Listing }) {
   const tracker = useTracker()
   const refresh = useTrackerRefresh()
@@ -33,21 +51,24 @@ export function TrackerPanel({ x }: { x: Listing }) {
   const reset = () => run(() => api.delete(`/api/tracker/links${qs({ listing_key: x.key })}`), 'Back to automatic matching')
   if (tracker.data && !tracker.data.configured) return <Text size="sm" c="dimmed">The tracker sheet isn’t connected.</Text>
   const rows = tracker.data?.rows ?? []
+  const row = rows.find((r) => r.property === x.tracker_row)
   return (
     <Stack gap="xs">
       {x.tracker_row ? (
         <>
           <Group gap="xs">
-            <ApplicationBadge s={x.application} />
+            <ApplicationBadge s={x.application} group={x.application_group} since={x.application_since} baseline={x.application_since_baseline} />
+            {x.application_group && <Text size="xs" c="dimmed">{x.application_group}</Text>}
             <Text size="sm" fw={500}>{x.tracker_row}</Text>
             <Text size="xs" c="dimmed">{HOW[x.tracker_match ?? ''] ?? ''}</Text>
           </Group>
           {x.application_notes && <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x.application_notes}</Text>}
+          {row && row.events.length > 0 && <StageTimeline steps={row.events} />}
         </>
       ) : <Text size="sm" c="dimmed">Not in your tracker sheet.</Text>}
       <Group gap="xs" align="flex-end">
         <Select size="xs" w={300} label="Link to a tracker row" placeholder="Pick a row" searchable disabled={busy || !rows.length}
-          data={rows.map((r) => ({ value: r.row_key, label: `${r.property}${r.status ? ` · ${r.status}` : ''}` }))}
+          data={rows.map((r) => ({ value: r.row_key, label: `${r.property}${r.stage ? ` · ${r.stage}` : ''}` }))}
           value={null} onChange={(v) => v && link(v)} nothingFoundMessage="No row matches" />
         {x.tracker_row && x.tracker_match !== 'manual' && (
           <Button size="xs" variant="default" disabled={busy} onClick={() => link(null)}>Not This Row</Button>

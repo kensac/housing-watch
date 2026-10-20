@@ -5,6 +5,9 @@ The sheet is the source of truth for application status and notes. `sync` copies
 rows with listings deterministically: the row's Apply / Source link is the listing's URL, else a
 normalized street address matches, else the building name does. A manual link set in the UI
 (`tracker_links`) always wins, including "not this row".
+
+The sheet holds only each row's current Status, so `sync` records every change it sees in
+`tracker_events`; a row's stage history, and how long it has been in its stage, come from there.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from . import fetch
-from .orm import TrackerLinkRow, TrackerRow
+from .orm import TrackerEventRow, TrackerLinkRow, TrackerRow
 from .parse import addr_keys, name_key, units, url_key
 
 SHEET = os.environ.get("HW_TRACKER_SHEET", "")
@@ -30,6 +33,42 @@ KEY_FILE = os.environ.get("HW_SHEETS_KEY_FILE", "")
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 API = "https://sheets.googleapis.com/v4/spreadsheets/{id}"
 FIELDS = "sheets(data(rowData(values(formattedValue,hyperlink,textFormatRuns(format(link(uri)))))))"
+
+
+# --- application stages -----------------------------------------------------------------------------------
+
+YOU, THEM, DONE = "your move", "their move", "done"
+GROUPS = (YOU, THEM, DONE)
+# The sheet's Status dropdown, in order, with whose move it is. A blank Status means not pursuing (yet).
+STAGES = {
+    "To Apply": YOU, "Ready to Send": YOU, "Action Needed": YOU,
+    "Form Requested": THEM, "Applied": THEM, "Tour Scheduled": THEM, "In Processing": THEM,
+    "Offer": DONE, "Closed": DONE,
+}  # fmt: skip
+# Statuses from before the dropdown had these stages (None: no stage)
+LEGACY = {
+    "interest form filled": "Applied", "contacted": "Form Requested", "under review": "In Processing",
+    "appeal under review": "In Processing", "rejected": "Closed", "not interested": "Closed", "seen": None,
+}  # fmt: skip
+_BY_LOWER = {k.lower(): k for k in STAGES}
+_RANK = {k: i for i, k in enumerate(STAGES)}
+
+
+def stage(status: str | None) -> str | None:
+    """The stage a Status means; one that is neither a stage nor a legacy status is kept as written."""
+    s = " ".join((status or "").split())
+    if not s:
+        return None
+    return _BY_LOWER[s.lower()] if s.lower() in _BY_LOWER else LEGACY.get(s.lower(), s)
+
+
+def group(st: str | None) -> str | None:
+    return STAGES.get(st or "")
+
+
+def rank(st: str | None) -> int:
+    """Sort order: the stages in sheet order, then unknown statuses, then no stage."""
+    return _RANK.get(st, len(STAGES)) if st else len(STAGES) + 1
 
 
 # --- reading the sheet -----------------------------------------------------------------------------------
@@ -103,27 +142,80 @@ def sync(engine: Engine) -> int:
         return (r.row_key, r.position, r.property, r.status, r.notes, r.source_url, r.page_url, r.cells)
 
     with Session(engine) as s, s.begin():
-        old = sorted(facts(r) for r in s.scalars(select(TrackerRow)))
-        if old != sorted(facts(r) for r in seen.values()):  # unchanged: keep the rows (and the read cache)
+        stored = list(s.scalars(select(TrackerRow)))
+        if sorted(facts(r) for r in stored) != sorted(facts(r) for r in seen.values()):  # else keep the read cache
             s.execute(delete(TrackerRow))
             s.add_all(seen.values())
+        s.add_all(_events(s, seen, {r.row_key for r in stored}, now))
     return len(seen)
+
+
+def _events(s: Session, rows: dict[str, TrackerRow], stored: set[str], now: datetime) -> list[TrackerEventRow]:
+    """An event for each row whose Status differs from its last event, or that has none yet. A row stored
+    before it had any event predates tracking (the first sync after deploy), so its event is a baseline.
+    A removed row records nothing and keeps its events, in case it comes back."""
+    q = select(TrackerEventRow.row_key, TrackerEventRow.status_to).order_by(TrackerEventRow.id)
+    last = dict(s.execute(q).all())  # each row's newest event wins
+    return [
+        TrackerEventRow(row_key=k, status_from=last.get(k), status_to=r.status, baseline=k not in last and k in stored,
+                        at=now)
+        for k, r in rows.items()
+        if k not in last or last[k] != r.status
+    ]  # fmt: skip
 
 
 # --- matching ----------------------------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
+class Step:
+    """A row entering a stage. `baseline`: it was already there when tracking began, so it entered earlier."""
+
+    at: datetime
+    stage_from: str | None
+    stage_to: str | None
+    baseline: bool = False
+
+
+def history(engine: Engine) -> dict[str, list[Step]]:
+    """row key -> its stage changes, oldest first. A Status edit that keeps the stage (a legacy name replaced
+    by its new one) is not a change."""
+    out: dict[str, list[Step]] = {}
+    with Session(engine) as s:
+        for e in s.scalars(select(TrackerEventRow).order_by(TrackerEventRow.at, TrackerEventRow.id)):
+            steps = out.setdefault(e.row_key, [])
+            to = stage(e.status_to)
+            if not steps:
+                steps.append(Step(e.at, stage(e.status_from), to, e.baseline))
+            elif to != steps[-1].stage_to:
+                steps.append(Step(e.at, steps[-1].stage_to, to))
+    return out
+
+
+def since(steps: list[Step], status: str | None) -> Step | None:
+    """The step that entered the row's current stage."""
+    return steps[-1] if steps and steps[-1].stage_to == stage(status) else None
+
+
+@dataclass(frozen=True)
 class Ref:
     row_key: str
     property: str
-    status: str | None
+    status: str | None  # as written in the sheet
     notes: str | None
     how: str  # url | address | name | manual
+    stage: str | None = None
+    since: Step | None = None
+
+    @property
+    def group(self) -> str | None:
+        return group(self.stage)
 
 
-def _ref(r: TrackerRow, how: str) -> Ref:
-    return Ref(r.row_key, r.property, r.status, r.notes, how)
+def _ref(r: TrackerRow, how: str, steps: dict[str, list[Step]]) -> Ref:
+    return Ref(
+        r.row_key, r.property, r.status, r.notes, how, stage(r.status), since(steps.get(r.row_key, []), r.status)
+    )
 
 
 def load(engine: Engine) -> tuple[list[TrackerRow], dict[str, str | None]]:
@@ -133,8 +225,11 @@ def load(engine: Engine) -> tuple[list[TrackerRow], dict[str, str | None]]:
     return rows, links
 
 
-def match(listings: list, rows: list[TrackerRow], links: dict[str, str | None]) -> dict[str, Ref]:
+def match(
+    listings: list, rows: list[TrackerRow], links: dict[str, str | None], steps: dict[str, list[Step]] | None = None
+) -> dict[str, Ref]:
     """listing key -> its tracker row, for listings with (key, url, title, address) attributes."""
+    steps = steps or {}
     by_key = {r.row_key: r for r in rows}
     # a link identifies a listing only when it is that one listing's own page: agent home pages and portals
     # (shared by many rows or many listings) would pin every listing that uses them to one row
@@ -166,17 +261,17 @@ def match(listings: list, rows: list[TrackerRow], links: dict[str, str | None]) 
         if x.key in links:
             r = by_key.get(links[x.key] or "")
             if r:
-                out[x.key] = _ref(r, "manual")
+                out[x.key] = _ref(r, "manual", steps)
             continue  # a manual "not this row" (or a row since renamed) beats every automatic match
         if (u := url_key(x.url)) and u in by_url:
-            out[x.key] = _ref(by_url[u], "url")
+            out[x.key] = _ref(by_url[u], "url", steps)
             continue
         unit = units(x.title)
         cands = [r for a in sorted(addr_keys(x.address) | addr_keys(x.title)) for r in by_addr.get(a, [])]
         if r := pick(cands, unit):
-            out[x.key] = _ref(r, "address")
+            out[x.key] = _ref(r, "address", steps)
         elif (n := name_key(x.title)) and (r := pick(by_name.get(n, []), unit)):
-            out[x.key] = _ref(r, "name")
+            out[x.key] = _ref(r, "name", steps)
     return out
 
 
