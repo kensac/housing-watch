@@ -120,7 +120,10 @@ def _summary(r: ListingRow, lst: Listing, p: Profile, commutes: dict | None = No
 
 def _commute(commutes: dict, lst: Listing) -> dict:
     c = commutes.get(C.origin(lst.address, lst.borough) or "")
-    return {"commute": c.minutes, "commute_route": c.route} if c and c.status == "ok" else {}
+    if not (c and c.status == "ok"):
+        return {}
+    route = dict(c.route or {}, lines=[C.line_name(x) for x in (c.route or {}).get("lines", [])])
+    return {"commute": c.minutes, "commute_route": route}
 
 
 @dataclass
@@ -550,7 +553,7 @@ def listing_detail(engine: Engine, key: str, p: Profile = PROFILE) -> ListingDet
         ]
         evs = s.scalars(select(EventRow).where(EventRow.key == key).order_by(EventRow.at.desc()).limit(50))
         return ListingDetail(
-            summary=_summary(r, lst, p),
+            summary=_summary(r, lst, p, C.table(engine)),
             notes=lst.notes,
             ext_id=r.ext_id,
             last_seen=r.last_seen,
