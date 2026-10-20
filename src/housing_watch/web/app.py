@@ -26,9 +26,10 @@ from ..criteria import PROFILE, Profile
 DIST = Path(__file__).parent / "dist"
 SORTS = {
     "listings": {"verdict": "Verdict", "changed": "Last changed", "first_seen": "First seen",
-                 "rent": "Lowest rent that fits", "commute": "Commute", "deadline": "Deadline", "title": "Title",
-                 "source": "Source", "borough": "Borough"},
-    "units": {"verdict": "Verdict", "rent": "Rent", "commute": "Commute", "ami": "AMI", "size": "Size",
+                 "rent": "Lowest rent that fits", "commute": "Commute", "application": "Application stage",
+                 "deadline": "Deadline", "title": "Title", "source": "Source", "borough": "Borough"},
+    "units": {"verdict": "Verdict", "rent": "Rent", "commute": "Commute", "application": "Application stage",
+              "ami": "AMI", "size": "Size",
               "income_min": "Income min", "income_max": "Income max", "changed": "Last changed",
               "first_seen": "First seen", "deadline": "Deadline", "title": "Building", "borough": "Borough",
               "source": "Source"},
@@ -234,8 +235,10 @@ def create_app(engine: Engine, profile: Profile = PROFILE, dist: Path = DIST) ->
 
     @api.get("/tracker")
     def tracker_rows():
-        """Every tracker sheet row with the listings matched to it (empty: unmatched, link one by hand)."""
+        """Every tracker sheet row with its stage history and the listings matched to it (empty: unmatched, link
+        one by hand), by stage then longest in it."""
         rows, links = tracker.load(engine)
+        steps = tracker.history(engine)
         by_row: dict[str, list[dict]] = {}
         for x in queries.judged(engine, profile):
             if x.tracker_row:
@@ -244,12 +247,21 @@ def create_app(engine: Engine, profile: Profile = PROFILE, dist: Path = DIST) ->
                      "commute": x.commute}
                 )  # fmt: skip
         synced = max((r.synced for r in rows), default=None)
-        return {
-            "configured": bool(tracker.SHEET), "synced": synced,
-            "rows": [{"row_key": r.row_key, "position": r.position, "property": r.property, "status": r.status,
-                      "notes": r.notes, "source_url": r.source_url, "page_url": r.page_url, "cells": r.cells,
-                      "listings": by_row.get(r.row_key, [])} for r in rows],
-        }  # fmt: skip
+
+        def row(r) -> dict:
+            st, hist = tracker.stage(r.status), steps.get(r.row_key, [])
+            since = tracker.since(hist, r.status)
+            return {"row_key": r.row_key, "position": r.position, "property": r.property, "status": r.status,
+                    "stage": st, "group": tracker.group(st), "stage_since": since and since.at,
+                    "stage_since_baseline": bool(since and since.baseline),
+                    "events": [asdict(e) | {"group": tracker.group(e.stage_to)} for e in hist],
+                    "notes": r.notes, "source_url": r.source_url, "page_url": r.page_url, "cells": r.cells,
+                    "listings": by_row.get(r.row_key, [])}  # fmt: skip
+
+        out = [row(r) for r in rows]
+        out.sort(key=lambda d: (tracker.rank(d["stage"]), d["stage_since"] is None, d["stage_since"] or synced,
+                                d["position"]))  # fmt: skip
+        return {"configured": bool(tracker.SHEET), "synced": synced, "rows": out}
 
     @api.post("/tracker/links")
     async def link_tracker(req: Request):

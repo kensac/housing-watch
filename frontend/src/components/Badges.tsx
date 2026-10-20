@@ -1,7 +1,7 @@
-import { Badge, Tooltip } from '@mantine/core'
+import { Badge, Group, Text, Tooltip } from '@mantine/core'
 
-import type { Verdict } from '../api'
-import { EVENT_COLOR, STATUS_COLOR, VERDICT_COLOR } from '../format'
+import type { StageGroup, Verdict } from '../api'
+import { EVENT_COLOR, STATUS_COLOR, stageAge, VERDICT_COLOR, when } from '../format'
 import { useMotion } from '../hooks'
 
 // a badge never shrinks below its label (its ellipsis would otherwise let a table squeeze it to nothing)
@@ -27,12 +27,20 @@ export const EventBadge = ({ t, baseline }: { t: string; baseline?: boolean }) =
   </Badge>
 )
 
-// the tracker sheet's Status dropdown, grouped by what it means for "what to apply to next"
-const APPLICATION_COLOR: Record<string, string> = {
-  'To Apply': 'orange', Seen: 'gray', Applied: 'blue', 'Interest Form Filled': 'blue', 'Under Review': 'indigo',
-  'Appeal Under Review': 'indigo', Contacted: 'teal', Rejected: 'red', 'Not interested': 'gray', Closed: 'gray',
-}
+// an application stage, coloured by whose move it is: yours, theirs, or done (an offer, or closed)
+const GROUP_COLOR: Record<string, string> = { 'your move': 'orange', 'their move': 'blue' }
+const stageColor = (s: string, group: StageGroup | null | undefined) => (s === 'Offer' ? 'green' : GROUP_COLOR[group ?? ''] ?? 'gray')
 
-export const ApplicationBadge = ({ s }: { s: string | null | undefined }) => (s
-  ? <Badge color={APPLICATION_COLOR[s] ?? 'gray'} variant="light" style={whole}>{s}</Badge>
-  : <>—</>)
+/** The stage, and while someone still has to move, how long it has been in it. */
+export function ApplicationBadge({ s, group, since, baseline }: {
+  s: string | null | undefined; group?: StageGroup | null; since?: string | null; baseline?: boolean
+}) {
+  if (!s) return <>—</>
+  const age = group === 'your move' || group === 'their move' ? stageAge(since, baseline) : null
+  return (
+    <Group gap={6} wrap="nowrap">
+      <Badge color={stageColor(s, group)} variant="light" style={whole} title={group ?? 'not a known stage'}>{s}</Badge>
+      {age && <Text size="xs" c="dimmed" style={whole} title={baseline ? `Already ${s} when tracking began, ${when(since)}` : when(since)}>{age}</Text>}
+    </Group>
+  )
+}

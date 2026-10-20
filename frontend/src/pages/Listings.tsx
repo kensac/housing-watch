@@ -16,7 +16,8 @@ const CELLS: Cells<Listing> = {
   rent: { label: 'Rent (Fits You)', sort: 'rent', right: true, cell: (x) => range(x.rent_min, x.rent_max, money) },
   ami: { label: 'AMI', right: true, cell: (x) => range(x.ami_min, x.ami_max, pct) },
   commute: { label: 'Commute', sort: 'commute', right: true, cell: (x) => minutes(x.commute) },
-  application: { label: 'Application', cell: (x) => <ApplicationBadge s={x.application} /> },
+  application: { label: 'Application', sort: 'application', cell: (x) => (
+    <ApplicationBadge s={x.application} group={x.application_group} since={x.application_since} baseline={x.application_since_baseline} />) },
   status: { label: 'Status', cell: (x) => <StatusBadge s={x.status} /> },
   deadline: { label: 'Deadline', sort: 'deadline', cell: (x) => date(x.deadline) },
   borough: { label: 'Borough', sort: 'borough', cell: (x) => x.borough ?? '—' },

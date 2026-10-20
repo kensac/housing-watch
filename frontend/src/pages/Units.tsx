@@ -19,7 +19,8 @@ const CELLS: Cells<Unit> = {
   income: { label: 'Your Income Band', sort: 'income_min', right: true,
     cell: (u) => (u.income_min == null && u.income_max == null ? '—' : `${money(u.income_min)}–${money(u.income_max)}`) },
   commute: { label: 'Commute', sort: 'commute', right: true, cell: (u) => minutes(u.commute) },
-  application: { label: 'Application', cell: (u) => <ApplicationBadge s={u.application} /> },
+  application: { label: 'Application', sort: 'application', cell: (u) => (
+    <ApplicationBadge s={u.application} group={u.application_group} since={u.application_since} baseline={u.application_since_baseline} />) },
   status: { label: 'Status', cell: (u) => <StatusBadge s={u.status} /> },
   borough: { label: 'Borough', sort: 'borough', cell: (u) => u.borough ?? '—' },
   deadline: { label: 'Deadline', sort: 'deadline', cell: (u) => date(u.deadline) },

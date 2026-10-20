@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import Table, and_, exists, func, not_, or_, select
 
+from . import tracker as T
 from .orm import BandRow, EventRow, ListingRow, UnitRow
 
 NY = ZoneInfo("America/New_York")
@@ -68,6 +69,7 @@ class Field:
     scope: str  # listing | unit | band | event | computed
     column: Any = None  # SQL column or expression; None for computed fields
     choices: tuple[str, ...] = ()  # fixed values (computed enums)
+    order: tuple[str, ...] = ()  # known values in display order, where other values may occur too
 
     @property
     def money(self) -> bool:
@@ -106,7 +108,9 @@ COMPUTED = [
     Field("eligible_units", "Eligible units", "Verdict", "number", "computed"),
     Field("unit_count", "Units", "Verdict", "number", "computed"),
     Field("commute", "Commute (min)", "Commute", "number", "computed"),  # transit to HW_COMMUTE_TO, eligible only
-    Field("application", "Application status", "Tracker", "text", "computed"),  # from the tracker sheet
+    # the tracker sheet's Status as a stage: legacy statuses mapped, unknown ones as written
+    Field("application", "Application stage", "Tracker", "text", "computed", order=tuple(T.STAGES)),
+    Field("application_group", "Whose move", "Tracker", "text", "computed", choices=T.GROUPS),
     Field("application_notes", "Tracker notes", "Tracker", "text", "computed"),
 ]
 

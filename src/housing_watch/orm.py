@@ -232,6 +232,20 @@ class TrackerRow(Base):
     synced: Mapped[datetime] = mapped_column(TS, server_default=func.now())
 
 
+class TrackerEventRow(Base):
+    """A tracker row's Status as first seen or changed between syncs (the sheet keeps only the current one)."""
+
+    __tablename__ = "tracker_events"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    row_key: Mapped[str] = mapped_column(Text, index=True)
+    status_from: Mapped[str | None] = mapped_column(Text)  # None on a row's first event
+    status_to: Mapped[str | None] = mapped_column(Text)
+    baseline: Mapped[bool] = mapped_column(
+        Boolean, default=False
+    )  # the row predates tracking: its real start is earlier
+    at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
 class TrackerLinkRow(Base):
     """A manual match the owner set in the UI: this listing is (row_key) or is not (None) that sheet row."""
 

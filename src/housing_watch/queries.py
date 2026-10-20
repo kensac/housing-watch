@@ -22,7 +22,18 @@ from . import tracker as T
 from .criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, listing_verdict, unit_verdict
 from .mapping import listing_from_row
 from .models import Listing
-from .orm import BandRow, CommuteRow, EventRow, ListingRow, RunRow, SourceStateRow, TrackerLinkRow, TrackerRow, UnitRow
+from .orm import (
+    BandRow,
+    CommuteRow,
+    EventRow,
+    ListingRow,
+    RunRow,
+    SourceStateRow,
+    TrackerEventRow,
+    TrackerLinkRow,
+    TrackerRow,
+    UnitRow,
+)
 
 VERDICTS = (ELIGIBLE, POSSIBLE, EXCLUDED)
 STATUSES = ("open", "waitlist", "upcoming", "unknown", "closed", "gone")
@@ -74,7 +85,10 @@ class ListingSummary:
     haystack: str = field(default="", repr=False)  # lowercased text the search box matches
     commute: int | None = None  # transit minutes to HW_COMMUTE_TO (eligible listings only)
     commute_route: dict | None = None  # {"lines", "walk_min", "transfers"}
-    application: str | None = None  # the tracker sheet's Status for this listing's row
+    application: str | None = None  # the stage of this listing's tracker row (tracker.stage of its Status)
+    application_group: str | None = None  # your move | their move | done; None for an unknown status
+    application_since: datetime | None = None  # when the row entered that stage, as first recorded
+    application_since_baseline: bool = False  # the stage predates tracking: it began before application_since
     application_notes: str | None = None
     tracker_row: str | None = None  # that row's Property
     tracker_match: str | None = None  # url | address | name | manual
@@ -126,8 +140,10 @@ def _summary(r: ListingRow, lst: Listing, p: Profile, commutes: dict | None = No
 def _with_tracker(x: ListingSummary, ref: T.Ref | None) -> ListingSummary:
     if ref is None:
         return x
-    return replace(x, application=ref.status, application_notes=ref.notes, tracker_row=ref.property,
-                   tracker_match=ref.how)  # fmt: skip
+    return replace(x, application=ref.stage, application_group=ref.group,
+                   application_since=ref.since and ref.since.at,
+                   application_since_baseline=bool(ref.since and ref.since.baseline),
+                   application_notes=ref.notes, tracker_row=ref.property, tracker_match=ref.how)  # fmt: skip
 
 
 def _commute(commutes: dict, lst: Listing) -> dict:
@@ -169,6 +185,9 @@ class UnitSummary:
     reason: str
     commute: int | None = None
     application: str | None = None
+    application_group: str | None = None
+    application_since: datetime | None = None
+    application_since_baseline: bool = False
     haystack: str = field(default="", repr=False)
 
 
@@ -187,7 +206,9 @@ def _units(r: ListingRow, lst: Listing, x: ListingSummary, p: Profile) -> list[U
             gone_since=x.gone_since, listing_verdict=x.verdict, size=u.size, unit_no=u.unit_no, rent=u.rent,
             ami=u.ami, set_aside=u.set_aside, available=u.available, chart_year=u.chart_year,
             income_min=band.income_min if band else None, income_max=band.income_max if band else None,
-            verdict=uv, reason=why, commute=x.commute, application=x.application, haystack=x.haystack,
+            verdict=uv, reason=why, commute=x.commute, application=x.application,
+            application_group=x.application_group, application_since=x.application_since,
+            application_since_baseline=x.application_since_baseline, haystack=x.haystack,
         ))  # fmt: skip
     return out
 
@@ -220,6 +241,7 @@ def _judged(engine: Engine, p: Profile) -> tuple[list[ListingSummary], list[Unit
         ) + tuple(s.execute(select(func.count(), func.max(CommuteRow.computed))).one())
         version += tuple(s.execute(select(func.count(), func.max(TrackerRow.synced))).one())
         version += tuple(s.execute(select(func.count(), func.max(TrackerLinkRow.created))).one())
+        version += tuple(s.execute(select(func.max(TrackerEventRow.id))).one())
         ck = (str(engine.url), p)
         hit = _cache.get(ck)
         if hit and hit[0] == version:
@@ -229,7 +251,7 @@ def _judged(engine: Engine, p: Profile) -> tuple[list[ListingSummary], list[Unit
             rows = _load(s)
             lsts = [listing_from_row(r) for r in rows]
             out = [_summary(r, lst, p, commutes) for r, lst in zip(rows, lsts, strict=True)]
-            refs = T.match(out, *T.load(engine))  # the tracker sheet's status and notes, matched to listings
+            refs = T.match(out, *T.load(engine), T.history(engine))  # the tracker sheet's rows, matched to listings
             out = [_with_tracker(x, refs.get(x.key)) for x in out]
             units = [u for r, lst, x in zip(rows, lsts, out, strict=True) for u in _units(r, lst, x, p)]
             _cache[ck] = (version, out, units)
@@ -243,6 +265,7 @@ COMPUTED = {  # read-time values behind filters.COMPUTED
     "unit_count": lambda x: x.units,
     "commute": lambda x: x.commute,
     "application": lambda x: x.application,
+    "application_group": lambda x: x.application_group,
     "application_notes": lambda x: x.application_notes,
 }
 
@@ -291,6 +314,12 @@ def filter_listings(
     ]
 
 
+def _by_stage(x: ListingSummary | UnitSummary) -> tuple:
+    """Stage order (tracker.rank), then longest in its stage first."""
+    since = x.application_since.timestamp() if x.application_since else float("inf")
+    return (T.rank(x.application), since, x.title.lower())
+
+
 def _sort_key(sort: str):
     return {
         "verdict": lambda x: (_VRANK[x.verdict], -x.last_changed.timestamp()),
@@ -298,6 +327,7 @@ def _sort_key(sort: str):
         "first_seen": lambda x: x.first_seen,
         "rent": lambda x: (x.rent_min is None, x.rent_min or 0),
         "commute": lambda x: (x.commute is None, x.commute or 0),
+        "application": _by_stage,
         "deadline": lambda x: (x.deadline is None, x.deadline or ""),
         "title": lambda x: x.title.lower(),
         "source": lambda x: (x.source, x.title.lower()),
@@ -341,6 +371,7 @@ UNIT_COMPUTED = {  # the same computed fields on the Units page: verdict and rea
     "unit_count": lambda u, x: x.units,
     "commute": lambda u, x: x.commute,
     "application": lambda u, x: x.application,
+    "application_group": lambda u, x: x.application_group,
     "application_notes": lambda u, x: x.application_notes,
 }
 
@@ -376,6 +407,7 @@ UNIT_SORTS = {
     "rent": lambda u: (u.rent is None, u.rent or 0),
     "ami": lambda u: (u.ami is None, u.ami or 0),
     "commute": lambda u: (u.commute is None, u.commute or 0),
+    "application": _by_stage,
     "size": lambda u: (_SIZE_ORDER.get(u.size, 99), u.rent or 0),
     "income_min": lambda u: (u.income_min is None, u.income_min or 0),
     "income_max": lambda u: (u.income_max is None, u.income_max or 0),
@@ -418,7 +450,7 @@ _distinct: dict[tuple, tuple[float, int]] = {}
 
 
 def is_enum(engine: Engine, fld: F.Field, p: Profile = PROFILE) -> bool:
-    if fld.choices:
+    if fld.choices or fld.order:
         return True
     if fld.type != "text":
         return False
@@ -478,9 +510,10 @@ def value_counts(
 
 
 def _sorted_counts(fld: F.Field, counts: dict) -> list[tuple[str | None, int]]:
-    for v in fld.choices:
+    known = fld.choices or fld.order
+    for v in known:
         counts.setdefault(v, 0)
-    order = {v: i for i, v in enumerate(fld.choices)}
+    order = {v: i for i, v in enumerate(known)}
     return sorted(counts.items(), key=lambda kv: (order.get(kv[0], 99), -kv[1], str(kv[0])))
 
 

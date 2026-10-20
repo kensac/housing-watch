@@ -1,11 +1,14 @@
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select, update
 
 from housing_watch import filters as F
 from housing_watch import queries as Q
 from housing_watch import tracker as T
+from housing_watch.orm import TrackerEventRow, TrackerRow
 from housing_watch.web.app import create_app
 from seed import L, Session, add_listing, seed
 
@@ -169,3 +172,108 @@ def test_a_unit_row_does_not_cover_other_units():
         "sv": "SVEN",  # "Log #8984" in the notes is not a unit
         "sb": "115 Stanwix St, Unit 218",  # a listing naming no unit takes its building's row
     }  # s302 and o9 are other units of buildings whose rows name specific units
+
+
+def test_stages_and_legacy_statuses():
+    assert [T.stage(s) for s in ("To Apply", " ready  to send ", "OFFER", "", None)] == [
+        "To Apply", "Ready to Send", "Offer", None, None,
+    ]  # fmt: skip
+    legacy = ["Interest Form Filled", "Contacted", "Under Review", "Appeal Under Review", "Rejected", "Not interested"]
+    assert [T.stage(s) for s in legacy] == [
+        "Applied", "Form Requested", "In Processing", "In Processing", "Closed", "Closed",
+    ]  # fmt: skip
+    assert T.stage("Seen") is None and T.stage("Waiting on landlord") == "Waiting on landlord"  # unknown: as written
+    assert [T.group(s) for s in ("Action Needed", "Tour Scheduled", "Offer", "Waiting on landlord", None)] == [
+        T.YOU, T.THEM, T.DONE, None, None,
+    ]  # fmt: skip
+    ranked = sorted([None, "Closed", "Waiting on landlord", "Applied", "To Apply", "Offer"], key=T.rank)
+    assert ranked == ["To Apply", "Applied", "Offer", "Closed", "Waiting on landlord", None]
+
+
+def sheet_of(rows: list[tuple[str, str]]) -> dict:
+    head = {"values": [cell("Property"), cell("Status"), cell("Notes")]}
+    body = [{"values": [cell(p), cell(s), cell(f"Note for {p}.")]} for p, s in rows]
+    return {"sheets": [{"data": [{"rowData": [head, *body]}]}]}
+
+
+@pytest.fixture
+def sheet(pg, monkeypatch, tmp_path):
+    """Listings t:1..t:5 (invented addresses) and a sheet whose rows a test sets before each `sync()`."""
+    with Session(pg) as s, s.begin():
+        for n, addr in enumerate(["10 Elm St", "20 Oak Ave", "30 Pine Rd", "1 Nowhere Ln", "40 Cedar Pl"], start=1):
+            add_listing(s, L("t", str(n), "Queens", address=f"{addr}, Queens, NY"))
+    key = tmp_path / "k.json"
+    key.write_text("{}")
+    monkeypatch.setattr(T, "SHEET", "sheet-id")
+    monkeypatch.setattr(T, "KEY_FILE", str(key))
+    monkeypatch.setattr(T, "_token", lambda: "tok")
+    box = SimpleNamespace(rows=[], engine=pg, sync=lambda: T.sync(pg))
+    monkeypatch.setattr(T.fetch, "get", lambda url, headers=None: SimpleNamespace(json=lambda: sheet_of(box.rows)))
+    return box
+
+
+def tracker_events(pg) -> list[tuple]:
+    with Session(pg) as s:
+        q = select(TrackerEventRow).order_by(TrackerEventRow.id)
+        return [(e.row_key, e.status_from, e.status_to, e.baseline) for e in s.scalars(q)]
+
+
+def test_sync_records_status_changes(sheet):
+    pg = sheet.engine
+    with Session(pg) as s, s.begin():  # a row synced before events existed
+        s.add(TrackerRow(row_key="10 elm st", position=2, property="10 Elm St", status="Contacted", cells={}))
+    sheet.rows = [("10 Elm St", "Contacted"), ("20 Oak Ave", "To Apply")]
+    sheet.sync()
+    assert tracker_events(pg) == [("10 elm st", None, "Contacted", True), ("20 oak ave", None, "To Apply", False)]
+    sheet.sync()  # nothing changed: no event
+    assert len(tracker_events(pg)) == 2
+    sheet.rows = [("10 Elm St", "Form Requested"), ("20 Oak Ave", "Applied")]
+    sheet.sync()
+    assert tracker_events(pg)[2:] == [("10 elm st", "Contacted", "Form Requested", False),
+                                      ("20 oak ave", "To Apply", "Applied", False)]  # fmt: skip
+    hist = T.history(pg)  # Contacted -> Form Requested is a rename, not a new stage: the baseline still holds
+    assert [(h.stage_from, h.stage_to, h.baseline) for h in hist["10 elm st"]] == [(None, "Form Requested", True)]
+    assert [(h.stage_from, h.stage_to) for h in hist["20 oak ave"]] == [(None, "To Apply"), ("To Apply", "Applied")]
+    sheet.rows = [("20 Oak Ave", "Applied")]  # a row removed from the sheet records nothing and keeps its events
+    sheet.sync()
+    assert len(tracker_events(pg)) == 4 and "10 elm st" in T.history(pg)
+    sheet.rows = [("20 Oak Ave", "Applied"), ("10 Elm St", "Form Requested")]  # back, unchanged: still nothing
+    sheet.sync()
+    assert len(tracker_events(pg)) == 4
+
+
+def test_stage_order_group_filter_and_api(sheet):
+    pg = sheet.engine
+    sheet.rows = [("10 Elm St", "Rejected"), ("20 Oak Ave", "Action Needed"), ("30 Pine Rd", "Applied"),
+                  ("40 Cedar Pl", "Waiting on landlord"), ("50 Spruce St", "Applied")]  # fmt: skip
+    sheet.sync()
+    with pg.begin() as c:  # Spruce has been Applied for longer than Pine
+        c.execute(update(TrackerEventRow).where(TrackerEventRow.row_key == "50 spruce st")
+                  .values(at=datetime(2026, 10, 1, tzinfo=UTC)))  # fmt: skip
+    got = Q.search_listings(pg, Q.ListingQuery(sort="application")).items
+    assert [(x.key, x.application, x.application_group) for x in got] == [
+        ("t:2", "Action Needed", T.YOU), ("t:3", "Applied", T.THEM), ("t:1", "Closed", T.DONE),
+        ("t:5", "Waiting on landlord", None), ("t:4", None, None),
+    ]  # fmt: skip
+    assert got[0].application_since and got[0].application_since_baseline is False
+    assert Q.search_listings(pg, Q.ListingQuery(sort="-application")).items[0].key == "t:4"
+    units = Q.search_units(pg, Q.ListingQuery(sort="application")).items
+    assert [u.key for u in units] == ["t:2", "t:3", "t:1", "t:5", "t:4"] and units[0].application_group == T.YOU
+    mine = F.parse_one("application_group.in.your move,done", F.LISTING_FIELDS)
+    assert {x.key for x in Q.search_listings(pg, Q.ListingQuery([mine])).items} == {"t:1", "t:2"}
+    with pytest.raises(F.FilterError):
+        F.parse_one("application_group.in.mine", F.LISTING_FIELDS)
+    counts = Q.value_counts(pg, "listings", F.LISTING_FIELDS["application"], [])
+    assert [v for v, _ in counts][:9] == list(T.STAGES) and dict(counts)["Applied"] == 1
+    assert {v for v, _ in counts[9:]} == {"Waiting on landlord", None}  # unknown statuses after the stages
+
+    c = TestClient(create_app(pg))
+    lst = c.get("/api/listings?sort=application&f=application_group.in.their move").json()
+    assert [x["key"] for x in lst["items"]] == ["t:3"] and lst["items"][0]["application_since"]
+    assert c.get("/api/units?sort=application").json()["items"][0]["application_group"] == T.YOU
+    rows = c.get("/api/tracker").json()["rows"]
+    assert [r["property"] for r in rows] == ["20 Oak Ave", "50 Spruce St", "30 Pine Rd", "10 Elm St", "40 Cedar Pl"]
+    elm = rows[3]
+    assert (elm["status"], elm["stage"], elm["group"]) == ("Rejected", "Closed", T.DONE)
+    assert [(e["stage_from"], e["stage_to"]) for e in elm["events"]] == [(None, "Closed")]
+    assert elm["stage_since"] == elm["events"][0]["at"] and elm["stage_since_baseline"] is False
