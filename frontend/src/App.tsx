@@ -1,6 +1,6 @@
 import { AppShell, Badge, Burger, Button, Group, NavLink, ScrollArea, Text } from '@mantine/core'
 import { useDisclosure, useReducedMotion } from '@mantine/hooks'
-import { IconActivity, IconBuilding, IconDoor, IconHome, IconList, IconServer, IconTimeline } from '@tabler/icons-react'
+import { IconActivity, IconBuilding, IconDoor, IconHome, IconList, IconServer, IconTimeline, IconChecklist } from '@tabler/icons-react'
 import { useState } from 'react'
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
@@ -12,6 +12,7 @@ import { FleetPage } from './pages/Fleet'
 import { ListingsPage } from './pages/Listings'
 import { OverviewPage } from './pages/Overview'
 import { SourcesPage } from './pages/Sources'
+import { TrackerPage } from './pages/Tracker'
 import { UnitsPage } from './pages/Units'
 
 const PAGES: { to: string; label: string; icon: React.ReactNode; page?: Page }[] = [
@@ -19,6 +20,7 @@ const PAGES: { to: string; label: string; icon: React.ReactNode; page?: Page }[]
   { to: '/listings', label: 'Listings', icon: <IconBuilding size={16} aria-hidden />, page: 'listings' },
   { to: '/units', label: 'Units', icon: <IconDoor size={16} aria-hidden />, page: 'units' },
   { to: '/events', label: 'Events', icon: <IconTimeline size={16} aria-hidden />, page: 'events' },
+  { to: '/tracker', label: 'Tracker', icon: <IconChecklist size={16} aria-hidden /> },
   { to: '/sources', label: 'Sources', icon: <IconList size={16} aria-hidden /> },
   { to: '/fleet', label: 'Fleet', icon: <IconServer size={16} aria-hidden /> },
 ]
@@ -93,6 +95,7 @@ export function App() {
           <Route path="/listings" element={<ListingsPage />} />
           <Route path="/units" element={<UnitsPage />} />
           <Route path="/events" element={<EventsPage />} />
+          <Route path="/tracker" element={<TrackerPage />} />
           <Route path="/sources" element={<SourcesPage />} />
           <Route path="/fleet" element={<FleetPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

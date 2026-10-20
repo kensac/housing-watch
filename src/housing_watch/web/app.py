@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.engine import Engine
 
-from .. import applications, digest, queries, views
+from .. import applications, digest, queries, tracker, views
 from .. import filters as F
 from ..criteria import PROFILE, Profile
 
@@ -231,6 +231,46 @@ def create_app(engine: Engine, profile: Profile = PROFILE, dist: Path = DIST) ->
     @api.get("/fleet")
     def fleet():
         return queries.fleet(engine)
+
+    @api.get("/tracker")
+    def tracker_rows():
+        """Every tracker sheet row with the listings matched to it (empty: unmatched, link one by hand)."""
+        rows, links = tracker.load(engine)
+        by_row: dict[str, list[dict]] = {}
+        for x in queries.judged(engine, profile):
+            if x.tracker_row:
+                by_row.setdefault(tracker.row_key(x.tracker_row), []).append(
+                    {"key": x.key, "title": x.title, "verdict": x.verdict, "status": x.status, "how": x.tracker_match,
+                     "commute": x.commute}
+                )  # fmt: skip
+        synced = max((r.synced for r in rows), default=None)
+        return {
+            "configured": bool(tracker.SHEET), "synced": synced,
+            "rows": [{"row_key": r.row_key, "position": r.position, "property": r.property, "status": r.status,
+                      "notes": r.notes, "source_url": r.source_url, "page_url": r.page_url, "cells": r.cells,
+                      "listings": by_row.get(r.row_key, [])} for r in rows],
+        }  # fmt: skip
+
+    @api.post("/tracker/links")
+    async def link_tracker(req: Request):
+        """Link a listing to a sheet row (row_key), or mark it as no row (row_key null)."""
+        _same_origin(req)
+        body = await req.json()
+        key, row = str(body.get("listing_key") or ""), body.get("row_key")
+        if not key or queries.listing_detail(engine, key, profile) is None:
+            raise Problem(404, "No such listing")
+        if row is not None and row not in {r.row_key for r in tracker.load(engine)[0]}:
+            raise Problem(404, "No such tracker row")
+        tracker.set_link(engine, key, row)
+        return {"listing_key": key, "row_key": row}
+
+    @api.delete("/tracker/links")
+    def unlink_tracker(req: Request, listing_key: str):
+        """Drop a manual link: the listing goes back to automatic matching."""
+        _same_origin(req)
+        if not tracker.clear_link(engine, listing_key):
+            raise Problem(404, "No manual link for that listing")
+        return Response(status_code=204)
 
     # --- saved views: the UI's own config ---------------------------------------------------------------
 

@@ -132,6 +132,12 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   8:30 AM), each origin address once per destination (again after 60 days), into `commutes`; a periodic
   `commute` task on the digest worker does it. queries.py attaches the minutes and lines at read time
   (`commute` filter field, sort and column).
+- `tracker.py` copies the owner's application tracker sheet (the source of truth for application status
+  and notes) into `tracker_rows` every 5 minutes, read-only via a service account, and matches rows to
+  listings at read time: the row's own source link (only when that link is one row's and one listing's),
+  else a normalized street address, else the building name; a manual link in `tracker_links` wins.
+  The UI shows the status and notes on listings and units (`application` filter field and column) and
+  has a Tracker page for unmatched rows.
 - `applications.py` recognises known paper application forms by their fillable field names (today HPD's
   HC2.0 application) and fills them from the applicant file (`HW_APPLICANT_FILE`, private, host-only;
   signs and dates the applicant's line; never the SSN). The drawer checks a listing's linked PDFs lazily; a download is built

@@ -51,6 +51,7 @@ tables), so the same input always gives the same output.
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | STARTTLS SMTP |
 | `HW_APPLICANT_FILE` | applicant JSON for pre-filling known paper application forms (UI only; schema: `tests/fixtures/applications/applicant.example.json`). Signs (`signature_image`, else the name in a handwriting font) and dates the applicant's line; never the SSN |
 | `HW_COMMUTE_TO`, `GOOGLE_MAPS_API_KEY` | transit commute (weekday 8:30 AM) from eligible listings to this address, via Google's Routes API; both unset = off |
+| `HW_TRACKER_SHEET`, `HW_TRACKER_TAB`, `HW_SHEETS_KEY_FILE` | the application tracker Google Sheet (id, tab, default `Properties`) and a service-account key that can view it; synced read-only |
 | `BYPARR_URL` | FlareSolverr-compatible renderer for JS/Cloudflare pages |
 
 ## Running

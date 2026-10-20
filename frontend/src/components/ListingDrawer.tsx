@@ -7,6 +7,7 @@ import { commute, date, money, pct, when } from '../format'
 import { useMotion } from '../hooks'
 import { EventBadge, StatusBadge, VerdictBadge } from './Badges'
 import { Loading, LoadError } from './State'
+import { TrackerPanel } from './TrackerPanel'
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return <Stack gap={0} miw={0}><Text size="xs" c="dimmed">{label}</Text><Text size="sm" style={{ overflowWrap: 'anywhere' }}>{children}</Text></Stack>
@@ -113,6 +114,8 @@ export function ListingDrawer({ k, onClose }: { k: string | null; onClose: () =>
               </Table.ScrollContainer>
             ) : <Text size="sm" c="dimmed">The source publishes no unit details for this listing; check the source site for rents and sizes.</Text>}
           </Stack>
+
+          <Stack gap="xs"><Title order={3} size="h5">Tracker</Title><TrackerPanel x={x} /></Stack>
 
           {d.pdfs.length > 0 && <Stack gap="xs"><Title order={3} size="h5">Application</Title><ApplicationsPanel k={x.key} /></Stack>}
 
