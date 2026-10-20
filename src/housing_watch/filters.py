@@ -105,6 +105,7 @@ COMPUTED = [
     Field("reason", "Verdict reason", "Verdict", "text", "computed"),
     Field("eligible_units", "Eligible units", "Verdict", "number", "computed"),
     Field("unit_count", "Units", "Verdict", "number", "computed"),
+    Field("commute", "Commute (min)", "Commute", "number", "computed"),  # transit to HW_COMMUTE_TO, eligible only
 ]
 
 

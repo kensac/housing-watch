@@ -23,16 +23,17 @@ from .orm import SavedViewRow
 FIELDS = {"listings": F.LISTING_FIELDS, "units": F.LISTING_FIELDS, "events": F.EVENT_FIELDS}
 COLUMNS = {
     "listings": {"verdict": "Verdict", "sizes": "Sizes", "rent": "Rent", "ami": "AMI", "status": "Status",
-                 "deadline": "Deadline", "borough": "Borough", "kind": "Kind", "source": "Source",
+                 "deadline": "Deadline", "borough": "Borough", "commute": "Commute", "kind": "Kind", "source": "Source",
                  "first_seen": "First seen", "changed": "Changed"},
     "units": {"verdict": "Verdict", "size": "Size", "unit_no": "Unit", "rent": "Rent", "ami": "AMI",
-              "income": "Your income band", "status": "Status", "borough": "Borough", "deadline": "Deadline",
+              "income": "Your income band", "commute": "Commute", "status": "Status", "borough": "Borough",
+              "deadline": "Deadline",
               "source": "Source", "changed": "Changed"},
     "events": {"verdict": "Verdict", "source": "Source", "mailed": "Mailed"},
 }  # fmt: skip
 DEFAULT_COLUMNS = {
-    "listings": ("verdict", "sizes", "rent", "ami", "status", "changed"),
-    "units": ("verdict", "size", "rent", "ami", "income", "status", "borough"),
+    "listings": ("verdict", "sizes", "rent", "ami", "commute", "status", "changed"),
+    "units": ("verdict", "size", "rent", "ami", "income", "commute", "status", "borough"),
     "events": ("verdict", "source", "mailed"),
 }
 DEFAULT_SORT = {"listings": "verdict", "units": "verdict", "events": ""}

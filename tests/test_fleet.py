@@ -391,5 +391,5 @@ def test_migrations_downgrade_and_upgrade_again(pg_url):
 
 def test_periodic_tasks_registered():
     assert {t.task.name for t in tasks.app.periodic_registry.periodic_tasks.values()} == {
-        "tick", "retry_stalled", "cleanup",
+        "tick", "retry_stalled", "cleanup", "commute",
     }  # fmt: skip

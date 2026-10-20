@@ -16,11 +16,12 @@ from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, selectinload
 
+from . import commute as C
 from . import filters as F
 from .criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, listing_verdict, unit_verdict
 from .mapping import listing_from_row
 from .models import Listing
-from .orm import BandRow, EventRow, ListingRow, RunRow, SourceStateRow, UnitRow
+from .orm import BandRow, CommuteRow, EventRow, ListingRow, RunRow, SourceStateRow, UnitRow
 
 VERDICTS = (ELIGIBLE, POSSIBLE, EXCLUDED)
 STATUSES = ("open", "waitlist", "upcoming", "closed", "gone")
@@ -70,6 +71,8 @@ class ListingSummary:
     unit_sizes: frozenset[str] = field(default_factory=frozenset, repr=False)
     unit_rents: tuple[float, ...] = field(default=(), repr=False)
     haystack: str = field(default="", repr=False)  # lowercased text the search box matches
+    commute: int | None = None  # transit minutes to HW_COMMUTE_TO (eligible listings only)
+    commute_route: dict | None = None  # {"lines", "walk_min", "transfers"}
 
 
 def _load(s: Session, *where) -> list[ListingRow]:
@@ -77,7 +80,7 @@ def _load(s: Session, *where) -> list[ListingRow]:
     return list(s.scalars(q.where(*where)))
 
 
-def _summary(r: ListingRow, lst: Listing, p: Profile) -> ListingSummary:
+def _summary(r: ListingRow, lst: Listing, p: Profile, commutes: dict | None = None) -> ListingSummary:
     v = listing_verdict(lst, p)
     # ranges over the units that could fit (not excluded); all units when none does
     fit = [u for u, uv, _ in v.units if uv != EXCLUDED] or lst.units
@@ -111,7 +114,13 @@ def _summary(r: ListingRow, lst: Listing, p: Profile) -> ListingSummary:
         unit_sizes=frozenset(sizes),
         unit_rents=tuple(u.rent for u in lst.units if u.rent),
         haystack=" ".join(x for x in (r.key, lst.title, lst.address, lst.borough, lst.notes) if x).lower(),
+        **_commute(commutes or {}, lst),
     )
+
+
+def _commute(commutes: dict, lst: Listing) -> dict:
+    c = commutes.get(C.origin(lst.address, lst.borough) or "")
+    return {"commute": c.minutes, "commute_route": c.route} if c and c.status == "ok" else {}
 
 
 @dataclass
@@ -143,6 +152,7 @@ class UnitSummary:
     income_max: int | None
     verdict: str  # this unit's, after the listing-level rules (closed, borough, senior, ...)
     reason: str
+    commute: int | None = None
     haystack: str = field(default="", repr=False)
 
 
@@ -161,7 +171,7 @@ def _units(r: ListingRow, lst: Listing, x: ListingSummary, p: Profile) -> list[U
             gone_since=x.gone_since, listing_verdict=x.verdict, size=u.size, unit_no=u.unit_no, rent=u.rent,
             ami=u.ami, set_aside=u.set_aside, available=u.available, chart_year=u.chart_year,
             income_min=band.income_min if band else None, income_max=band.income_max if band else None,
-            verdict=uv, reason=why, haystack=x.haystack,
+            verdict=uv, reason=why, commute=x.commute, haystack=x.haystack,
         ))  # fmt: skip
     return out
 
@@ -191,16 +201,17 @@ def _judged(engine: Engine, p: Profile) -> tuple[list[ListingSummary], list[Unit
                     func.count(ListingRow.gone_since),
                 )
             ).one()
-        )
+        ) + tuple(s.execute(select(func.count(), func.max(CommuteRow.computed))).one())
         ck = (str(engine.url), p)
         hit = _cache.get(ck)
         if hit and hit[0] == version:
             return hit[1], hit[2]
         with _lock:
             out, units = [], []
+            commutes = C.table(engine)
             for r in _load(s):
                 lst = listing_from_row(r)
-                out.append(x := _summary(r, lst, p))
+                out.append(x := _summary(r, lst, p, commutes))
                 units += _units(r, lst, x, p)
             _cache[ck] = (version, out, units)
         return out, units
@@ -211,6 +222,7 @@ COMPUTED = {  # read-time values behind filters.COMPUTED
     "reason": lambda x: x.reason,
     "eligible_units": lambda x: x.eligible_units,
     "unit_count": lambda x: x.units,
+    "commute": lambda x: x.commute,
 }
 
 
@@ -264,6 +276,7 @@ def _sort_key(sort: str):
         "changed": lambda x: x.last_changed,
         "first_seen": lambda x: x.first_seen,
         "rent": lambda x: (x.rent_min is None, x.rent_min or 0),
+        "commute": lambda x: (x.commute is None, x.commute or 0),
         "deadline": lambda x: (x.deadline is None, x.deadline or ""),
         "title": lambda x: x.title.lower(),
         "source": lambda x: (x.source, x.title.lower()),
@@ -305,6 +318,7 @@ UNIT_COMPUTED = {  # the same computed fields on the Units page: verdict and rea
     "reason": lambda u, x: u.reason,
     "eligible_units": lambda u, x: x.eligible_units,
     "unit_count": lambda u, x: x.units,
+    "commute": lambda u, x: x.commute,
 }
 
 
@@ -338,6 +352,7 @@ UNIT_SORTS = {
     "verdict": lambda u: (_VRANK[u.verdict], u.rent is None, u.rent or 0),
     "rent": lambda u: (u.rent is None, u.rent or 0),
     "ami": lambda u: (u.ami is None, u.ami or 0),
+    "commute": lambda u: (u.commute is None, u.commute or 0),
     "size": lambda u: (_SIZE_ORDER.get(u.size, 99), u.rent or 0),
     "income_min": lambda u: (u.income_min is None, u.income_min or 0),
     "income_max": lambda u: (u.income_max is None, u.income_max or 0),
