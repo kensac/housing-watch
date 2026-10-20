@@ -45,6 +45,7 @@ def test_departure_is_the_next_weekday_morning():
 def test_summarize():
     assert C.summarize(RESP) == (34, {"lines": ["A", "Q32"], "walk_min": 7, "transfers": 1})
     assert C.summarize({}) == (None, {})
+    assert C.line_name("F Line") == "F" and C.line_name("M34A-SBS") == "M34A-SBS"
 
 
 def test_refresh_routes_only_eligible_listings_once(pg, monkeypatch):
@@ -60,6 +61,7 @@ def test_refresh_routes_only_eligible_listings_once(pg, monkeypatch):
     assert all(y.commute is None for y in Q.judged(pg) if y.key != "a:1")
     hits = Q.search_listings(pg, Q.ListingQuery([F.parse_one("commute.le.40", F.LISTING_FIELDS)])).items
     assert [h.key for h in hits] == ["a:1"]
+    assert Q.listing_detail(pg, "a:1").summary.commute == 34  # the drawer too
     units = Q.search_units(pg, Q.ListingQuery(sort="commute")).items
     assert units[0].key == "a:1" and units[0].commute == 34
 

@@ -56,6 +56,11 @@ def departure(now: datetime) -> datetime:
     return d
 
 
+def line_name(name: str) -> str:
+    """'F Line' -> 'F' (Google names some subway lines in full, others by letter or number)."""
+    return re.sub(r"\s+Line$", "", name)
+
+
 def _secs(s: str | None) -> int:
     return int(float((s or "0s").rstrip("s")))
 
@@ -72,7 +77,7 @@ def summarize(resp: dict) -> tuple[int | None, dict]:
         for s in steps
         if s.get("travelMode") == "TRANSIT" and s.get("transitDetails")
     ]
-    lines = [x.get("nameShort") or x.get("name") or "?" for x in rides]
+    lines = [line_name(x.get("nameShort") or x.get("name") or "?") for x in rides]
     walk = sum(_secs(s.get("staticDuration")) for s in steps if s.get("travelMode") == "WALK")
     return round(_secs(r.get("duration")) / 60), {
         "lines": lines,
