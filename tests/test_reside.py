@@ -186,3 +186,27 @@ def test_chunks_merged_from_separate_workers_match_one_process(site):
     assert sorted(x.ext_id for x in res.listings) == sorted(x.ext_id for x in want.listings)
     assert {k: v for k, v in cache.items() if k != PLAN} == {k: v for k, v in serial.cache.items() if k != PLAN}
     assert set(cache) - {PLAN} == set(pages)
+
+
+def test_a_failed_page_keeps_its_last_copy_and_is_retried(site, monkeypatch):
+    pages, calls = site
+    a = Reside()
+    a.fetch()
+    flaky, new = list(pages)[0], "https://residenewyork.com/property/p99-" + FIX[0] + "/"
+    pages[flaky], pages[new] = "2026-10-02", "2026-10-02"
+    ok = reside.fetch.html
+
+    def html(u, **kw):
+        if u in (flaky, new):
+            raise reside.fetch.FetchError(f"GET {u}: The read operation timed out")
+        return ok(u, **kw)
+
+    monkeypatch.setattr(reside.fetch, "html", html)
+    b = Reside(dict(a.cache))
+    res = b.fetch_chunk(b.chunks()[0])
+    assert len(res.listings) == 40  # the flaky page's old listing kept, the new one not yet
+    assert b.cache[flaky]["lastmod"] == "2026-10-01" and new not in b.cache  # both fetched again next run
+    monkeypatch.setattr(reside, "MAX_FAILED", 1)
+    c = Reside(dict(a.cache))
+    with pytest.raises(RuntimeError, match="2 Reside pages failed"):
+        c.fetch_chunk(c.chunks()[0])
