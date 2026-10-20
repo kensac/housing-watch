@@ -35,6 +35,14 @@ def test_closed_project():
     assert lst.status == "closed" and listing_verdict(lst).verdict == "excluded"
 
 
+def test_page_without_status_label_is_unknown_not_open():
+    # 24 Wilson Ave 3D (2026-10-19): no property-status term and no label; Reside's form no longer offers it
+    lst = page("no-status-label")
+    assert lst.status == "unknown" and [u.size for u in lst.units] == ["1br"]
+    v = listing_verdict(lst)
+    assert v.verdict == "possible" and "no status" in v.reason
+
+
 def test_upcoming_project():
     lst = page("1-9-putnam-avenue")
     assert lst.status == "upcoming" and lst.borough == "Brooklyn"
@@ -55,7 +63,8 @@ def test_word_pasted_table_and_continuation_rows():
     (u,) = lst.units
     assert (u.size, u.unit_no, u.rent, u.ami) == ("1br", "1E", 2370.74, 150)
     assert bands(u) == [(1, 86152, 170100), (2, 86152, 194400), (3, 86152, 218700)]
-    assert lst.borough == "Manhattan" and listing_verdict(lst).verdict == "eligible"
+    # the page carries no status label, and Reside's form does not offer #1E: not marketed, so not open
+    assert lst.borough == "Manhattan" and lst.status == "unknown" and listing_verdict(lst).verdict == "possible"
 
 
 def test_multi_value_cells():
@@ -132,6 +141,11 @@ def site(monkeypatch):
         return (F / f"{u.rstrip('/').rsplit('/', 1)[-1].split('-', 1)[1]}.html").read_text()
 
     monkeypatch.setattr(reside.fetch, "html", html)
+
+    def no_form():
+        raise reside.fetch.FetchError("form not available in tests")
+
+    monkeypatch.setattr(reside, "read_form", no_form)  # statuses from the page labels unless a test sets a form
     monkeypatch.setattr(Reside, "min_listings", 1)
     monkeypatch.setattr(adapters, "CHUNK_LEAST", 5)
     return pages, calls
@@ -210,3 +224,49 @@ def test_a_failed_page_keeps_its_last_copy_and_is_retried(site, monkeypatch):
     c = Reside(dict(a.cache))
     with pytest.raises(RuntimeError, match="2 Reside pages failed"):
         c.fetch_chunk(c.chunks()[0])
+
+
+FORM_UNITS = (F / "form_units.txt").read_text().splitlines()  # Reside's form picker on 2026-10-19, 23:40 ET
+
+
+def test_form_option_labels():
+    assert reside.form_option("2 Blue Slip - Apt 9D - $2589.74 -") == ({"2 blue slip"}, {"9D"})
+    assert reside.form_option("2180 Walton Avenue - Apt. 10D - Apt 10B - $3128 -")[1] == {"10D", "10B"}
+    assert reside.form_option("36-10 31st Street - Unit 3A - Apt 3A - $3308.31 -") == ({"36-10 31 st"}, {"3A"})
+    assert reside.form_option("3317 Parkside PL Apt 3B - Apt 3B - $1857.63 -") == ({"3317 parkside pl"}, {"3B"})
+    assert reside.form_option("647 Sheffield Ave- Apt. 1A - Apt 1A - $2800.41 -") == ({"647 sheffield ave"}, {"1A"})
+    assert reside.form_option("2061Crotona - Apt 4B - $3787.95 -") == ({"2061 crotona"}, {"4B"})
+    assert all(reside.form_option(x)[0] and reside.form_option(x)[1] for x in FORM_UNITS), "every label parses"
+
+
+def test_the_form_decides_open():
+    options = [reside.form_option(x) for x in FORM_UNITS]
+    offered = reside.with_form(page("115-stanwix-st-apartment-unit-218"), options)  # in the form
+    assert offered.status == "open" and listing_verdict(offered).verdict == "eligible"
+    gone = reside.with_form(page("210-w-150-street-apartment-unit-1e"), options)  # not in the form
+    assert gone.status == "unknown" and "does not offer" in gone.notes
+    up = page("1-9-putnam-avenue")
+    assert reside.with_form(up, options).status == "upcoming"  # upcoming projects are never in the form
+
+
+def test_a_chunked_run_applies_the_form(site, monkeypatch):
+    pages, _ = site
+    monkeypatch.setattr(reside, "read_form", lambda: FORM_UNITS)
+    a = Reside()
+    res = a.fetch()
+    by = {x.ext_id: x for x in res.listings}
+    assert reside.FORM in a.cache and a.cache[reside.FORM]["units"] == FORM_UNITS
+    stanwix = [x for k, x in by.items() if k.endswith("115-stanwix-st-apartment-unit-218")]
+    assert stanwix and all(x.status == "open" for x in stanwix)
+    w150 = [x for k, x in by.items() if k.endswith("210-w-150-street-apartment-unit-1e")]
+    assert w150 and all(x.status == "unknown" for x in w150)
+    b = Reside(dict(a.cache))  # a warm run keeps judging cached listings against the form
+    monkeypatch.setattr(reside, "read_form", lambda: [x for x in FORM_UNITS if "Stanwix" not in x])
+    again = {x.ext_id: x for x in b.fetch().listings}
+    assert all(x.status == "unknown" for k, x in again.items() if k.endswith("115-stanwix-st-apartment-unit-218"))
+
+
+def test_a_stale_form_is_not_used(site, monkeypatch):
+    a = Reside()
+    a.cache[reside.FORM] = {"at": 0, "units": FORM_UNITS}  # 1970: far older than FORM_MAX_AGE
+    assert a._form_options() is None

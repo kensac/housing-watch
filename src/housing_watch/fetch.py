@@ -146,6 +146,24 @@ def rendered(url: str, wait_ms: int = 4000, expect: str | None = None, tries: in
     raise FetchError(f"render {url}: {expect!r} missing after {tries} renders ({len(body)} bytes)")
 
 
+@contextlib.contextmanager
+def browser(viewport: tuple[int, int] = (1300, 1400)):
+    """A headless Chromium page (Playwright) for pages that need clicks and scrolling, not just a render
+    (e.g. Reside's Airtable form). Runs on the byparr worker only, like rendered(); one at a time."""
+    if not BYPARR_URL:
+        raise NeedsByparr("browser: only the byparr worker runs a browser")
+    from playwright.sync_api import sync_playwright
+
+    with _render_lock, sync_playwright() as pw:
+        b = pw.chromium.launch(args=["--disable-dev-shm-usage"])  # docker gives /dev/shm only 64 MB
+        try:
+            page = b.new_page(viewport={"width": viewport[0], "height": viewport[1]}, user_agent=UA)
+            page.set_default_timeout(45_000)
+            yield page
+        finally:
+            b.close()
+
+
 def _render(url: str, wait_ms: int) -> str:
     try:
         with _render_lock, _slot(url):  # byparr drives one browser: one render at a time
