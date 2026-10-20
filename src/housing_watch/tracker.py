@@ -116,6 +116,8 @@ _STREET = {
     "drive": "dr", "parkway": "pkwy", "lane": "ln", "court": "ct", "terrace": "ter", "plaza": "plz",
     "west": "w", "east": "e", "north": "n", "south": "s", "of": "", "the": "",
 }  # fmt: skip
+_SUFFIX = {"st", "ave", "blvd", "rd", "pl", "dr", "pkwy", "ln", "ct", "ter", "plz", "way", "sq", "cir", "hwy"}
+_UNIT = re.compile(r"(?:\bunits?\s+|#|\bapt\.?\s+)((?:[a-z]*\d[\w-]*)(?:\s*(?:,|/|&|and)\s*#?[a-z]*\d[\w-]*)*)", re.I)
 _ADDR = re.compile(
     r"\b(\d+(?:-\d+)?)\s+((?:[a-z0-9.']+\s?){1,5}?)(?=$|,|\(|\)|\s(?:apt|unit|#|aka|apartments?)\b|\s#)", re.I
 )
@@ -135,9 +137,24 @@ def addr_keys(text: str | None) -> set[str]:
     for num, street in _ADDR.findall((text or "").lower()):
         words = [_STREET.get(w, w) for w in re.sub(r"[.']", "", street).split()]
         words = [re.sub(r"^(\d+)(st|nd|rd|th)$", r"\1", w) for w in words if w]
+        cut = next((i for i, w in enumerate(words) if w in _SUFFIX and i > 0), None)
+        words = words[: cut + 1] if cut is not None else words  # "69 amboy st 4b" -> "69 amboy st"
         if words and not all(w.isdigit() for w in words):
             out.add(f"{num} {' '.join(words)}")
     return out
+
+
+def units(text: str | None) -> set[str]:
+    """Unit numbers a row or listing names: 'Unit 218', 'Units 12N / 14N', '#13D', or a trailing '4B' / 'PH2'
+    after the street ('69 Amboy St 4B')."""
+    t = text or ""
+    out = {u.upper().lstrip("#") for m in _UNIT.findall(t) for u in re.split(r"\s*(?:,|/|&|and)\s*", m) if u}
+    tail = re.search(
+        r"\b(?:" + "|".join(_SUFFIX) + r"|street|avenue)\.?\s+((?:ph)?\d+[a-z]{1,2}|ph\d*|[a-z]\d+)\s*$", t, re.I
+    )
+    if tail:
+        out.add(tail.group(1).upper())
+    return {u for u in out if re.search(r"\d", u) or u.startswith("PH")}
 
 
 _GENERIC = {"apartments", "apartment", "apts", "the", "residences", "multiple", "units", "unit", "available"}
@@ -179,13 +196,24 @@ def match(listings: list, rows: list[TrackerRow], links: dict[str, str | None]) 
     row_urls = Counter(k for r in rows if (k := url_key(r.source_url)))
     listing_urls = Counter(url_key(x.url) for x in listings)
     by_url = {k: r for r in rows if (k := url_key(r.source_url)) and row_urls[k] == 1 and listing_urls[k] == 1}
-    by_addr: dict[str, TrackerRow] = {}
-    by_name: dict[str, TrackerRow] = {}
+    by_addr: dict[str, list[TrackerRow]] = {}
+    by_name: dict[str, list[TrackerRow]] = {}
+    row_units = {r.row_key: units(r.property) | units((r.notes or "").split("\n")[0]) for r in rows}
     for r in rows:
         for a in addr_keys(r.property):
-            by_addr.setdefault(a, r)
+            by_addr.setdefault(a, []).append(r)
         if n := name_key(r.property):
-            by_name.setdefault(n, r)
+            by_name.setdefault(n, []).append(r)
+
+    def pick(cands: list[TrackerRow], unit: set[str]) -> TrackerRow | None:
+        """A row naming this listing's unit; else a building-wide row (no units). A row for other units
+        of the building is not this listing's: applying for #218 says nothing about #302."""
+        if unit:
+            exact = [r for r in cands if row_units[r.row_key] & unit]
+            if exact:
+                return exact[0]
+        return next((r for r in cands if not row_units[r.row_key]), None)
+
     out: dict[str, Ref] = {}
     for x in listings:
         if x.key in links:
@@ -195,10 +223,13 @@ def match(listings: list, rows: list[TrackerRow], links: dict[str, str | None]) 
             continue  # a manual "not this row" (or a row since renamed) beats every automatic match
         if (u := url_key(x.url)) and u in by_url:
             out[x.key] = _ref(by_url[u], "url")
-        elif r := next((by_addr[a] for a in addr_keys(x.address) | addr_keys(x.title) if a in by_addr), None):
+            continue
+        unit = units(x.title)
+        cands = [r for a in sorted(addr_keys(x.address) | addr_keys(x.title)) for r in by_addr.get(a, [])]
+        if r := pick(cands, unit):
             out[x.key] = _ref(r, "address")
-        elif (n := name_key(x.title)) and n in by_name:
-            out[x.key] = _ref(by_name[n], "name")
+        elif (n := name_key(x.title)) and (r := pick(by_name.get(n, []), unit)):
+            out[x.key] = _ref(r, "name")
     return out
 
 
