@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from dataclasses import asdict
 
 from .. import ami, fetch, parse
@@ -21,6 +22,8 @@ log = logging.getLogger("housing_watch")
 
 SITEMAPS = [f"https://residenewyork.com/wp-sitemap-posts-property-{i}.xml" for i in (1, 2)]
 APPLY = "https://airtable.com/appsseXTOVx59HC0W/pagcVengefPFQvMZC/form"
+FORM = "_form"  # cache: {"at": epoch s, "units": [picker labels]}: the units Reside's form accepts
+FORM_MAX_AGE = 12 * 3600  # an older list is not used to judge status
 MAX_FAILED = 20  # more page failures than this in one run = something is wrong with the site
 PARSER = 5  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
 
@@ -235,6 +238,64 @@ def _from_dict(d: dict) -> Listing:
     return Listing(**{**d, "units": units})
 
 
+def read_form() -> list[str]:
+    """Every unit Reside's application form accepts: its "Add unit" picker options, e.g.
+    "2 Blue Slip - Apt 9D - $2589.74 -" (a virtualized list, so it is scrolled to the end). Needs a browser."""
+    seen: set[str] = set()
+    with fetch.browser() as p:
+        p.goto(APPLY, wait_until="load")
+        p.wait_for_timeout(3000)
+        reject = p.get_by_role("button", name="Reject All, Except Strictly Necessary")
+        if reject.count():
+            reject.first.click()
+        p.get_by_text("Add unit").first.click()
+        p.wait_for_timeout(1500)
+        still = 0
+        for _ in range(200):
+            before = len(seen)
+            seen.update(t.strip() for t in p.locator('[role="option"], li').all_inner_texts() if " - Apt " in t)
+            p.mouse.wheel(0, 400)
+            p.wait_for_timeout(250)
+            last = p.locator('[role="option"]').last
+            if last.count():
+                last.scroll_into_view_if_needed()
+            still = still + 1 if len(seen) == before else 0
+            if still >= 8:
+                break
+    if len(seen) < 10:
+        raise fetch.FetchError(f"Reside's form listed only {len(seen)} units")
+    return sorted(seen)
+
+
+def form_option(label: str) -> tuple[set[str], set[str]]:
+    """(address keys, unit numbers) of a picker label like "2180 Walton Avenue - Apt. 10D - Apt 10B - $3128 -"
+    or "36-10 31st Street - Unit 3A - Apt 3A - $3308.31 -" (the street part sometimes repeats the unit)."""
+    addr = re.split(r"\s*-\s+|\s+Apt\.?\s|\s+Unit\s", label, maxsplit=1)[0]
+    addr = re.sub(r"^(\d+(?:-\d+)?)(?=[a-z]{3})", r"\1 ", addr, flags=re.I)  # "2061Crotona"
+    return parse.addr_keys(addr), parse.units(label.split(" - $")[0])
+
+
+def accepting(lst: Listing, options: list[tuple[set[str], set[str]]]) -> bool:
+    """Whether the form offers this listing's unit (same address, same unit number)."""
+    keys = parse.addr_keys(lst.address) | parse.addr_keys(lst.title)
+    nums = {u.unit_no.upper() for u in lst.units if u.unit_no} or parse.units(lst.title)
+    return any(keys & a and nums & u for a, u in options) if keys and nums else False
+
+
+def with_form(lst: Listing, options: list[tuple[set[str], set[str]]]) -> Listing:
+    """Status from the form, which is what decides whether you can apply: a unit it offers is open whatever
+    its page says; an "open" page whose unit it does not offer is unknown. Upcoming stays upcoming."""
+    from dataclasses import replace
+
+    if accepting(lst, options):
+        note = "" if lst.status == "open" else f"page says {lst.status}, but Reside's application form offers this unit"
+        return replace(lst, status="open", notes="; ".join(x for x in (lst.notes, note) if x))
+    if lst.status in ("open", "unknown"):
+        note = "Reside's application form does not offer this unit, so it cannot be applied for now"
+        return replace(lst, status="unknown", notes="; ".join(x for x in (lst.notes, note) if x))
+    return lst
+
+
 class Reside(Adapter):
     name = "reside"
     title = "Reside New York"
@@ -265,7 +326,19 @@ class Reside(Adapter):
 
         todo = [[u, lm] for u, lm in entries if not fresh(u, lm)]
         c[PLAN] = spread(todo, [u for u, lm in entries if fresh(u, lm)], self.parallel)
+        try:  # the form decides open/not open; without a fresh list, statuses come from the pages' labels
+            c[FORM] = {"at": time.time(), "units": read_form()}
+        except fetch.NeedsByparr:
+            raise  # the fleet moves this run to the worker that has a browser
+        except Exception as e:  # noqa: BLE001 - a broken form page (Airtable, Playwright) must not stop the crawl
+            log.warning("reside: application form not read (%s); using the last list if it is fresh", e)
         return list(c[PLAN])
+
+    def _form_options(self) -> list[tuple[set[str], set[str]]] | None:
+        f = self.cache.get(FORM) or {}
+        if not f.get("units") or time.time() - f.get("at", 0) > FORM_MAX_AGE:
+            return None
+        return [form_option(x) for x in f["units"]]
 
     def fetch_chunk(self, key: str) -> Result:
         """Cached listings for the chunk's unchanged pages; its changed pages fetched, each cached under its url."""
@@ -285,6 +358,8 @@ class Reside(Adapter):
             out.append(lst)
         if len(failed) > MAX_FAILED // int(key.split("/")[1]):  # the run's allowance, shared by its chunks
             raise RuntimeError(f"{len(failed)} Reside pages failed to fetch, e.g. {failed[:3]}")
+        if (options := self._form_options()) is not None:
+            out = [with_form(x, options) for x in out]
         return Result(listings=out)
 
     def fetch(self) -> Result:

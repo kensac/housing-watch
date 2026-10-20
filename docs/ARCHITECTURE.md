@@ -33,6 +33,11 @@ queries.py  digest.py  web/ frontend/  READ      what changed, what fits        
   and every SANEL official document (`doc:<key>`), is its own top-level cache key, so chunk deltas
   never overlap. A cold Reside run is 4 chunks of ~530 pages; a run with few changed pages is one chunk,
   recorded inline.
+- Reside's unit pages are often stale (no status label at all, or "Open Market" on a unit nobody can
+  apply for), so its application form decides: `chunks()` reads the form's "Add unit" picker with a
+  headless browser (`fetch.browser()`, Playwright; `NeedsByparr` sends planning to hetzner) into
+  `cache["_form"]`, and every chunk marks a unit open if the form offers it, else `unknown` (verdict
+  possible). A failed read keeps the last list for 12 h, then statuses fall back to the page labels.
 
 ## Rules (criteria)
 

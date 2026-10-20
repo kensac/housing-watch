@@ -14,7 +14,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.engine import Engine
@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from . import fetch
 from .orm import TrackerLinkRow, TrackerRow
+from .parse import addr_keys, name_key, units, url_key
 
 SHEET = os.environ.get("HW_TRACKER_SHEET", "")
 TAB = os.environ.get("HW_TRACKER_TAB", "Properties")
@@ -110,62 +111,6 @@ def sync(engine: Engine) -> int:
 
 
 # --- matching ----------------------------------------------------------------------------------------------
-
-_STREET = {
-    "street": "st", "avenue": "ave", "av": "ave", "boulevard": "blvd", "road": "rd", "place": "pl",
-    "drive": "dr", "parkway": "pkwy", "lane": "ln", "court": "ct", "terrace": "ter", "plaza": "plz",
-    "west": "w", "east": "e", "north": "n", "south": "s", "of": "", "the": "",
-}  # fmt: skip
-_SUFFIX = {"st", "ave", "blvd", "rd", "pl", "dr", "pkwy", "ln", "ct", "ter", "plz", "way", "sq", "cir", "hwy"}
-_UNIT = re.compile(r"(?:\bunits?\s+|#|\bapt\.?\s+)((?:[a-z]*\d[\w-]*)(?:\s*(?:,|/|&|and)\s*#?[a-z]*\d[\w-]*)*)", re.I)
-_ADDR = re.compile(
-    r"\b(\d+(?:-\d+)?)\s+((?:[a-z0-9.']+\s?){1,5}?)(?=$|,|\(|\)|\s(?:apt|unit|#|aka|apartments?)\b|\s#)", re.I
-)
-
-
-def url_key(u: str | None) -> str | None:
-    if not u:
-        return None
-    p = urlsplit(u.strip().lower())
-    host = p.netloc.removeprefix("www.")
-    return (host + p.path.rstrip("/")) if host else None
-
-
-def addr_keys(text: str | None) -> set[str]:
-    """'42-10 27th St' / '241 West 28th Street' -> {'42-10 27 st'} / {'241 w 28 st'}: house number + street."""
-    out = set()
-    for num, street in _ADDR.findall((text or "").lower()):
-        words = [_STREET.get(w, w) for w in re.sub(r"[.']", "", street).split()]
-        words = [re.sub(r"^(\d+)(st|nd|rd|th)$", r"\1", w) for w in words if w]
-        cut = next((i for i, w in enumerate(words) if w in _SUFFIX and i > 0), None)
-        words = words[: cut + 1] if cut is not None else words  # "69 amboy st 4b" -> "69 amboy st"
-        if words and not all(w.isdigit() for w in words):
-            out.add(f"{num} {' '.join(words)}")
-    return out
-
-
-def units(text: str | None) -> set[str]:
-    """Unit numbers a row or listing names: 'Unit 218', 'Units 12N / 14N', '#13D', or a trailing '4B' / 'PH2'
-    after the street ('69 Amboy St 4B')."""
-    t = text or ""
-    out = {u.upper().lstrip("#") for m in _UNIT.findall(t) for u in re.split(r"\s*(?:,|/|&|and)\s*", m) if u}
-    tail = re.search(
-        r"\b(?:" + "|".join(_SUFFIX) + r"|street|avenue)\.?\s+((?:ph)?\d+[a-z]{1,2}|ph\d*|[a-z]\d+)\s*$", t, re.I
-    )
-    if tail:
-        out.add(tail.group(1).upper())
-    return {u for u in out if re.search(r"\d", u) or u.startswith("PH")}
-
-
-_GENERIC = {"apartments", "apartment", "apts", "the", "residences", "multiple", "units", "unit", "available"}
-
-
-def name_key(text: str | None) -> str | None:
-    """The building name before any '(address)', '#unit' or '|': 'The Cove (43-12 ...)' -> 'cove'."""
-    base = re.split(r"[(|#–—]", (text or "").lower())[0]
-    words = [w for w in re.findall(r"[a-z0-9]+", base) if w not in _GENERIC]
-    key = " ".join(words)
-    return key if len(key) >= 4 and not key.isdigit() else None
 
 
 @dataclass(frozen=True)

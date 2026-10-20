@@ -302,6 +302,7 @@ def test_reside_spreads_changed_pages_over_chunks_and_merges(fleet, pg, monkeypa
         return page
 
     monkeypatch.setattr(fetch, "html", html)
+    monkeypatch.setattr(reside, "read_form", lambda: [])  # no browser here; the form has its own tests
     monkeypatch.setattr(reside.Reside, "min_listings", 1)
     monkeypatch.setattr(adapters, "CHUNK_LEAST", 3)
     monkeypatch.setattr(tasks, "load_all", lambda: {**FAKES, "reside": reside.Reside})
@@ -311,7 +312,7 @@ def test_reside_spreads_changed_pages_over_chunks_and_merges(fleet, pg, monkeypa
     assert run.ok and run.chunks == 4 and run.listings == 12, run.error
     assert sorted(calls) == sorted(pages)  # every page fetched exactly once, across the chunks
     with Session(pg) as s:
-        assert set(db.load_cache(s, "reside")) == set(pages)  # every chunk's pages merged; the plan is not saved
+        assert set(db.load_cache(s, "reside")) == set(pages) | {reside.FORM}  # chunks merged; the plan is not saved
     calls.clear()
     moved, gone = list(pages)[0], list(pages)[-1]
     pages[moved] = "2026-10-02"
@@ -322,7 +323,7 @@ def test_reside_spreads_changed_pages_over_chunks_and_merges(fleet, pg, monkeypa
     assert run.ok and run.chunks is None and run.listings == 11 and calls == [moved]  # one small chunk, inline
     with Session(pg) as s:
         assert s.scalars(select(EventRow.key).where(EventRow.type == "gone")).all() == ["reside:p11"]
-        assert set(db.load_cache(s, "reside")) == set(pages)
+        assert set(db.load_cache(s, "reside")) == set(pages) | {reside.FORM}
 
 
 def test_inline_run_handles_chunks_and_byparr(fleet, pg):

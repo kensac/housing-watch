@@ -26,6 +26,11 @@ ENV UV_PYTHON_PREFERENCE=only-system \
     UV_LINK_MODE=copy
 RUN uv sync --frozen --no-dev --no-cache
 
+# Headless Chromium for sources whose data is only behind clicks (Reside's application form); hetzner only uses it.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN /app/.venv/bin/playwright install --with-deps --only-shell chromium \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY alembic ./alembic
 COPY src ./src
 COPY --from=web /web/dist ./src/housing_watch/web/dist
