@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import { api, qs, type ListResponse, type Unit } from '../api'
-import { SizeBadge, StatusBadge, VerdictBadge } from '../components/Badges'
+import { ApplicationBadge, SizeBadge, StatusBadge, VerdictBadge } from '../components/Badges'
 import { ListPage, ListRows, ListTable, MoreRow, SortTh, Summary, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { ago, date, minutes, money, pct, when } from '../format'
@@ -19,6 +19,7 @@ const CELLS: Cells<Unit> = {
   income: { label: 'Your Income Band', sort: 'income_min', right: true,
     cell: (u) => (u.income_min == null && u.income_max == null ? '—' : `${money(u.income_min)}–${money(u.income_max)}`) },
   commute: { label: 'Commute', sort: 'commute', right: true, cell: (u) => minutes(u.commute) },
+  application: { label: 'Application', cell: (u) => <ApplicationBadge s={u.application} /> },
   status: { label: 'Status', cell: (u) => <StatusBadge s={u.status} /> },
   borough: { label: 'Borough', sort: 'borough', cell: (u) => u.borough ?? '—' },
   deadline: { label: 'Deadline', sort: 'deadline', cell: (u) => date(u.deadline) },

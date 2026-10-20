@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, type MouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-import { api, qs, type Meta, type Page, type SavedView, type ViewState } from './api'
+import { api, qs, type Meta, type Page, type SavedView, type Tracker, type ViewState } from './api'
 
 export const TITLES: Record<Page, string> = { listings: 'Listings', units: 'Units', events: 'Events' }
 
@@ -98,4 +98,14 @@ export function rowClick(go: () => void) {
     if (window.getSelection()?.toString()) return
     go()
   }
+}
+
+export function useTracker() {
+  return useQuery({ queryKey: ['tracker'], queryFn: () => api.get<Tracker>('/api/tracker') })
+}
+
+/** Re-read everything a tracker link changes: the listing, the lists and the tracker page. */
+export function useTrackerRefresh() {
+  const qc = useQueryClient()
+  return () => Promise.all(['listing', 'listings', 'units', 'tracker', 'overview'].map((k) => qc.invalidateQueries({ queryKey: [k] })))
 }

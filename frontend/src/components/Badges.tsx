@@ -26,3 +26,13 @@ export const EventBadge = ({ t, baseline }: { t: string; baseline?: boolean }) =
     {baseline && t === 'new' ? 'first run' : t.replaceAll('_', ' ')}
   </Badge>
 )
+
+// the tracker sheet's Status dropdown, grouped by what it means for "what to apply to next"
+const APPLICATION_COLOR: Record<string, string> = {
+  'To Apply': 'orange', Seen: 'gray', Applied: 'blue', 'Interest Form Filled': 'blue', 'Under Review': 'indigo',
+  'Appeal Under Review': 'indigo', Contacted: 'teal', Rejected: 'red', 'Not interested': 'gray', Closed: 'gray',
+}
+
+export const ApplicationBadge = ({ s }: { s: string | null | undefined }) => (s
+  ? <Badge color={APPLICATION_COLOR[s] ?? 'gray'} variant="light" style={whole}>{s}</Badge>
+  : <>—</>)

@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import { api, qs, type Listing, type ListResponse, type ViewState } from '../api'
-import { SizeBadge, StatusBadge, VerdictBadge } from '../components/Badges'
+import { ApplicationBadge, SizeBadge, StatusBadge, VerdictBadge } from '../components/Badges'
 import { ListPage, ListRows, ListTable, MoreRow, SortTh, Summary, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { ago, date, minutes, money, pct, range, when } from '../format'
@@ -16,6 +16,7 @@ const CELLS: Cells<Listing> = {
   rent: { label: 'Rent (Fits You)', sort: 'rent', right: true, cell: (x) => range(x.rent_min, x.rent_max, money) },
   ami: { label: 'AMI', right: true, cell: (x) => range(x.ami_min, x.ami_max, pct) },
   commute: { label: 'Commute', sort: 'commute', right: true, cell: (x) => minutes(x.commute) },
+  application: { label: 'Application', cell: (x) => <ApplicationBadge s={x.application} /> },
   status: { label: 'Status', cell: (x) => <StatusBadge s={x.status} /> },
   deadline: { label: 'Deadline', sort: 'deadline', cell: (x) => date(x.deadline) },
   borough: { label: 'Borough', sort: 'borough', cell: (x) => x.borough ?? '—' },

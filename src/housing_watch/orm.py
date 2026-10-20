@@ -215,3 +215,27 @@ class CommuteRow(Base):
     route: Mapped[dict | None] = mapped_column(JSONB)  # {"lines": [...], "walk_min", "transfers"}
     depart: Mapped[datetime | None] = mapped_column(TS)  # the departure it was routed for
     computed: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
+class TrackerRow(Base):
+    """One row of the owner's application tracker sheet, as last synced (the sheet is the source of truth)."""
+
+    __tablename__ = "tracker_rows"
+    row_key: Mapped[str] = mapped_column(Text, primary_key=True)  # tracker.row_key(property)
+    position: Mapped[int] = mapped_column(Integer)  # sheet row number
+    property: Mapped[str] = mapped_column(Text)
+    status: Mapped[str | None] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text)
+    source_url: Mapped[str | None] = mapped_column(Text)  # the Apply / Source cell's link
+    page_url: Mapped[str | None] = mapped_column(Text)
+    cells: Mapped[dict] = mapped_column(JSONB, default=dict)  # every column by its header
+    synced: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
+class TrackerLinkRow(Base):
+    """A manual match the owner set in the UI: this listing is (row_key) or is not (None) that sheet row."""
+
+    __tablename__ = "tracker_links"
+    listing_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    row_key: Mapped[str | None] = mapped_column(Text)
+    created: Mapped[datetime] = mapped_column(TS, server_default=func.now())

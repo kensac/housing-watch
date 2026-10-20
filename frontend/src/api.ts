@@ -75,6 +75,10 @@ export interface Listing {
   ami_max: number | null
   commute?: number | null // transit minutes to work; only eligible listings get one
   commute_route?: CommuteRoute | null
+  application?: string | null // the tracker sheet's Status for this listing's row
+  application_notes?: string | null
+  tracker_row?: string | null // that row's Property
+  tracker_match?: 'url' | 'address' | 'name' | 'manual' | null
 }
 
 export interface Unit {
@@ -104,6 +108,7 @@ export interface Unit {
   verdict: Verdict
   reason: string
   commute?: number | null
+  application?: string | null
 }
 
 export interface Event {
@@ -221,6 +226,24 @@ export interface Fleet {
   queues: Record<string, Record<string, number>>
   failures: { id: number; queue_name: string; task_name: string; args: Record<string, unknown>; attempts: number; at: string | null; error: string | null }[]
   hosts: { name: string; last_run: string; runs_24h: number; fails_24h: number; sources: number }[]
+}
+
+export interface TrackerRow {
+  row_key: string
+  position: number
+  property: string
+  status: string | null
+  notes: string | null
+  source_url: string | null
+  page_url: string | null
+  cells: Record<string, string>
+  listings: { key: string; title: string; verdict: Verdict; status: string; how: string; commute: number | null }[]
+}
+
+export interface Tracker {
+  configured: boolean
+  synced: string | null
+  rows: TrackerRow[]
 }
 
 export class ApiError extends Error {}
