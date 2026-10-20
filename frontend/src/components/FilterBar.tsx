@@ -1,8 +1,9 @@
-import { Alert, Button, Group, Pill, Popover } from '@mantine/core'
+import { Alert, Button, Group, Pill, Popover, UnstyledButton } from '@mantine/core'
 import { IconFilterPlus } from '@tabler/icons-react'
 import { useState } from 'react'
 
 import type { Chip, Page } from '../api'
+import { useMotion } from '../hooks'
 import { FilterEditor } from './FilterEditor'
 
 interface Props {
@@ -14,21 +15,29 @@ interface Props {
   onChange: (f: string[]) => void
 }
 
-/** The active filters as pills (click one to edit it) plus "Add filter"; every change is in the URL. */
+/** The active filters as pills (click one to edit it, × to remove it) plus "Add Filter"; every change is in the
+ * URL, so the browser's Back undoes it. */
 export function FilterBar({ page, f, chips, problems, q, onChange }: Props) {
   const [editing, setEditing] = useState<number | 'new' | null>(null)
+  const motion = useMotion()
   const others = (i: number | 'new') => f.filter((_, j) => j !== i)
   const close = () => setEditing(null)
   return (
     <>
-      <Group gap="xs">
+      <Group gap="xs" role="group" aria-label="Filters">
         {chips.map((c) => { const i = c.i; return (
-          <Popover key={c.f} opened={editing === i} onChange={(o) => !o && close()} position="bottom-start" withArrow trapFocus>
+          <Popover key={c.f} opened={editing === i} onChange={(o) => !o && close()} position="bottom-start" withArrow trapFocus
+            returnFocus transitionProps={motion}>
             <Popover.Target>
-              <Pill size="lg" withRemoveButton onRemove={() => onChange(others(i))} onClick={() => setEditing(i)}
-                style={{ cursor: 'pointer' }}>{c.label}</Pill>
+              <Pill size="lg" withRemoveButton onRemove={() => onChange(others(i))}
+                removeButtonProps={{ 'aria-hidden': false, tabIndex: 0, 'aria-label': `Remove filter: ${c.label}` }}>
+                <UnstyledButton fz="inherit" lh="inherit" onClick={() => setEditing(editing === i ? null : i)}
+                  aria-haspopup="dialog" aria-expanded={editing === i} aria-label={`Edit filter: ${c.label}`}>
+                  {c.label}
+                </UnstyledButton>
+              </Pill>
             </Popover.Target>
-            <Popover.Dropdown>
+            <Popover.Dropdown aria-label={`Edit filter: ${c.label}`}>
               {editing === i && (
                 <FilterEditor page={page} current={c} others={others(i)} q={q}
                   onApply={(nf) => { onChange(f.map((x, j) => (j === i ? nf : x))); close() }}
@@ -37,21 +46,25 @@ export function FilterBar({ page, f, chips, problems, q, onChange }: Props) {
             </Popover.Dropdown>
           </Popover>
         ) })}
-        <Popover opened={editing === 'new'} onChange={(o) => !o && close()} position="bottom-start" withArrow trapFocus>
+        <Popover opened={editing === 'new'} onChange={(o) => !o && close()} position="bottom-start" withArrow trapFocus
+          returnFocus transitionProps={motion}>
           <Popover.Target>
-            <Button variant="default" size="xs" leftSection={<IconFilterPlus size={14} />} onClick={() => setEditing('new')}>
-              Add filter
+            <Button variant="default" size="xs" leftSection={<IconFilterPlus size={14} aria-hidden />}
+              onClick={() => setEditing(editing === 'new' ? null : 'new')} aria-haspopup="dialog" aria-expanded={editing === 'new'}>
+              Add Filter
             </Button>
           </Popover.Target>
-          <Popover.Dropdown>
+          <Popover.Dropdown aria-label="Add a filter">
             {editing === 'new' && (
               <FilterEditor page={page} others={f} q={q} onApply={(nf) => { onChange([...f, nf]); close() }} />
             )}
           </Popover.Dropdown>
         </Popover>
-        {f.length > 0 && <Button variant="subtle" size="xs" onClick={() => onChange([])}>Clear</Button>}
+        {f.length > 0 && <Button variant="subtle" size="xs" onClick={() => onChange([])}>Clear Filters</Button>}
       </Group>
-      {problems.map((p) => <Alert key={p} color="red" variant="light" title="Filter ignored">{p}</Alert>)}
+      {problems.map((p) => (
+        <Alert key={p} color="red" variant="light" title="Filter ignored: it has no effect on the list">{p}</Alert>
+      ))}
     </>
   )
 }
