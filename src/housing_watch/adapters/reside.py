@@ -9,6 +9,7 @@ page prints, with sizes taken from the copy and floor-plan images. Applying is o
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import asdict
 
@@ -16,8 +17,11 @@ from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
 from . import PLAN, Adapter, spread
 
+log = logging.getLogger("housing_watch")
+
 SITEMAPS = [f"https://residenewyork.com/wp-sitemap-posts-property-{i}.xml" for i in (1, 2)]
 APPLY = "https://airtable.com/appsseXTOVx59HC0W/pagcVengefPFQvMZC/form"
+MAX_FAILED = 20  # more page failures than this in one run = something is wrong with the site
 PARSER = 4  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
 
 
@@ -264,10 +268,20 @@ class Reside(Adapter):
         """Cached listings for the chunk's unchanged pages; its changed pages fetched, each cached under its url."""
         part = self.cache[PLAN][key]
         out = [_from_dict(self.cache[u]["listing"]) for u in part["keep"]]
+        failed = []
         for url, lastmod in part["fetch"]:
-            lst = parse_page(url, fetch.html(url))
+            try:
+                lst = parse_page(url, fetch.html(url))
+            except fetch.FetchError as e:
+                log.warning("reside: %s", e)
+                failed.append(url)
+                if (hit := self.cache.get(url)) and hit.get("listing"):  # keep the last good copy; its old
+                    out.append(_from_dict(hit["listing"]))  # lastmod makes the next run fetch it again
+                continue  # a new page waits for the next run
             self.cache[url] = {"lastmod": lastmod, "v": PARSER, "listing": asdict(lst)}
             out.append(lst)
+        if len(failed) > MAX_FAILED // int(key.split("/")[1]):  # the run's allowance, shared by its chunks
+            raise RuntimeError(f"{len(failed)} Reside pages failed to fetch, e.g. {failed[:3]}")
         return Result(listings=out)
 
     def fetch(self) -> Result:
