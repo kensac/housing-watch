@@ -29,7 +29,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from . import db, metrics, runner
+from . import commute, db, metrics, runner
 from .adapters import load_all
 from .fetch import NeedsByparr
 from .orm import FleetWorkerRow
@@ -239,6 +239,13 @@ async def retry_stalled(context, timestamp: int) -> str:
     for job in jobs:
         await context.app.job_manager.retry_job(job)
     return f"{len(jobs)} stalled jobs retried"
+
+
+@app.periodic(cron="*/10 * * * *")
+@app.task(name="commute", queue=DIGEST, queueing_lock="commute", retry=False)
+def commute_task(timestamp: int) -> str:
+    """Route eligible listings that have no commute yet (on the digest worker: it has the key and destination)."""
+    return f"{commute.refresh(engine())} routed"
 
 
 @app.periodic(cron="23 4 * * *")

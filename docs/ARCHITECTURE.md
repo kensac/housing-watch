@@ -128,6 +128,10 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   worker + web, the web started only when `HW_WEB_PORT` is set) on the tailnet only. The one table it
   writes is `saved_views` (`views.py`: a filter AST + sort + columns per page, re-validated against the
   field registry on load), through same-origin POST/PATCH/DELETE. Nothing is seeded.
+- `commute.py` routes eligible, listed listings to `HW_COMMUTE_TO` by transit (Google Routes API, weekday
+  8:30 AM), each origin address once per destination (again after 60 days), into `commutes`; a periodic
+  `commute` task on the digest worker does it. queries.py attaches the minutes and lines at read time
+  (`commute` filter field, sort and column).
 - `applications.py` recognises known paper application forms by their fillable field names (today HPD's
   HC2.0 application) and fills them from the applicant file (`HW_APPLICANT_FILE`, private, host-only;
   signs and dates the applicant's line; never the SSN). The drawer checks a listing's linked PDFs lazily; a download is built

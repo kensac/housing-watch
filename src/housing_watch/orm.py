@@ -202,3 +202,16 @@ class FleetWorkerRow(Base):
     concurrency: Mapped[int] = mapped_column(Integer)
     started: Mapped[datetime] = mapped_column(TS)
     last_seen: Mapped[datetime] = mapped_column(TS)  # heartbeat, every HEARTBEAT seconds while running
+
+
+class CommuteRow(Base):
+    """A transit route from one listing address to one destination, as the routing API returned it."""
+
+    __tablename__ = "commutes"
+    origin: Mapped[str] = mapped_column(Text, primary_key=True)  # commute.origin(address, borough)
+    destination: Mapped[str] = mapped_column(Text, primary_key=True)  # HW_COMMUTE_TO
+    minutes: Mapped[int | None] = mapped_column(Integer)  # None: no route found
+    status: Mapped[str] = mapped_column(Text)  # ok | no_route | failed
+    route: Mapped[dict | None] = mapped_column(JSONB)  # {"lines": [...], "walk_min", "transfers"}
+    depart: Mapped[datetime | None] = mapped_column(TS)  # the departure it was routed for
+    computed: Mapped[datetime] = mapped_column(TS, server_default=func.now())

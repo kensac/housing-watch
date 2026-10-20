@@ -26,11 +26,12 @@ from ..criteria import PROFILE, Profile
 DIST = Path(__file__).parent / "dist"
 SORTS = {
     "listings": {"verdict": "Verdict", "changed": "Last changed", "first_seen": "First seen",
-                 "rent": "Lowest rent that fits", "deadline": "Deadline", "title": "Title", "source": "Source",
-                 "borough": "Borough"},
-    "units": {"verdict": "Verdict", "rent": "Rent", "ami": "AMI", "size": "Size", "income_min": "Income min",
-              "income_max": "Income max", "changed": "Last changed", "first_seen": "First seen",
-              "deadline": "Deadline", "title": "Building", "borough": "Borough", "source": "Source"},
+                 "rent": "Lowest rent that fits", "commute": "Commute", "deadline": "Deadline", "title": "Title",
+                 "source": "Source", "borough": "Borough"},
+    "units": {"verdict": "Verdict", "rent": "Rent", "commute": "Commute", "ami": "AMI", "size": "Size",
+              "income_min": "Income min", "income_max": "Income max", "changed": "Last changed",
+              "first_seen": "First seen", "deadline": "Deadline", "title": "Building", "borough": "Borough",
+              "source": "Source"},
 }  # fmt: skip
 Filters = Annotated[list[str] | None, Query()]  # repeated ?f=<field>.<op>.<values>
 _PRIVATE = ("unit_sizes", "unit_rents", "haystack")  # ListingSummary's internal fields
