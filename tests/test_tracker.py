@@ -146,7 +146,8 @@ def test_a_unit_row_does_not_cover_other_units():
                             ("2710 Decatur Ave, Unit 1B, Bronx", "To Apply", None),
                             ("2710 Decatur Ave PH2", None, None),
                             ("ONE LIC (42-10 27th St)", "To Apply", "Units #7D, #13D.\nApplication: paper."),
-                            ("Waterside Plaza", "Applied", None)]]  # fmt: skip
+                            ("Waterside Plaza", "Applied", None),
+                            ("SVEN", "Applied", "Log #8984.\nRents checked.")]]  # fmt: skip
 
     def x(key, title, address=None):
         return SimpleNamespace(key=key, title=title, address=address, url="")
@@ -157,11 +158,14 @@ def test_a_unit_row_does_not_cover_other_units():
                    x("dph", "2710 Decatur Ave #PH2", "2710 Decatur Ave, Bronx, NY 10458"),
                    x("o13", "ONE LIC Multiple units available 0926 #13D", "42-10 27th St, Queens"),
                    x("o9", "ONE LIC #9A", "42-10 27th St, Queens"),
-                   x("w", "Waterside Plaza #10-03G")], rows, {})  # fmt: skip
+                   x("w", "Waterside Plaza #10-03G"), x("sv", "SVEN #21N"),
+                   x("sb", "115 Stanwix Street, Brooklyn NY, 11206", "115 Stanwix Street")], rows, {})  # fmt: skip
     assert {k: r.property for k, r in got.items()} == {
         "s218": "115 Stanwix St, Unit 218",
         "d1b": "2710 Decatur Ave, Unit 1B, Bronx",
         "dph": "2710 Decatur Ave PH2",
         "o13": "ONE LIC (42-10 27th St)",
         "w": "Waterside Plaza",  # a building-wide row covers every unit
+        "sv": "SVEN",  # "Log #8984" in the notes is not a unit
+        "sb": "115 Stanwix St, Unit 218",  # a listing naming no unit takes its building's row
     }  # s302 and o9 are other units of buildings whose rows name specific units
