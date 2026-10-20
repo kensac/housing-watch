@@ -129,3 +129,39 @@ def test_tracker_api_and_manual_links(synced):
 def test_sync_is_off_unconfigured(pg, monkeypatch):
     monkeypatch.setattr(T, "SHEET", "")
     assert T.sync(pg) == 0
+
+
+def test_units():
+    assert T.units("115 Stanwix St, Unit 218") == {"218"}
+    assert T.units("2 Blue Slip, Units 12N / 14N, Greenpoint") == {"12N", "14N"}
+    assert T.units("69 Amboy St 4B") == {"4B"} and T.units("2710 Decatur Ave PH2") == {"PH2"}
+    assert T.units("2710 Decatur Ave #PH2") == {"PH2"} and T.units("Units #7D, #13D.") == {"7D", "13D"}
+    assert T.units("Waterside Plaza #10-03G") == {"10-03G"} and T.units("SVEN") == set()
+    assert T.addr_keys("69 Amboy St 4B") == {"69 amboy st"}
+
+
+def test_a_unit_row_does_not_cover_other_units():
+    rows = [SimpleNamespace(row_key=T.row_key(p), property=p, status=s, notes=n, source_url=None)
+            for p, s, n in [("115 Stanwix St, Unit 218", "Interest Form Filled", None),
+                            ("2710 Decatur Ave, Unit 1B, Bronx", "To Apply", None),
+                            ("2710 Decatur Ave PH2", None, None),
+                            ("ONE LIC (42-10 27th St)", "To Apply", "Units #7D, #13D.\nApplication: paper."),
+                            ("Waterside Plaza", "Applied", None)]]  # fmt: skip
+
+    def x(key, title, address=None):
+        return SimpleNamespace(key=key, title=title, address=address, url="")
+
+    got = T.match([x("s218", "115 Stanwix Street Apartment – Unit 218", "115 Stanwix Street"),
+                   x("s302", "115 Stanwix Street Apartment – Unit 302", "115 Stanwix Street"),
+                   x("d1b", "2710 Decatur Avenue, Unit 1B", "2710 Decatur Avenue, Bronx, NY"),
+                   x("dph", "2710 Decatur Ave #PH2", "2710 Decatur Ave, Bronx, NY 10458"),
+                   x("o13", "ONE LIC Multiple units available 0926 #13D", "42-10 27th St, Queens"),
+                   x("o9", "ONE LIC #9A", "42-10 27th St, Queens"),
+                   x("w", "Waterside Plaza #10-03G")], rows, {})  # fmt: skip
+    assert {k: r.property for k, r in got.items()} == {
+        "s218": "115 Stanwix St, Unit 218",
+        "d1b": "2710 Decatur Ave, Unit 1B, Bronx",
+        "dph": "2710 Decatur Ave PH2",
+        "o13": "ONE LIC (42-10 27th St)",
+        "w": "Waterside Plaza",  # a building-wide row covers every unit
+    }  # s302 and o9 are other units of buildings whose rows name specific units
