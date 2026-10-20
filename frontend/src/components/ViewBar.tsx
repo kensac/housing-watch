@@ -6,85 +6,126 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { api, type Page, type SavedView, type ViewState } from '../api'
-import { stateUrl, useMeta, useRefreshViews } from '../hooks'
+import { stateUrl, TITLES, useMeta, useMotion, useRefreshViews } from '../hooks'
 
-const TITLES: Record<Page, string> = { listings: 'Listings', units: 'Units', events: 'Events' }
-
-function fail(e: unknown) {
-  notifications.show({ color: 'red', title: 'Could not save the view', message: String((e as Error).message ?? e) })
-}
+const message = (e: unknown) => String((e as Error)?.message ?? e)
 
 /** The page title, or the open saved view with its actions. Views are only ever created by the user. */
 export function ViewBar({ page, state, view, modified }: { page: Page; state: ViewState; view: SavedView | null; modified: boolean }) {
   const meta = useMeta().data
   const refresh = useRefreshViews()
   const navigate = useNavigate()
+  const motion = useMotion()
   const [naming, setNaming] = useState<null | 'new' | 'rename'>(null)
   const [name, setName] = useState('')
   const [isDefault, setDefault] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null) // the action in flight, for its button's spinner
 
   const go = (v: SavedView) => navigate(stateUrl(page, v.state, meta, v.id))
-  const run = async (fn: () => Promise<SavedView | void>, after?: (v: SavedView | void) => void) => {
-    try { const v = await fn(); await refresh(); after?.(v) } catch (e) { fail(e) }
-  }
-  const submit = () => {
-    if (naming === 'new') {
-      run(() => api.post<SavedView>('/api/views', { page, name, is_default: isDefault, state }), (v) => v && go(v))
-    } else if (view) {
-      run(() => api.patch<SavedView>(`/api/views/${view.id}`, { name }))
+  /** Runs a view change; says what happened either way. Returns false when it failed. */
+  const run = async (what: string, done: string, fn: () => Promise<SavedView | void>, after?: (v: SavedView | void) => void) => {
+    setBusy(what)
+    try {
+      const v = await fn()
+      await refresh()
+      after?.(v)
+      notifications.show({ color: 'green', message: done })
+      return true
+    } catch (e) {
+      notifications.show({ color: 'red', title: `Couldn’t ${what}`, message: `${message(e)} Try again; your filters are still in the address bar.` })
+      return false
+    } finally {
+      setBusy(null)
     }
-    setNaming(null)
   }
-  const openName = (kind: 'new' | 'rename') => { setName(kind === 'rename' && view ? view.name : ''); setDefault(false); setNaming(kind) }
+  const submit = async () => {
+    const n = name.trim()
+    if (!n) { setNameError('Enter a name for the view.'); return }
+    setBusy('save the view')
+    try {
+      const v = naming === 'new'
+        ? await api.post<SavedView>('/api/views', { page, name: n, is_default: isDefault, state })
+        : await api.patch<SavedView>(`/api/views/${view!.id}`, { name: n })
+      await refresh()
+      setNaming(null)
+      notifications.show({ color: 'green', message: naming === 'new' ? `Saved “${n}”` : `Renamed to “${n}”` })
+      if (naming === 'new') go(v)
+    } catch (e) {
+      setNameError(message(e)) // e.g. a duplicate name: shown on the field, the dialog stays open
+    } finally {
+      setBusy(null)
+    }
+  }
+  const openName = (kind: 'new' | 'rename') => {
+    setName(kind === 'rename' && view ? view.name : ''); setDefault(false); setNameError(null); setNaming(kind)
+  }
 
   return (
     <Stack gap="xs">
-      <Group justify="space-between" wrap="nowrap">
-        <Group gap="xs" wrap="nowrap">
-          <Title order={3}>{view ? view.name : TITLES[page]}</Title>
+      <Group justify="space-between" gap="xs">
+        <Group gap="xs" miw={0}>
+          <Title order={1} size="h3" textWrap="balance">{view ? view.name : TITLES[page]}</Title>
           {view?.is_default && <Badge variant="light">default</Badge>}
           {modified && <Badge color="orange" variant="light">modified</Badge>}
         </Group>
-        <Group gap="xs" wrap="nowrap">
+        <Group gap="xs">
           {view && modified && (
             <>
-              <Button size="xs" variant="subtle" onClick={() => go(view)}>Discard</Button>
-              <Button size="xs" onClick={() => run(() => api.patch<SavedView>(`/api/views/${view.id}`, { state }))}>Save changes</Button>
+              <Button size="xs" variant="subtle" onClick={() => go(view)}>Discard Changes</Button>
+              <Button size="xs" loading={busy === 'save the changes'}
+                onClick={() => run('save the changes', `Saved changes to “${view.name}”`, () => api.patch<SavedView>(`/api/views/${view.id}`, { state }))}>
+                Save Changes
+              </Button>
             </>
           )}
           <Button size="xs" variant={view && modified ? 'default' : 'filled'} onClick={() => openName('new')}>
-            {view ? 'Save as new view' : 'Save view'}
+            {view ? 'Save as New View' : 'Save View'}
           </Button>
           {view && (
-            <Menu position="bottom-end" withinPortal>
-              <Menu.Target><ActionIcon variant="default" aria-label="View actions"><IconDots size={16} /></ActionIcon></Menu.Target>
+            <Menu position="bottom-end" withinPortal transitionProps={motion}>
+              <Menu.Target>
+                <ActionIcon variant="default" size="input-xs" aria-label={`Actions for view “${view.name}”`} loading={Boolean(busy && busy !== 'save the changes' && busy !== 'save the view')}>
+                  <IconDots size={16} aria-hidden />
+                </ActionIcon>
+              </Menu.Target>
               <Menu.Dropdown>
-                <Menu.Item leftSection={<IconPencil size={14} />} onClick={() => openName('rename')}>Rename</Menu.Item>
-                <Menu.Item leftSection={view.is_default ? <IconStarOff size={14} /> : <IconStar size={14} />}
-                  onClick={() => run(() => api.patch(`/api/views/${view.id}`, { is_default: !view.is_default }))}>
-                  {view.is_default ? 'Stop opening by default' : 'Open by default'}
+                <Menu.Item leftSection={<IconPencil size={14} aria-hidden />} onClick={() => openName('rename')}>Rename…</Menu.Item>
+                <Menu.Item leftSection={view.is_default ? <IconStarOff size={14} aria-hidden /> : <IconStar size={14} aria-hidden />}
+                  onClick={() => run('change the default view', view.is_default ? `“${view.name}” no longer opens by default` : `“${view.name}” now opens by default`,
+                    () => api.patch(`/api/views/${view.id}`, { is_default: !view.is_default }))}>
+                  {view.is_default ? 'Stop Opening by Default' : 'Open by Default'}
                 </Menu.Item>
-                <Menu.Item leftSection={<IconCopy size={14} />}
-                  onClick={() => run(() => api.post<SavedView>(`/api/views/${view.id}/duplicate`), (v) => v && go(v))}>Duplicate</Menu.Item>
-                <Menu.Item leftSection={<IconArrowUp size={14} />} onClick={() => run(() => api.patch(`/api/views/${view.id}`, { move: -1 }))}>Move up</Menu.Item>
-                <Menu.Item leftSection={<IconArrowDown size={14} />} onClick={() => run(() => api.patch(`/api/views/${view.id}`, { move: 1 }))}>Move down</Menu.Item>
+                <Menu.Item leftSection={<IconCopy size={14} aria-hidden />}
+                  onClick={() => run('duplicate the view', `Duplicated “${view.name}”`, () => api.post<SavedView>(`/api/views/${view.id}/duplicate`), (v) => v && go(v))}>
+                  Duplicate
+                </Menu.Item>
+                <Menu.Item leftSection={<IconArrowUp size={14} aria-hidden />}
+                  onClick={() => run('move the view', `Moved “${view.name}” up`, () => api.patch(`/api/views/${view.id}`, { move: -1 }))}>Move Up</Menu.Item>
+                <Menu.Item leftSection={<IconArrowDown size={14} aria-hidden />}
+                  onClick={() => run('move the view', `Moved “${view.name}” down`, () => api.patch(`/api/views/${view.id}`, { move: 1 }))}>Move Down</Menu.Item>
                 <Menu.Divider />
-                <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={() => modals.openConfirmModal({
-                  title: `Delete “${view.name}”?`, labels: { confirm: 'Delete', cancel: 'Cancel' }, confirmProps: { color: 'red' },
-                  onConfirm: () => run(() => api.delete(`/api/views/${view.id}`), () => navigate(stateUrl(page, view.state, meta))),
-                })}>Delete</Menu.Item>
+                <Menu.Item color="red" leftSection={<IconTrash size={14} aria-hidden />} onClick={() => modals.openConfirmModal({
+                  title: `Delete “${view.name}”?`, children: 'The view’s filters, sort and columns are removed. Listings are not affected.',
+                  labels: { confirm: 'Delete View', cancel: 'Keep View' }, confirmProps: { color: 'red' }, transitionProps: motion,
+                  onConfirm: () => run('delete the view', `Deleted “${view.name}”`, () => api.delete(`/api/views/${view.id}`), () => navigate(stateUrl(page, view.state, meta))),
+                })}>Delete…</Menu.Item>
               </Menu.Dropdown>
             </Menu>
           )}
         </Group>
       </Group>
       {view?.warnings.map((w) => <Alert key={w} color="orange" variant="light">{w}</Alert>)}
-      <Modal opened={naming !== null} onClose={() => setNaming(null)} title={naming === 'new' ? 'Save view' : 'Rename view'}>
+      <Modal opened={naming !== null} onClose={() => setNaming(null)} title={naming === 'new' ? 'Save View' : 'Rename View'} transitionProps={motion}>
         <form onSubmit={(e) => { e.preventDefault(); submit() }}>
           <Stack>
-            <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} data-autofocus maxLength={80} required />
+            <TextInput label="Name" name="view-name" autoComplete="off" placeholder="e.g. Brooklyn studios under $1,500…" value={name}
+              onChange={(e) => { setName(e.currentTarget.value); setNameError(null) }} error={nameError} data-autofocus maxLength={80} required />
             {naming === 'new' && <Checkbox label={`Open by default on ${TITLES[page]}`} checked={isDefault} onChange={(e) => setDefault(e.currentTarget.checked)} />}
-            <Group justify="flex-end"><Button type="submit" disabled={!name.trim()}>Save</Button></Group>
+            <Group justify="flex-end">
+              <Button variant="default" onClick={() => setNaming(null)}>Cancel</Button>
+              <Button type="submit" loading={busy === 'save the view'}>{naming === 'new' ? 'Save View' : 'Rename View'}</Button>
+            </Group>
           </Stack>
         </form>
       </Modal>

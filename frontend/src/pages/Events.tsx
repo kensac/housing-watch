@@ -1,17 +1,36 @@
-import { Table, Text } from '@mantine/core'
+import { Anchor, Table, Text } from '@mantine/core'
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
 
 import { api, qs, type Event, type EventsResponse } from '../api'
 import { EventBadge, VerdictBadge } from '../components/Badges'
-import { ListPage, MoreRow } from '../components/ListPage'
+import { ListPage, ListRows, ListTable, MoreRow, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
-import { ago, when } from '../format'
+import { ago, num, when } from '../format'
 import { useListState } from '../hooks'
 
-const CELLS: Record<string, { label: string; cell: (e: Event) => React.ReactNode }> = {
+const CELLS: Cells<Event> = {
   verdict: { label: 'Verdict', cell: (e) => <VerdictBadge v={e.verdict} /> },
-  source: { label: 'Source', cell: (e) => e.source },
-  mailed: { label: 'Mailed', cell: (e) => (e.notified ? ago(e.notified) : '—') },
+  source: { label: 'Source', cell: (e) => <span translate="no">{e.source}</span> },
+  mailed: { label: 'Mailed', cell: (e) => (e.notified ? <span title={when(e.notified)}>{ago(e.notified)}</span> : '—') },
+}
+
+const rowKey = (e: Event) => e.id
+const openKey = (e: Event) => e.key
+const lead = (e: Event, to: string | null) => {
+  const what = e.title ?? e.summary ?? e.source
+  return (
+    <>
+      <Table.Td style={{ whiteSpace: 'nowrap' }}><Text size="sm" title={when(e.at)}>{ago(e.at)}</Text></Table.Td>
+      <Table.Td><EventBadge t={e.type} baseline={e.baseline} /></Table.Td>
+      <Table.Td maw={520}>
+        {to
+          ? <Anchor component={Link} to={to} c="inherit" size="sm" lineClamp={1}>{what}</Anchor>
+          : <Text size="sm" lineClamp={1}>{what}</Text>}
+      </Table.Td>
+    </>
+  )
 }
 
 export function EventsPage() {
@@ -26,37 +45,33 @@ export function EventsPage() {
     enabled: ctx.ready,
   })
   const first = q.data?.pages[0]
-  const rows = q.data?.pages.flatMap((p) => p.items) ?? []
+  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data])
   return (
     <ListPage page="events" search={false} chips={first?.filters ?? []} problems={first?.problems ?? []}
-      summary={first && `${first.total.toLocaleString()} events, newest first`}>
-      {({ state, set, open }) => (
-        <>
-          <Table.ScrollContainer minWidth={800}>
-            <Table stickyHeader highlightOnHover verticalSpacing={6}>
+      error={q.isError && !q.data ? q.error : undefined} retry={() => q.refetch()}
+      summary={first && `${num(first.total)} events, newest first`}>
+      {({ state, set, base, open }) => {
+        const cols = state.columns.filter((c) => c in CELLS)
+        return (
+          <>
+            <ListTable label="Events" minWidth={800} stale={q.isPlaceholderData}>
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Time</Table.Th><Table.Th>Event</Table.Th><Table.Th>What</Table.Th>
-                  {state.columns.map((c) => <Table.Th key={c}>{CELLS[c].label}</Table.Th>)}
+                  {cols.map((c) => <Table.Th key={c}>{CELLS[c].label}</Table.Th>)}
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {rows.map((e) => (
-                  <Table.Tr key={e.id} onClick={() => e.key && set({ open: e.key })} style={{ cursor: e.key ? 'pointer' : undefined }}>
-                    <Table.Td style={{ whiteSpace: 'nowrap' }}><Text size="sm" title={when(e.at)}>{ago(e.at)}</Text></Table.Td>
-                    <Table.Td><EventBadge t={e.type} baseline={e.baseline} /></Table.Td>
-                    <Table.Td><Text size="sm" lineClamp={1}>{e.title ?? e.summary ?? e.source}</Text></Table.Td>
-                    {state.columns.map((c) => <Table.Td key={c}>{CELLS[c].cell(e)}</Table.Td>)}
-                  </Table.Tr>
-                ))}
-                <MoreRow cols={state.columns.length + 3} more={Boolean(q.hasNextPage)} loading={q.isFetching}
-                  onMore={() => q.fetchNextPage()} total={first?.total ?? 0} noun="events" />
+                <ListRows page="events" rows={rows} cols={cols.join(',')} base={base} cells={CELLS} rowKey={rowKey} openKey={openKey} lead={lead} />
+                <MoreRow cols={cols.length + 3} more={Boolean(q.hasNextPage)} loading={q.isFetching} failed={q.isFetchNextPageError}
+                  onMore={() => q.fetchNextPage()} total={first?.total ?? 0} noun="events"
+                  onClear={state.f.length ? () => set({ f: [] }) : undefined} clearLabel="Clear Filters" />
               </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-          <ListingDrawer k={open} onClose={() => set({ open: null })} />
-        </>
-      )}
+            </ListTable>
+            <ListingDrawer k={open} onClose={() => set({ open: null })} />
+          </>
+        )
+      }}
     </ListPage>
   )
 }

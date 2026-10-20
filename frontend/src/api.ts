@@ -48,6 +48,8 @@ export interface ListResponse<T> {
   hidden_gone: boolean
 }
 
+export interface CommuteRoute { lines?: string[]; walk_min?: number; transfers?: number } // {} when no route was found
+
 export interface Listing {
   key: string
   source: string
@@ -71,6 +73,8 @@ export interface Listing {
   rent_max: number | null
   ami_min: number | null
   ami_max: number | null
+  commute?: number | null // transit minutes to work; only eligible listings get one
+  commute_route?: CommuteRoute | null
 }
 
 export interface Unit {
@@ -99,6 +103,7 @@ export interface Unit {
   income_max: number | null
   verdict: Verdict
   reason: string
+  commute?: number | null
 }
 
 export interface Event {
