@@ -246,10 +246,14 @@ def _sign(page, field: str, a: dict) -> None:
             pdfmetrics.registerFont(TTFont("Hand", str(HAND)))
         name = " ".join(x for x in (a.get("first"), a.get("last")) if x)
         size = min((y1 - y0) * 0.6, 16.0)
-        while size > 6 and pdfmetrics.stringWidth(name, "Hand", size) > x1 - x0 - 4:
+        gap = lambda z: z * 0.5 * name.count(" ")  # noqa: E731 - the font's own space is too narrow to read
+        while size > 6 and pdfmetrics.stringWidth(name, "Hand", size) + gap(size) > x1 - x0 - 4:
             size -= 0.5
-        c.setFont("Hand", size)
-        c.drawString(x0 + 2, y0 + (y1 - y0) * 0.25, name)
+        t = c.beginText(x0 + 2, y0 + (y1 - y0) * 0.25)
+        t.setFont("Hand", size)
+        t.setWordSpace(size * 0.5)
+        t.textOut(name)
+        c.drawText(t)
     c.save()
     page.merge_page(PdfReader(buf).pages[0])
 

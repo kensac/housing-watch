@@ -4,3 +4,4 @@ __pycache__/
 *.db-*
 .pytest_cache/
 .ruff_cache/
+src/housing_watch/web/dist/

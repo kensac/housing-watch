@@ -98,3 +98,9 @@ def test_every_source_runs_at_least_every_4_hours():
 
     slow = {name: cls.every_hours for name, cls in load_all().items() if cls.every_hours > 4}
     assert not slow, slow
+
+
+def test_money_repairs():
+    assert parse.money("$ 1,5 47.67") == 1547.67  # a thousands group split by a space
+    assert parse.money("$2.468") == 2468 and parse.money("$2.46") == 2.46  # dot as thousands separator
+    assert parse.money("$1,500 2BR") == 1500 and parse.money("$12,345.50") == 12345.5

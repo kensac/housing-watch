@@ -155,3 +155,28 @@ def test_fleet(db):
     assert w["name"] == w["host"] == "oci" and w["queues"] == ["sources", "byparr"] and w["concurrency"] == 2
     assert w["doing"] == ["c"] and w["age"] < 60
     assert f.failures[0]["error"] == "TimeoutError: boom"
+
+
+def test_units_page(db):
+    from housing_watch.models import Band, Unit
+    from seed import L, add_listing
+
+    two = Unit("2br", 1800.0, 130, "2A", [Band(1, 70000, 154440)])
+    cheap = Unit("studio", 2100.0, 130, "1A", [Band(1, 72000, 154440)])
+    with Session(db) as s, s.begin():
+        add_listing(s, L("u", "1", "Queens", units=[two, cheap]))
+    q = Q.ListingQuery
+    # listings: the rent range covers only units that fit (the 2BR is not wanted), so the sort is honest
+    (x,) = [x for x in Q.search_listings(db, q()).items if x.key == "u:1"]
+    assert (x.rent_min, x.rent_max) == (2100.0, 2100.0)
+    units = Q.search_units(db, q(sort="rent")).items
+    mine = [(u.unit_no, u.verdict) for u in units if u.key == "u:1"]
+    assert mine == [("2A", "excluded"), ("1A", "eligible")] and units[0].rent == 1800.0
+    # a unit condition holds on the row's own unit; band conditions on that unit's bands
+    got = Q.search_units(db, q([F.parse_one("units.size.in.studio", F.LISTING_FIELDS),
+                                F.parse_one("bands.income_min.le.72000", F.LISTING_FIELDS)])).items  # fmt: skip
+    assert {(u.key, u.unit_no) for u in got} >= {("u:1", "1A")} and all(u.size == "studio" for u in got)
+    bronx = [u for u in Q.search_units(db, q()).items if u.borough == "Bronx"]
+    assert bronx and all(u.verdict == "excluded" and u.reason == "in Bronx" for u in bronx)  # listing rules
+    v = dict(Q.value_counts(db, "units", F.LISTING_FIELDS["units.size"], []))
+    assert v["2br"] == 1 and v["studio"] >= 2

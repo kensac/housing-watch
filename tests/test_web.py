@@ -1,17 +1,17 @@
-from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
-from housing_watch import applications, tasks
+from housing_watch import applications, queries
+from housing_watch.orm import SavedViewRow
 from housing_watch.web.app import create_app
-from seed import L, add_listing, seed, seed_jobs
+from seed import L, add_listing, event, seed, seed_jobs
 
-HX = {"HX-Request": "true"}
-RESULTS = {**HX, "HX-Target": "results"}
 SAME = {"origin": "http://testserver"}
+FX = Path(__file__).parent / "fixtures" / "applications"
 
 
 @pytest.fixture
@@ -20,171 +20,161 @@ def client(pg):
     return TestClient(create_app(pg))
 
 
-def test_pages_render(client):
-    for path, text in [
-        ("/", "Eligible &amp; open now"),
-        ("/listings", "a 1"),
-        (
-            "/listings?f=verdict.in.excluded&f=borough.in.Bronx&sort=-rent&q=a&f=units.size.in.studio"
-            "&f=units.rent.le.5000&f=last_changed.last.7d&cols=rent,source",
-            "a 2",
-        ),
-        ("/listings?f=units.rent.le.junk", "is not a number"),
-        ("/listings?f=nope.in.x", "Unknown filter field"),
-        ("/listings?open=a%3A1", "Apply by mail"),
-        ("/listings?open=missing", "Listing not found"),
-        ("/sources", "TimeoutError: boom"),
-        ("/events", "source failed"),
-        ("/events?f=type.in.new&f=source.in.a&f=first_run.is.no", "a 1"),
-        ("/events?f=listing.borough.in.Queens&f=verdict.in.eligible&cols=source", "a 1"),
-    ]:
-        r = client.get(path)
-        assert r.status_code == 200, path
-        assert text in r.text, path
-    assert "/static/htmx.min.js" in r.text
-    assert client.get("/static/htmx.min.js").status_code == 200
+def titles(r) -> list[str]:
+    return [x["title"] for x in r.json()["items"]]
 
 
-def test_htmx_fragments(client):
-    r = client.get("/listings?f=verdict.in.eligible", headers=RESULTS)
-    assert r.status_code == 200 and "<html" not in r.text and "a 1" in r.text and "a 2" not in r.text
-    assert 'id="chips" class="chips" hx-swap-oob="true"' in r.text and "Verdict is eligible" in r.text
-    assert 'id="navlist"' in r.text and 'id="viewbar"' in r.text  # chips, view bar and nav refresh with the list
-    d = client.get("/listings/drawer?key=a%3A1", headers=HX)
-    assert "<html" not in d.text and "82,557" in d.text and "https://a.example/1" in d.text
+def test_meta(client):
+    m = client.get("/api/meta").json()
+    fields = {f["name"]: f for f in m["pages"]["listings"]["fields"]}
+    assert fields["units.rent"]["type"] == "number" and fields["units.rent"]["money"]
     assert (
-        client.get("/listings/drawer?key=a%3A1", follow_redirects=False).headers["location"] == "/listings?open=a%3A1"
+        fields["verdict"]["choices"] == ["eligible", "possible", "excluded"] and "between" in fields["units.ami"]["ops"]
     )
-    e = client.get("/events?before=999999", headers={**HX, "HX-Target": ""})
-    assert e.text.lstrip().startswith("<tr")
+    assert "listing.borough" in {f["name"] for f in m["pages"]["events"]["fields"]}
+    assert m["pages"]["units"]["sorts"]["rent"] == "Rent" and m["op_labels"]["le"] == "≤"
 
 
-def test_empty_store(pg):
-    r = TestClient(create_app(pg)).get("/listings")
-    assert r.status_code == 200 and "No listings yet" in r.text
-    assert "Nothing pending" in TestClient(create_app(pg)).get("/").text
+def test_listings(client):
+    r = client.get("/api/listings")
+    assert r.status_code == 200 and titles(r)[0] == "a 1" and "b 3" not in titles(r)  # gone hidden
+    x = r.json()["items"][0]
+    assert x["verdict"] == "eligible" and x["sizes"] == ["studio"] and "haystack" not in x
+    q = "/api/listings?f=verdict.in.excluded&f=borough.in.Bronx&sort=-rent&q=a&f=units.size.in.studio"
+    r = client.get(q + "&f=units.rent.le.5000&f=last_changed.last.7d").json()
+    assert [x["title"] for x in r["items"]] == ["a 2"] and r["filters"][1]["label"] == "Borough is Bronx"
+    assert client.get("/api/listings?f=units.rent.le.junk").json()["problems"] == ["Rent: “junk” is not a number"]
+    assert "Unknown filter field" in client.get("/api/listings?f=nope.in.x").json()["problems"][0]
 
 
-def test_fleet_page(pg, monkeypatch):
-    seed(pg)
-    seed_jobs(pg)
-    tasks.beat(pg, "gcp-vps", 2, ["sources"], datetime.now(UTC))
-    r = TestClient(create_app(pg)).get("/fleet")
-    assert r.status_code == 200 and "gcp-vps" in r.text and "2 slots" in r.text and "hetzner" in r.text
+def test_listing_detail(client):
+    d = client.get("/api/listing?key=a%3A1").json()
+    assert d["summary"]["title"] == "a 1" and d["notes"] == "Apply by mail" and d["units"][0]["bands"][0][1] == 82557
+    assert d["events"][0]["type"] == "new" and d["pdfs"] == []
+    assert client.get("/api/listing?key=missing").status_code == 404
+
+
+def test_values(client):
+    v = client.get("/api/values?page=listings&field=borough&f=verdict.in.eligible").json()
+    assert v["enum"] and {c["value"] for c in v["counts"] if c["count"]} == {"Queens"}
+    assert not client.get("/api/values?page=listings&field=units.rent").json()["enum"]
+    ev = client.get("/api/values?page=events&field=type").json()
+    assert "source_failed" in {c["value"] for c in ev["counts"]}
+    assert client.get("/api/values?page=nope&field=x").status_code == 404
+
+
+def test_events_overview_sources(client):
+    e = client.get("/api/events").json()
+    assert e["total"] == 6 and e["items"][0]["type"] == "source_failed" and e["next_before"] is None
+    e = client.get("/api/events?f=listing.borough.in.Queens&f=verdict.in.eligible").json()
+    assert e["problems"] == [] and [x["key"] for x in e["items"]] == ["b:3", "a:1"]  # removed listings included
+    o = client.get("/api/overview").json()
+    assert o["eligible_open"] == 1 and o["eligible_now"][0]["title"] == "a 1" and o["failing"] == ["b"]
+    assert o["digest"]["events"] >= 1
+    s = {x["source"]: x for x in client.get("/api/sources").json()}
+    assert s["b"]["health"] == "failing" and s["b"]["last_error"] == "TimeoutError: boom"
 
 
 def test_lists_scroll_in_batches(pg):
-    from sqlalchemy.orm import Session
-
-    from seed import L, add_listing, event
-
     with Session(pg) as s, s.begin():
         for i in range(250):
             add_listing(s, L("bulk", f"{i:03}", "Queens"))
             event(s, f"bulk:{i:03}", "new")
     c = TestClient(create_app(pg))
-    first = c.get("/listings?sort=title")
-    assert "<strong>250</strong> listings" in first.text and first.text.count('class="click') == 200
-    assert 'hx-get="/listings?sort=title&amp;offset=200"' in first.text and 'hx-trigger="intersect once"' in first.text
-    assert "?page=" not in first.text and "&amp;page=" not in first.text
-    rest = c.get("/listings?sort=title&offset=200", headers=HX)
-    assert "<table" not in rest.text and rest.text.count('class="click') == 50
-    assert "All 250 listings shown" in rest.text and "intersect" not in rest.text
-    ev = c.get("/events")
-    assert "<strong>250</strong> events" in ev.text and 'hx-trigger="intersect once"' in ev.text
-    older = c.get(ev.text.split('class="more-row" hx-get="')[1].split('"')[0].replace("&amp;", "&"), headers=HX)
-    assert older.text.count("<tr>") == 50 and "No older events" in older.text
+    first = c.get("/api/listings?sort=title").json()
+    assert first["total"] == 250 and len(first["items"]) == 200 and first["next_offset"] == 200
+    rest = c.get("/api/listings?sort=title&offset=200").json()
+    assert len(rest["items"]) == 50 and rest["next_offset"] is None
+    ev = c.get("/api/events").json()
+    assert ev["total"] == 250 and len(ev["items"]) == 200
+    older = c.get(f"/api/events?before={ev['next_before']}").json()
+    assert len(older["items"]) == 50 and older["next_before"] is None
 
 
-def test_fleet_page_without_queue(pg, monkeypatch):
-    from housing_watch import queries
-
+def test_fleet(pg, monkeypatch):
+    seed(pg)
+    seed_jobs(pg)
+    f = TestClient(create_app(pg)).get("/api/fleet").json()
+    assert f["available"] and f["queues"]["sources"]["failed"] == 1 and f["hosts"]
     monkeypatch.setattr(queries, "JOBS_TABLE", "procrastinate_missing")
-    assert "set up yet" in TestClient(create_app(pg)).get("/fleet").text
-
-
-def test_filter_builder(client):
-    pick = client.get("/filters/builder?page=listings")
-    assert "Income band" in pick.text and 'data-pick="units.rent"' in pick.text and 'data-pick="verdict"' in pick.text
-    b = client.get("/filters/builder?page=listings&field=borough&f=verdict.in.eligible")
-    assert 'value="Queens"' in b.text and 'value="Bronx"' not in b.text  # counts under the other filters
-    num = client.get("/filters/builder?page=listings&field=units.rent&f=units.rent.le.3000&edit=0")
-    assert 'value="3000"' in num.text and "data-remove" in num.text and '<option value="le" selected' in num.text
-    t = client.get("/filters/builder?page=listings&field=first_seen")
-    assert 'data-ops="last"' in t.text and 'type="date"' in t.text
-    ev = client.get("/filters/builder?page=events&field=type")
-    assert 'value="source_failed"' in ev.text
-    assert client.get("/filters/builder?page=nope").status_code == 404
+    assert TestClient(create_app(pg)).get("/api/fleet").json()["available"] is False
 
 
 def test_saved_views(client):
-    assert 'class="views"' not in client.get("/listings").text  # nothing seeded
-    r = client.post("/views", data={"page": "listings", "name": "Queens", "default": "1",
-                                    "back": "/listings?f=borough.in.Queens&sort=-rent"}, headers=SAME)  # fmt: skip
-    assert r.status_code == 204 and r.headers["HX-Location"].startswith(
-        "/listings?f=borough.in.Queens&sort=-rent&view="
+    assert client.get("/api/views").json() == []  # nothing seeded
+    body = {"page": "listings", "name": "Queens", "is_default": True,
+            "state": {"f": ["borough.in.Queens"], "sort": "-rent"}}  # fmt: skip
+    v = client.post("/api/views", json=body, headers=SAME).json()
+    assert v["state"] == {"f": ["borough.in.Queens"], "q": "", "sort": "-rent", "columns": v["state"]["columns"]}
+    assert v["is_default"] and client.get("/api/views").json()[0]["count"] == 1
+    vid = v["id"]
+    p = client.patch(
+        f"/api/views/{vid}", json={"state": {"f": ["verdict.in.eligible"]}, "name": "Renamed"}, headers=SAME
     )
-    vid = r.headers["HX-Location"].rsplit("=", 1)[1]
-    page = client.get("/listings")  # the default view opens on a bare URL
-    assert "Queens</span>" in page.text and "Borough is Queens" in page.text and "a 2" not in page.text
-    assert f'data-canonical="/listings?f=borough.in.Queens&amp;sort=-rent&amp;view={vid}"' in page.text
-    drift = client.get(f"/listings?f=borough.in.Queens&f=verdict.in.eligible&sort=-rent&view={vid}")
-    assert "mod-dot" in drift.text and "Save changes" in drift.text
-    assert "mod-dot" not in client.get(f"/listings?view={vid}").text
-    patch = client.patch(f"/views/{vid}", data={"save": "1", "back": f"/listings?f=verdict.in.eligible&view={vid}"},
-                         headers=SAME)  # fmt: skip
-    assert patch.status_code == 204 and "Verdict is eligible" in client.get(f"/listings?view={vid}").text
-    assert client.patch(f"/views/{vid}", data={"name": "Renamed"}, headers=SAME).status_code == 204
-    assert "Renamed" in client.get("/listings").text
-    dup = client.post(f"/views/{vid}/duplicate", headers=SAME)
-    assert dup.status_code == 204 and "Renamed (copy)" in client.get("/listings").text
-    assert client.post("/views", data={"page": "listings", "name": ""}, headers=SAME).status_code == 400
-    assert client.delete(f"/views/{vid}", headers=SAME).status_code == 204
-    assert client.delete(f"/views/{vid}", headers=SAME).status_code == 404
+    assert p.json()["name"] == "Renamed" and p.json()["state"]["f"] == ["verdict.in.eligible"]
+    assert client.post(f"/api/views/{vid}/duplicate", headers=SAME).json()["name"] == "Renamed (copy)"
+    assert client.patch(f"/api/views/{vid}", json={"move": 1}, headers=SAME).json()["position"] == 1
+    bad = {"page": "listings", "name": "x", "state": {"f": ["nope.in.x"]}}
+    assert client.post("/api/views", json=bad, headers=SAME).status_code == 400
+    assert client.post("/api/views", json={"page": "listings", "name": ""}, headers=SAME).status_code == 400
+    assert client.delete(f"/api/views/{vid}", headers=SAME).status_code == 204
+    assert client.delete(f"/api/views/{vid}", headers=SAME).status_code == 404
 
 
 def test_view_writes_need_same_origin(client):
-    data = {"page": "listings", "name": "X"}
-    assert client.post("/views", data=data).status_code == 403
-    assert client.post("/views", data=data, headers={"origin": "http://evil.example"}).status_code == 403
-    assert client.post("/views", data=data, headers={**SAME, "sec-fetch-site": "cross-site"}).status_code == 403
-    assert client.post("/views", data=data, headers={"referer": "http://testserver/listings"}).status_code == 204
+    body = {"page": "listings", "name": "X"}
+    assert client.post("/api/views", json=body).status_code == 403
+    assert client.post("/api/views", json=body, headers={"origin": "http://evil.example"}).status_code == 403
+    assert client.post("/api/views", json=body, headers={**SAME, "sec-fetch-site": "cross-site"}).status_code == 403
+    assert client.post("/api/views", json=body, headers={"referer": "http://testserver/listings"}).status_code == 200
 
 
 def test_stale_view_warns(client, pg):
-    from sqlalchemy import update
-    from sqlalchemy.orm import Session
-
-    from housing_watch.orm import SavedViewRow
-
-    r = client.post("/views", data={"page": "listings", "name": "Old", "back": "/listings?f=borough.in.Queens"},
-                    headers=SAME)  # fmt: skip
-    vid = int(r.headers["HX-Location"].rsplit("=", 1)[1])
+    vid = client.post("/api/views", json={"page": "listings", "name": "Old"}, headers=SAME).json()["id"]
     with Session(pg) as s, s.begin():
         s.execute(update(SavedViewRow).where(SavedViewRow.id == vid).values(
             query={"filters": [{"field": "pets_ok", "op": "is", "values": ["yes"]}]}))  # fmt: skip
-    page = client.get(f"/listings?view={vid}")
-    assert page.status_code == 200 and "Unknown filter field “pets_ok”" in page.text and "dropped" in page.text
+    (v,) = client.get("/api/views").json()
+    assert "Unknown filter field “pets_ok”" in v["warnings"][0] and v["state"]["f"] == []
 
 
 def test_application_prefill(pg, monkeypatch, tmp_path):
-    blank = (Path(__file__).parent / "fixtures" / "applications" / "hc2.pdf").read_bytes()
+    blank = (FX / "hc2.pdf").read_bytes()
     monkeypatch.setattr(applications, "blank", lambda url: blank if url.endswith("g1.pdf") else b"%PDF flat")
-    with Session(pg) as s:
-        notes = "Mail only. Application: https://x.example/g1.pdf; flyer https://x.example/flyer.pdf"
-        add_listing(s, L("m", "1", "Queens", notes=notes))
-        s.commit()
+    with Session(pg) as s, s.begin():
+        add_listing(
+            s, L("m", "1", "Queens", notes="Mail only. Application: https://x.example/g1.pdf; https://x.example/f.pdf")
+        )
     c = TestClient(create_app(pg))
-    assert "/listings/application/panel?key=m%3A1" in c.get("/listings/drawer?key=m%3A1", headers=HX).text
-    p = c.get("/listings/application/panel?key=m%3A1")
-    assert "HC2.0" in p.text and "not a fillable form" in p.text and "set HW_APPLICANT_FILE" in p.text
-    assert c.get("/listings/application?key=m%3A1").status_code == 404  # no applicant file yet
+    assert c.get("/api/listing?key=m%3A1").json()["pdfs"] == ["https://x.example/g1.pdf", "https://x.example/f.pdf"]
+    p = c.get("/api/listing/applications?key=m%3A1").json()
+    assert not p["ready"] and [x["form"] for x in p["pdfs"]] == ["HC2.0 Affordable Housing Application", None]
+    assert c.get("/api/listing/application?key=m%3A1").status_code == 404  # no applicant file yet
     f = tmp_path / "applicant.json"
-    f.write_text((Path(__file__).parent / "fixtures" / "applications" / "applicant.example.json").read_text())
+    f.write_text((FX / "applicant.example.json").read_text())
     monkeypatch.setattr(applications, "APPLICANT_FILE", str(f))
-    assert "Download filled" in c.get("/listings/application/panel?key=m%3A1").text
-    r = c.get("/listings/application?key=m%3A1&n=0")
+    assert c.get("/api/listing/applications?key=m%3A1").json()["ready"]
+    r = c.get("/api/listing/application?key=m%3A1&n=0")
     assert r.status_code == 200 and r.headers["content-type"] == "application/pdf" and r.content[:4] == b"%PDF"
     assert "no-store" in r.headers["cache-control"] and "application-1.pdf" in r.headers["content-disposition"]
-    assert c.get("/listings/application?key=m%3A1&n=1").status_code == 422
-    assert c.get("/listings/application?key=m%3A1&n=5").status_code == 404
+    assert c.get("/api/listing/application?key=m%3A1&n=1").status_code == 422
+    assert c.get("/api/listing/application?key=m%3A1&n=5").status_code == 404
+
+
+def test_spa(pg, tmp_path):
+    assert TestClient(create_app(pg, dist=tmp_path)).get("/listings").status_code == 503
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "index.html").write_text("<div id=root></div>")
+    (tmp_path / "assets" / "app.js").write_text("x")
+    c = TestClient(create_app(pg, dist=tmp_path))
+    assert c.get("/listings?open=a%3A1").text == "<div id=root></div>" and c.get("/assets/app.js").text == "x"
+    assert c.get("/api/nope").status_code == 404 and c.get("/../etc/passwd").status_code in (200, 404)
+
+
+def test_units_api(client):
+    r = client.get("/api/units?sort=rent&f=borough.in.Queens").json()
+    assert r["total"] == 1 and r["items"][0]["unit_no"] == "4B" and r["items"][0]["income_min"] == 82557
+    assert "haystack" not in r["items"][0] and r["verdict_counts"]["eligible"] == 1
+    v = client.post("/api/views", json={"page": "units", "name": "Cheap", "state": {"f": ["units.rent.le.2500"]}},
+                    headers=SAME).json()  # fmt: skip
+    assert v["page"] == "units" and client.get("/api/views").json()[0]["count"] == 3  # a:1, a:2 and closed b:2

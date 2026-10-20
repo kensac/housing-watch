@@ -7,7 +7,7 @@ adapters/  parse.py  fetch.py      SOURCES   what does each source list right no
 criteria.py                        RULES     is a unit eligible for the profile?    (pure, read time)
 orm.py  db.py  alembic/            STORE     raw facts + change events in Postgres  (no verdicts)
 tasks.py  worker                   FLEET     who fetches what, when, from which IP  (Procrastinate)
-queries.py  digest.py  web/        READ      what changed, what fits                (UI, email)
+queries.py  digest.py  web/ frontend/  READ      what changed, what fits                (UI, email)
 ```
 
 ## Sources (adapters)
@@ -106,7 +106,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 ## Read (queries, digest, web)
 
 - `queries.py` is the read API, returning plain dicts/dataclasses: listing search with filters,
-  listing detail with units/bands/events, the per-source health table, event feed, overview counts.
+  unit search (one row per unit), listing detail with units/bands/events, the per-source health table,
+  event feed, overview counts.
   It attaches verdicts by calling `criteria` at read time.
   Every listing is judged once per store version and cached in memory, so pages filter in Python.
 - `digest.py` builds the email from `queries.py`: `send(engine, dry_run)` and `urgent(engine)` (an open,
@@ -117,13 +118,16 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   `?f=<field>.<op>.<values>` (e.g. `units.rent.le.3000`), parsed into a typed AST and turned into SQL.
   Unit conditions must hold on one unit, band conditions on one band of it; verdict fields are applied in
   Python after the SQL prefilter.
-- `web/` is the UI: `web.app.create_app(engine)`, FastAPI + Jinja2 templates + HTMX (vendored in
-  `web/static/`), with hand-written CSS (no build step). List state (filters, search, sort, columns) lives
-  in the query string; lists scroll in batches of 200. It is served by the hetzner worker container
-  (`python -m housing_watch serve` = migrate + worker + web, the web started only when `HW_WEB_PORT` is
-  set) on the tailnet only. The data is read-only from the web; the one table it writes is its own
-  `saved_views` (`views.py`: a filter AST + sort + columns per page, re-validated against the field
-  registry on load), through same-origin POST/PATCH/DELETE. Nothing is seeded: views exist only once saved.
+- `web/app.py` is a JSON API (`/api/...`) over `queries.py` and `views.py`; `frontend/` is the UI, React +
+  Mantine (default theme) + TanStack Query, built by the image into `web/dist/`, which the same app serves for
+  every non-API path. List state (filters, search, sort, columns, saved view, open listing) lives in the
+  app's URL, and filters cross the API in the `f=` grammar; lists scroll in batches of 200. Three list
+  pages: Listings (a row per listing; its rent and AMI ranges cover the units that fit and match the unit
+  filters), Units (a row per unit, so rent sorts exactly; unit and band filters hold on that unit) and
+  Events. It is served by the hetzner worker container (`python -m housing_watch serve` = migrate +
+  worker + web, the web started only when `HW_WEB_PORT` is set) on the tailnet only. The one table it
+  writes is `saved_views` (`views.py`: a filter AST + sort + columns per page, re-validated against the
+  field registry on load), through same-origin POST/PATCH/DELETE. Nothing is seeded.
 - `applications.py` recognises known paper application forms by their fillable field names (today HPD's
   HC2.0 application) and fills them from the applicant file (`HW_APPLICANT_FILE`, private, host-only;
   signs and dates the applicant's line; never the SSN). The drawer checks a listing's linked PDFs lazily; a download is built
