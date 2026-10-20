@@ -198,7 +198,9 @@ def match(listings: list, rows: list[TrackerRow], links: dict[str, str | None]) 
     by_url = {k: r for r in rows if (k := url_key(r.source_url)) and row_urls[k] == 1 and listing_urls[k] == 1}
     by_addr: dict[str, list[TrackerRow]] = {}
     by_name: dict[str, list[TrackerRow]] = {}
-    row_units = {r.row_key: units(r.property) | units((r.notes or "").split("\n")[0]) for r in rows}
+    row_units = {r.row_key: units(r.property) | {u for line in (r.notes or "").splitlines()
+                                                 if re.match(r"\s*units?\b", line, re.I) for u in units(line)}
+                 for r in rows}  # fmt: skip
     for r in rows:
         for a in addr_keys(r.property):
             by_addr.setdefault(a, []).append(r)
@@ -206,13 +208,13 @@ def match(listings: list, rows: list[TrackerRow], links: dict[str, str | None]) 
             by_name.setdefault(n, []).append(r)
 
     def pick(cands: list[TrackerRow], unit: set[str]) -> TrackerRow | None:
-        """A row naming this listing's unit; else a building-wide row (no units). A row for other units
-        of the building is not this listing's: applying for #218 says nothing about #302."""
-        if unit:
-            exact = [r for r in cands if row_units[r.row_key] & unit]
-            if exact:
-                return exact[0]
-        return next((r for r in cands if not row_units[r.row_key]), None)
+        """For a listing that names its unit: a row naming that unit, else a building-wide row (a row for
+        other units says nothing about this one: applying for #218 is not applying for #302). A listing
+        that names no unit is the building (or an agent's single unit page): its building's first row."""
+        if not unit:
+            return cands[0] if cands else None
+        exact = [r for r in cands if row_units[r.row_key] & unit]
+        return exact[0] if exact else next((r for r in cands if not row_units[r.row_key]), None)
 
     out: dict[str, Ref] = {}
     for x in listings:
