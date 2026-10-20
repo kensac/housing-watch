@@ -87,6 +87,10 @@ def listing_verdict(lst: Listing, p: Profile = PROFILE) -> Verdict:
         return Verdict(POSSIBLE, "no unit details published")
     judged = [(u, *unit_verdict(u, p)) for u in lst.units]
     if any(v == ELIGIBLE for _, v, _ in judged):
+        if lst.status == "unknown":
+            return Verdict(
+                POSSIBLE, "eligible unit(s), but the source shows no status (likely no longer marketed)", judged
+            )
         if lst.borough is None and p.excluded_boroughs:
             return Verdict(POSSIBLE, "eligible unit(s), borough unknown", judged)
         return Verdict(ELIGIBLE, "eligible unit(s)", judged)

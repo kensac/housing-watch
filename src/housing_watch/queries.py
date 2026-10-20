@@ -25,7 +25,7 @@ from .models import Listing
 from .orm import BandRow, CommuteRow, EventRow, ListingRow, RunRow, SourceStateRow, TrackerLinkRow, TrackerRow, UnitRow
 
 VERDICTS = (ELIGIBLE, POSSIBLE, EXCLUDED)
-STATUSES = ("open", "waitlist", "upcoming", "closed", "gone")
+STATUSES = ("open", "waitlist", "upcoming", "unknown", "closed", "gone")
 LISTING_EVENTS = ("new", "reopened", "changed", "closed", "gone")
 EVENT_TYPES = (*LISTING_EVENTS, "page_changed", "watching", "source_failed", "source_recovered")
 SORTS = ("verdict", "changed", "first_seen", "rent", "deadline", "title", "source")  # "-x" flips the default

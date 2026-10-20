@@ -22,7 +22,7 @@ log = logging.getLogger("housing_watch")
 SITEMAPS = [f"https://residenewyork.com/wp-sitemap-posts-property-{i}.xml" for i in (1, 2)]
 APPLY = "https://airtable.com/appsseXTOVx59HC0W/pagcVengefPFQvMZC/form"
 MAX_FAILED = 20  # more page failures than this in one run = something is wrong with the site
-PARSER = 4  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
+PARSER = 5  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
 
 
 _W = "one two three four five six seven eight".split()
@@ -170,7 +170,10 @@ def parse_page(url: str, html: str) -> Listing:
         # the page's own label sits right before its title; the site menu also lists two of the labels
         lab = re.search(r"(Open Market|Upcoming Project|Closed Project)\s+" + re.escape(title[:25]), flat)
         label = lab.group(1) if lab else ""
-        status = "upcoming" if "Upcoming" in label else "closed" if "Closed" in label else "open"
+        # no term and no label: Reside has stopped marketing the unit (its application form drops it too)
+        status = {"Upcoming Project": "upcoming", "Closed Project": "closed", "Open Market": "open"}.get(
+            label, "unknown"
+        )
     # header facts every page prints: Rent/ Month, Available Units, Household Size, Required Income
     box = {}
     for b in s.select(".elementor-icon-box-content"):

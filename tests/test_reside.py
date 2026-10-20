@@ -35,6 +35,14 @@ def test_closed_project():
     assert lst.status == "closed" and listing_verdict(lst).verdict == "excluded"
 
 
+def test_page_without_status_label_is_unknown_not_open():
+    # 24 Wilson Ave 3D (2026-10-19): no property-status term and no label; Reside's form no longer offers it
+    lst = page("no-status-label")
+    assert lst.status == "unknown" and [u.size for u in lst.units] == ["1br"]
+    v = listing_verdict(lst)
+    assert v.verdict == "possible" and "no status" in v.reason
+
+
 def test_upcoming_project():
     lst = page("1-9-putnam-avenue")
     assert lst.status == "upcoming" and lst.borough == "Brooklyn"
@@ -55,7 +63,8 @@ def test_word_pasted_table_and_continuation_rows():
     (u,) = lst.units
     assert (u.size, u.unit_no, u.rent, u.ami) == ("1br", "1E", 2370.74, 150)
     assert bands(u) == [(1, 86152, 170100), (2, 86152, 194400), (3, 86152, 218700)]
-    assert lst.borough == "Manhattan" and listing_verdict(lst).verdict == "eligible"
+    # the page carries no status label, and Reside's form does not offer #1E: not marketed, so not open
+    assert lst.borough == "Manhattan" and lst.status == "unknown" and listing_verdict(lst).verdict == "possible"
 
 
 def test_multi_value_cells():

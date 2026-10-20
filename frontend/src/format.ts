@@ -60,7 +60,7 @@ export function duration(s: number | null | undefined): string {
 
 export const VERDICT_COLOR = { eligible: 'green', possible: 'yellow', excluded: 'gray' } as const
 export const STATUS_COLOR: Record<string, string> = {
-  open: 'green', waitlist: 'blue', upcoming: 'cyan', closed: 'gray', gone: 'red',
+  open: 'green', waitlist: 'blue', upcoming: 'cyan', unknown: 'yellow', closed: 'gray', gone: 'red',
 }
 export const EVENT_COLOR: Record<string, string> = {
   new: 'green', reopened: 'teal', changed: 'blue', closed: 'gray', gone: 'red', page_changed: 'violet',

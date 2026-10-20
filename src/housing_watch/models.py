@@ -41,7 +41,7 @@ class Listing:
     url: str
     address: str | None = None
     borough: str | None = None  # "Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island", or None
-    status: str = "open"  # "open" | "closed" | "waitlist" | "upcoming"
+    status: str = "open"  # "open" | "closed" | "waitlist" | "upcoming" | "unknown" (the source shows none)
     kind: str = "re-rental"  # "re-rental" | "lottery" | "waitlist" | "homeownership"
     units: list[Unit] = field(default_factory=list)
     deadline: str | None = None  # ISO date when the source publishes one
