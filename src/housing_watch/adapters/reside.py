@@ -18,7 +18,7 @@ from . import PLAN, Adapter, spread
 
 SITEMAPS = [f"https://residenewyork.com/wp-sitemap-posts-property-{i}.xml" for i in (1, 2)]
 APPLY = "https://airtable.com/appsseXTOVx59HC0W/pagcVengefPFQvMZC/form"
-PARSER = 3  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
+PARSER = 4  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
 
 
 _W = "one two three four five six seven eight".split()
@@ -91,6 +91,7 @@ def _table_units(s) -> list[Unit]:
             if len(cells) == len(head) and re.search(r"studio|bed|br\b|sro", cells[0], re.I):
                 a = next((parse.ami(c) for c in cells if parse.ami(c)), None)
                 rent = next((parse.money(c) for c in cells[1:] if "$" in c), None)
+                rent = rent if rent and rent >= 100 else None  # "$1" and the like: a broken cell, not a rent
                 hh = (
                     cells[c_hh]
                     if c_hh is not None

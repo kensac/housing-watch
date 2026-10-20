@@ -79,8 +79,10 @@ def _load(s: Session, *where) -> list[ListingRow]:
 
 def _summary(r: ListingRow, lst: Listing, p: Profile) -> ListingSummary:
     v = listing_verdict(lst, p)
-    rents = tuple(u.rent for u in lst.units if u.rent)
-    amis = [u.ami for u in lst.units if u.ami]
+    # ranges over the units that could fit (not excluded); all units when none does
+    fit = [u for u, uv, _ in v.units if uv != EXCLUDED] or lst.units
+    rents = tuple(u.rent for u in fit if u.rent)
+    amis = [u.ami for u in fit if u.ami]
     order = ["studio", "sro", "1br", "2br", "3br", "4br", "5br", "unknown"]
     sizes = sorted({u.size for u in lst.units}, key=lambda z: order.index(z) if z in order else 99)
     return ListingSummary(
@@ -107,17 +109,78 @@ def _summary(r: ListingRow, lst: Listing, p: Profile) -> ListingSummary:
         ami_min=min(amis) if amis else None,
         ami_max=max(amis) if amis else None,
         unit_sizes=frozenset(sizes),
-        unit_rents=rents,
+        unit_rents=tuple(u.rent for u in lst.units if u.rent),
         haystack=" ".join(x for x in (r.key, lst.title, lst.address, lst.borough, lst.notes) if x).lower(),
     )
 
 
-_cache: dict[tuple, tuple[tuple, list[ListingSummary]]] = {}
+@dataclass
+class UnitSummary:
+    """One unit with its listing's context: the row of the Units page."""
+
+    id: int
+    key: str  # the listing's
+    source: str
+    title: str
+    url: str
+    address: str | None
+    borough: str | None
+    status: str
+    kind: str
+    deadline: str | None
+    first_seen: datetime
+    last_changed: datetime
+    gone_since: datetime | None
+    listing_verdict: str
+    size: str
+    unit_no: str | None
+    rent: float | None
+    ami: int | None
+    set_aside: str | None
+    available: bool | None
+    chart_year: int | None
+    income_min: int | None  # the band for the profile's household size
+    income_max: int | None
+    verdict: str  # this unit's, after the listing-level rules (closed, borough, senior, ...)
+    reason: str
+    haystack: str = field(default="", repr=False)
+
+
+def _units(r: ListingRow, lst: Listing, x: ListingSummary, p: Profile) -> list[UnitSummary]:
+    v = listing_verdict(lst, p)
+    per = {id(u): (uv, why) for u, uv, why in v.units}
+    out = []
+    for row, u in zip(r.units, lst.units, strict=True):
+        uv, why = per.get(id(u), (v.verdict, v.reason))  # no per-unit verdict: a listing-level rule
+        if uv == ELIGIBLE and v.verdict == POSSIBLE:
+            uv, why = POSSIBLE, v.reason  # e.g. borough unknown
+        band = next((b for b in u.bands if b.household == p.household), None)
+        out.append(UnitSummary(
+            id=row.id, key=x.key, source=x.source, title=x.title, url=x.url, address=x.address, borough=x.borough,
+            status=x.status, kind=x.kind, deadline=x.deadline, first_seen=x.first_seen, last_changed=x.last_changed,
+            gone_since=x.gone_since, listing_verdict=x.verdict, size=u.size, unit_no=u.unit_no, rent=u.rent,
+            ami=u.ami, set_aside=u.set_aside, available=u.available, chart_year=u.chart_year,
+            income_min=band.income_min if band else None, income_max=band.income_max if band else None,
+            verdict=uv, reason=why, haystack=x.haystack,
+        ))  # fmt: skip
+    return out
+
+
+_cache: dict[tuple, tuple[tuple, list[ListingSummary], list[UnitSummary]]] = {}
 _lock = threading.Lock()
 
 
 def judged(engine: Engine, p: Profile = PROFILE) -> list[ListingSummary]:
     """Every listing, summarized and judged; recomputed only when the listings table moved."""
+    return _judged(engine, p)[0]
+
+
+def judged_units(engine: Engine, p: Profile = PROFILE) -> list[UnitSummary]:
+    """Every unit of every listing, judged; cached with judged()."""
+    return _judged(engine, p)[1]
+
+
+def _judged(engine: Engine, p: Profile) -> tuple[list[ListingSummary], list[UnitSummary]]:
     with Session(engine) as s:
         version = tuple(
             s.execute(
@@ -132,11 +195,15 @@ def judged(engine: Engine, p: Profile = PROFILE) -> list[ListingSummary]:
         ck = (str(engine.url), p)
         hit = _cache.get(ck)
         if hit and hit[0] == version:
-            return hit[1]
+            return hit[1], hit[2]
         with _lock:
-            out = [_summary(r, listing_from_row(r), p) for r in _load(s)]
-            _cache[ck] = (version, out)
-        return out
+            out, units = [], []
+            for r in _load(s):
+                lst = listing_from_row(r)
+                out.append(x := _summary(r, lst, p))
+                units += _units(r, lst, x, p)
+            _cache[ck] = (version, out, units)
+        return out, units
 
 
 COMPUTED = {  # read-time values behind filters.COMPUTED
@@ -204,6 +271,19 @@ def _sort_key(sort: str):
     }.get(sort, lambda x: (_VRANK[x.verdict], -x.last_changed.timestamp()))
 
 
+def _ranges_over(rows: list[ListingSummary], units: list[UnitSummary]) -> list[ListingSummary]:
+    by: dict[str, list[UnitSummary]] = {}
+    for u in units:
+        by.setdefault(u.key, []).append(u)
+    out = []
+    for x in rows:
+        us = [u for u in by.get(x.key, []) if u.verdict != EXCLUDED] or by.get(x.key, [])
+        rents, amis = [u.rent for u in us if u.rent], [u.ami for u in us if u.ami]
+        out.append(replace(x, rent_min=min(rents, default=None), rent_max=max(rents, default=None),
+                           ami_min=min(amis, default=None), ami_max=max(amis, default=None)))  # fmt: skip
+    return out
+
+
 def search_listings(engine: Engine, f: ListingQuery, p: Profile = PROFILE) -> ListingPage:
     verdict = [c for c in f.filters if c.field.name == "verdict"]
     base = filter_listings(engine, [c for c in f.filters if c not in verdict], f.q, p, hides_gone(f.filters))
@@ -211,10 +291,86 @@ def search_listings(engine: Engine, f: ListingQuery, p: Profile = PROFILE) -> Li
     for x in base:
         counts[x.verdict] += 1
     rows = [x for x in base if all(F.match(c, x.verdict) for c in verdict)]
+    unit_conds = [c for c in f.filters if c.field.scope in ("unit", "band")]
+    if unit_conds:  # ranges (and the rent sort) over the units the filters picked, of those that fit
+        rows = _ranges_over(rows, filter_units(engine, unit_conds, p=p, hide_gone=False))
     name = f.sort.lstrip("-")
     rows.sort(key=_sort_key(name), reverse=(name in _NEWEST_FIRST) != f.sort.startswith("-"))
     start, end = max(0, f.offset), max(0, f.offset) + max(1, min(f.limit, 1000))
     return ListingPage(rows[start:end], len(rows), end if end < len(rows) else None, counts)
+
+
+UNIT_COMPUTED = {  # the same computed fields on the Units page: verdict and reason are the unit's
+    "verdict": lambda u, x: u.verdict,
+    "reason": lambda u, x: u.reason,
+    "eligible_units": lambda u, x: x.eligible_units,
+    "unit_count": lambda u, x: x.units,
+}
+
+
+def filter_units(
+    engine: Engine, conds: list[F.Cond], q: str = "", p: Profile = PROFILE, hide_gone: bool | None = None
+) -> list[UnitSummary]:
+    """Like filter_listings, but every unit and band condition must hold on the row's own unit."""
+    by_key = {x.key: x for x in judged(engine, p)}
+    allu = judged_units(engine, p)
+    where = F.unit_where(conds)
+    if where:
+        with Session(engine) as s:
+            ids = set(
+                s.scalars(select(UnitRow.id).join(ListingRow, ListingRow.key == UnitRow.listing_key).where(*where))
+            )
+        allu = [u for u in allu if u.id in ids]
+    hide = hides_gone(conds) if hide_gone is None else hide_gone
+    comp = [c for c in conds if c.field.scope == "computed"]
+    words = q.strip().lower().split()
+    return [
+        u
+        for u in allu
+        if not (hide and u.gone_since)
+        and all(F.match(c, UNIT_COMPUTED[c.field.name](u, by_key[u.key])) for c in comp)
+        and all(w in u.haystack for w in words)
+    ]
+
+
+_SIZE_ORDER = {z: i for i, z in enumerate(["studio", "sro", "1br", "2br", "3br", "4br", "5br", "unknown"])}
+UNIT_SORTS = {
+    "verdict": lambda u: (_VRANK[u.verdict], u.rent is None, u.rent or 0),
+    "rent": lambda u: (u.rent is None, u.rent or 0),
+    "ami": lambda u: (u.ami is None, u.ami or 0),
+    "size": lambda u: (_SIZE_ORDER.get(u.size, 99), u.rent or 0),
+    "income_min": lambda u: (u.income_min is None, u.income_min or 0),
+    "income_max": lambda u: (u.income_max is None, u.income_max or 0),
+    "changed": lambda u: u.last_changed,
+    "first_seen": lambda u: u.first_seen,
+    "deadline": lambda u: (u.deadline is None, u.deadline or ""),
+    "title": lambda u: (u.title.lower(), u.unit_no or ""),
+    "borough": lambda u: (u.borough or "~", u.title.lower()),
+    "source": lambda u: (u.source, u.title.lower()),
+}
+
+
+@dataclass
+class UnitPage:
+    items: list[UnitSummary]
+    total: int
+    next_offset: int | None
+    verdict_counts: dict[str, int]
+
+
+def search_units(engine: Engine, f: ListingQuery, p: Profile = PROFILE) -> UnitPage:
+    verdict = [c for c in f.filters if c.field.name == "verdict"]
+    base = filter_units(engine, [c for c in f.filters if c not in verdict], f.q, p, hides_gone(f.filters))
+    counts = {v: 0 for v in VERDICTS}
+    for u in base:
+        counts[u.verdict] += 1
+    rows = [u for u in base if all(F.match(c, u.verdict) for c in verdict)]
+    name = f.sort.lstrip("-")
+    rows.sort(
+        key=UNIT_SORTS.get(name, UNIT_SORTS["verdict"]), reverse=(name in _NEWEST_FIRST) != f.sort.startswith("-")
+    )
+    start, end = max(0, f.offset), max(0, f.offset) + max(1, min(f.limit, 1000))
+    return UnitPage(rows[start:end], len(rows), end if end < len(rows) else None, counts)
 
 
 # --- value counts for the filter builder ---------------------------------------------------------------
@@ -263,6 +419,8 @@ def value_counts(
     """Each value of an enum field with how many results it would give, under the other filters."""
     others = [c for c in conds if c.field is not fld]
     counts: dict = {}
+    if target == "units":
+        return _sorted_counts(fld, _unit_value_counts(engine, fld, others, q, p, hides_gone(conds)))
     with Session(engine) as s:
         if target == "events" and fld.scope == "event":
             q = select(fld.column, func.count()).where(*event_where(engine, others, p)).group_by(fld.column)
@@ -278,10 +436,36 @@ def value_counts(
                 if (k, v) not in seen:
                     seen.add((k, v))
                     counts[v] = counts.get(v, 0) + weights[k]
+    return _sorted_counts(fld, counts)
+
+
+def _sorted_counts(fld: F.Field, counts: dict) -> list[tuple[str | None, int]]:
     for v in fld.choices:
         counts.setdefault(v, 0)
     order = {v: i for i, v in enumerate(fld.choices)}
     return sorted(counts.items(), key=lambda kv: (order.get(kv[0], 99), -kv[1], str(kv[0])))
+
+
+def _unit_value_counts(engine: Engine, fld: F.Field, others: list[F.Cond], q: str, p: Profile, hide: bool) -> dict:
+    """How many units each value of the field would give on the Units page."""
+    units = filter_units(engine, others, q, p, hide)
+    if fld.scope == "computed":
+        by_key = {x.key: x for x in judged(engine, p)}
+        vals = [(u.id, UNIT_COMPUTED[fld.name](u, by_key[u.key])) for u in units]
+    else:
+        ids = [u.id for u in units]
+        u, b, ls = UnitRow.__table__, BandRow.__table__, ListingRow.__table__
+        q_ = select(u.c.id, fld.column).distinct().where(u.c.id.in_(ids))
+        if fld.scope == "listing":
+            q_ = q_.join(ls, ls.c.key == u.c.listing_key)
+        elif fld.scope == "band":
+            q_ = q_.join(b, b.c.unit_id == u.c.id)
+        with Session(engine) as s:
+            vals = s.execute(q_).all() if ids else []
+    counts: dict = {}
+    for _, v in set(vals):
+        counts[v] = counts.get(v, 0) + 1
+    return counts
 
 
 @dataclass

@@ -1,9 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Listings{% endblock %}
-{% block sub %}<p class="sub">Every opportunity the sources publish, judged against the profile. Click a row for units, bands and history.</p>{% endblock %}
-{% block mainclass %}fit{% endblock %}
-{% block content %}
-{% include "_toolbar.html" %}
-<div id="results" class="card flush grow">{% include "_listings_results.html" %}</div>
-{% endblock %}
-{% block drawer %}{% if request.query_params.get("open") %}{% include "_drawer.html" %}{% endif %}{% endblock %}

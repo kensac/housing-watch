@@ -34,3 +34,19 @@ jobs:
       - run: uv run ruff format --check src tests alembic
       # Offline: adapter tests parse saved fixtures; store/fleet/web tests use the postgres service.
       - run: uv run python -m pytest -q
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run build # tsc -b (typecheck) + vite build

@@ -20,18 +20,22 @@ from . import queries
 from .criteria import PROFILE, Profile
 from .orm import SavedViewRow
 
-FIELDS = {"listings": F.LISTING_FIELDS, "events": F.EVENT_FIELDS}
+FIELDS = {"listings": F.LISTING_FIELDS, "units": F.LISTING_FIELDS, "events": F.EVENT_FIELDS}
 COLUMNS = {
     "listings": {"verdict": "Verdict", "sizes": "Sizes", "rent": "Rent", "ami": "AMI", "status": "Status",
                  "deadline": "Deadline", "borough": "Borough", "kind": "Kind", "source": "Source",
                  "first_seen": "First seen", "changed": "Changed"},
+    "units": {"verdict": "Verdict", "size": "Size", "unit_no": "Unit", "rent": "Rent", "ami": "AMI",
+              "income": "Your income band", "status": "Status", "borough": "Borough", "deadline": "Deadline",
+              "source": "Source", "changed": "Changed"},
     "events": {"verdict": "Verdict", "source": "Source", "mailed": "Mailed"},
 }  # fmt: skip
 DEFAULT_COLUMNS = {
     "listings": ("verdict", "sizes", "rent", "ami", "status", "changed"),
+    "units": ("verdict", "size", "rent", "ami", "income", "status", "borough"),
     "events": ("verdict", "source", "mailed"),
 }
-DEFAULT_SORT = {"listings": "verdict", "events": ""}
+DEFAULT_SORT = {"listings": "verdict", "units": "verdict", "events": ""}
 
 
 class ViewError(ValueError):
@@ -194,6 +198,8 @@ def delete(engine: Engine, view_id: int) -> bool:
 def matches(engine: Engine, st: State, p: Profile = PROFILE) -> int:
     if st.page == "events":
         return queries.events(engine, st.filters, limit=1, p=p).total
+    if st.page == "units":
+        return queries.search_units(engine, queries.ListingQuery(st.filters, st.q, limit=1), p).total
     return queries.search_listings(engine, queries.ListingQuery(st.filters, st.q, limit=1), p).total
 
 

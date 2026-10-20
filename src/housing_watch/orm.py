@@ -180,7 +180,7 @@ class SavedViewRow(Base):
 
     __tablename__ = "saved_views"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    page: Mapped[str] = mapped_column(Text)  # listings | events
+    page: Mapped[str] = mapped_column(Text)  # listings | units | events
     name: Mapped[str] = mapped_column(Text)
     query: Mapped[dict] = mapped_column(JSONB)  # {"filters": [{"field", "op", "values"}], "q", "sort", "columns"}
     position: Mapped[int] = mapped_column(Integer, default=0)

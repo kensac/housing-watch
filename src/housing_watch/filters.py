@@ -305,6 +305,17 @@ def listing_where(conds: list[Cond], listings=ListingRow.__table__, units=UnitRo
     return out
 
 
+def unit_where(conds: list[Cond], listings=ListingRow.__table__, units=UnitRow.__table__,
+               bands=BandRow.__table__) -> list:  # fmt: skip
+    """SQL clauses on `units` joined to `listings`: the unit conditions hold on that unit itself, and the
+    band conditions on one of its bands."""
+    out = [sql(c) for c in conds if c.field.scope in ("listing", "unit")]
+    bc = [sql(c) for c in conds if c.field.scope == "band"]
+    if bc:
+        out.append(exists(select(1).where(bands.c.unit_id == units.c.id, *bc)))
+    return out
+
+
 def match(c: Cond, value) -> bool:
     """A condition against one computed value, in Python, with the same meaning as sql()."""
     op, v = c.op, c.values

@@ -38,8 +38,16 @@ def money(text: str | float | int | None) -> float | None:
         return None
     if isinstance(text, int | float):
         return float(text)
-    m = re.search(r"\d[\d,]*(?:\.\d+)?", str(text).replace("$", ""))
-    return float(m.group(0).replace(",", "")) if m else None
+    t = str(text).replace("$", "")
+    m = re.search(r"\d[\d,]*(?:\.\d+)?", t)
+    if not m:
+        return None
+    num = m.group(0)
+    if re.search(r",\d{1,2}$", num) and (more := re.match(r" (\d[\d,]*(?:\.\d+)?)", t[m.end() :])):
+        num += more.group(1)  # a thousands group split by a stray space: "1,5 47.67"
+    if re.fullmatch(r"\d{1,3}\.\d{3}", num):
+        num = num.replace(".", ",")  # a dot as the thousands separator: "2.468"
+    return float(num.replace(",", ""))
 
 
 def whole(text: str | float | int | None) -> int | None:

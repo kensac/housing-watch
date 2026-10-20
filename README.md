@@ -65,6 +65,10 @@ python -m housing_watch worker               # a fleet worker
 python -m housing_watch serve                # migrate + worker + web: the image's default
 ```
 
+The web UI is `frontend/` (React + Mantine). `cd frontend && npm ci && npm run build` builds it into
+`src/housing_watch/web/dist/` for `serve`; `npm run dev` serves it with hot reload and proxies `/api` to
+`HW_API` (a running `serve`).
+
 The image is `ghcr.io/kensac/housing-watch` (amd64 and arm64), built on every
 push to `main`. Its entrypoint is `python -m housing_watch`, with `serve` as the
 default command.
