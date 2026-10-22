@@ -22,12 +22,13 @@ tables), so the same input always gives the same output.
   runs them, and big sources split into chunks that run on several workers.
 - `criteria.py` labels each listing **eligible**, **possible** or **excluded**
   when it is read, and gives a reason. Anything it cannot rule out counts as
-  possible and is still reported.
+  possible and shows in the web UI.
 - `applications.py` pre-fills paper application PDFs that are a known form (today HPD's HC2.0
   application, used by Tax Solute, iAfford, AFNY and others) from `HW_APPLICANT_FILE`. The UI
   generates the filled PDF on request and stores nothing.
-- `digest.py` sends a digest at `HW_DIGEST_HOURS`. When a new eligible unit is
-  open, it sends right away instead.
+- `digest.py` sends a digest at `HW_DIGEST_HOURS`, only when an eligible listing is new,
+  changed or closed (possible listings and page changes stay in the UI). When a new
+  eligible unit is open, it sends right away instead.
 
 `docs/ARCHITECTURE.md` is the full design.
 

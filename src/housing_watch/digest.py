@@ -1,7 +1,8 @@
-"""Turn un-notified events into one email. Nothing is sent when nothing worth reading happened.
+"""Turn un-notified events into one email. It goes out only when an eligible listing is new, changed or closed.
 
-A source's first run (events marked `baseline`) is its starting inventory, not news: it becomes one
-summary line with counts, and only its eligible listings are shown individually.
+Possible verdicts and watched-page changes are read in the web UI, not mailed; source failures ride along
+in a digest that is going out anyway. A source's first run (events marked `baseline`) is its starting
+inventory, not news: it becomes one summary line with counts, and only its eligible listings are shown.
 """
 
 from __future__ import annotations
@@ -108,7 +109,7 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
         label = "First seen" if baseline else TITLES.get(typ, typ)
         head = f"[{label}] {lst.title} ({lst.borough or 'borough ?'}) {lst.url}"
         if typ in ("closed", "gone"):
-            if listing_verdict(queries.as_open(lst), p).verdict != EXCLUDED:  # was it worth knowing about?
+            if listing_verdict(queries.as_open(lst), p).verdict == ELIGIBLE:  # was it worth knowing about?
                 sections["closed"].append((head, []))
             continue
         detail = [f"source: {r.source}  verdict: {v.verdict} ({v.reason})  status: {lst.status}"]
@@ -119,24 +120,19 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
         detail += _units(lst, p)
         if v.verdict == ELIGIBLE:
             sections["eligible"].append((head, detail))
-        elif v.verdict == POSSIBLE:
-            sections["possible"].append((head, detail))
         elif typ == "new":
             excluded_new += 1
-    if not any(sections.values()):
-        return "", "", "", ids  # only noise (a first run with nothing eligible is noise too): mark read
-    n_e, n_p = len(sections["eligible"]), len(sections["possible"])
-    subject = f"Housing watch: {n_e} eligible, {n_p} to check"
-    if sections["pages"]:
-        subject += f", {len(sections['pages'])} page changes"
+    if not (sections["eligible"] or sections["closed"]):
+        return "", "", "", ids  # nothing eligible happened (possible, page changes, failures alone): mark read
+    subject = f"Housing watch: {len(sections['eligible'])} eligible"
+    if sections["closed"]:
+        subject += f", {len(sections['closed'])} closed"
     if sections["failed"]:
         n = len(sections["failed"])
         subject += f", {n} source{'s' if n != 1 else ''} failing"
     order = [
         ("eligible", "Eligible"),
-        ("possible", "Possible: check these"),
-        ("pages", "Watched pages changed"),
-        ("closed", "Closed or removed (were eligible/possible)"),
+        ("closed", "Closed or removed (were eligible)"),
         ("failed", "Sources failing"),
         ("recovered", "Sources recovered"),
     ]
