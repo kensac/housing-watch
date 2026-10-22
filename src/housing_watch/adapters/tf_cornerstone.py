@@ -98,7 +98,6 @@ class TFCornerstone(Adapter):
     name = "tf_cornerstone"
     title = "TF Cornerstone re-rentals"
     url = f"{PAGE}#available-rerentals"
-    every_hours = 4  # first come, first served
     min_listings = 1  # a building, or the snapshot when none are listed
 
     def fetch(self) -> Result:

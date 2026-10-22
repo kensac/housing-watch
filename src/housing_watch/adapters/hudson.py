@@ -116,7 +116,6 @@ class Hudson(PageAdapter):
     title = "Hudson Companies"
     url = URL
     pages = [URL]
-    every_hours = 4
     min_text = 400
     min_listings = 1  # 3 programs on 2026-10-19 (Bergen Gardens, The Clark, La Central)
 

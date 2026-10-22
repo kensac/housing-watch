@@ -30,7 +30,6 @@ class InfiniteHorizons(GoDaddyPage):
     title = "Infinite Horizons (ihrerentals.com)"
     url = GALLERY
     pages = [GALLERY]
-    every_hours = 4
     ignore = GODADDY_IGNORE
     link_re = re.compile(r"ihrerentals\.com/house-|streeteasy\.com|foresthillsmha", re.I)
     min_text = 300

@@ -168,7 +168,6 @@ class TaxSolute(Adapter):
     name = "tax_solute"
     title = "Tax Solute (Affordable Living NYC)"
     url = URL
-    every_hours = 4  # first come, first served
     min_listings = 1
 
     def fetch(self) -> Result:

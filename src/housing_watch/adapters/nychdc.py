@@ -280,7 +280,6 @@ class NycHdc(Adapter):
     name = "nychdc"
     title = "NYC HDC re-rentals"
     url = PAGE
-    every_hours = 4
     min_listings = 8
 
     def fetch(self) -> Result:

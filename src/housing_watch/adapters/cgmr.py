@@ -14,6 +14,5 @@ class Cgmr(GoDaddyPage):
     title = "CGMR Compliance Partners"
     url = "https://cgmrcompliance.com/housing-opportunities-1"
     pages = [url]
-    every_hours = 4
     ignore = GODADDY_IGNORE
     min_text = 150  # the empty page is ~280 chars of repeated nav; less means it did not load

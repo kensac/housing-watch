@@ -163,7 +163,6 @@ class Mhany(PageAdapter):
     title = "MHANY Management"
     url = RERENTALS
     pages = [RERENTALS, AVAILABLE]
-    every_hours = 4
     min_listings = 1
 
     def fetch(self) -> Result:

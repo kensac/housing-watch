@@ -133,7 +133,6 @@ class Langsam(PageAdapter):
     title = "Langsam Property Services"
     url = URL
     pages = [URL]
-    every_hours = 4
     min_listings = 1
 
     def fetch(self) -> Result:

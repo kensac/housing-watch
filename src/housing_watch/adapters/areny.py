@@ -68,7 +68,6 @@ class ARENY(PageAdapter):
     title = "About Real Estate NY (ARENY)"
     url = URL
     pages = [URL]
-    every_hours = 4
     min_text = 150
     min_listings = 0  # usually only the snapshot; the flush run (see module doc) returns nothing
 

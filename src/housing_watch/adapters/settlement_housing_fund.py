@@ -457,7 +457,6 @@ class SettlementHousingFund(PageAdapter):
     title = "Settlement Housing Fund"
     url = URL
     pages = [URL]
-    every_hours = 4
     min_listings = 1
 
     def _table(self, img: str) -> list[list[list[str]]]:

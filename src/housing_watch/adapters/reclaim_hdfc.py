@@ -49,7 +49,6 @@ class ReclaimHdfc(PageAdapter):
     title = "Reclaim HDFC (Sycamore Birch)"
     url = URL
     pages = [URL]
-    every_hours = 4
     min_text = 300
     link_re = re.compile(r"FileHandler\.ashx", re.I)
 

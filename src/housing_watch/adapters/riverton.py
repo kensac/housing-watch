@@ -19,7 +19,6 @@ class Riverton(GoDaddyPage):
     title = "Riverton Square"
     url = "https://rivertonlottery.com/"
     pages = ["https://rivertonlottery.com/", "https://rivertonsquare.com/"]
-    every_hours = 4
     ignore = [*GODADDY_IGNORE, r"drop us a line!", r"send"]
     link_re = re.compile(r"housingconnect|streeteasy\.com|rivertonlottery\.com/wp-content/uploads", re.I)
     min_text = 300

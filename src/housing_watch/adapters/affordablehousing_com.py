@@ -229,7 +229,6 @@ class AffordableHousingCom(Adapter):
     name = "affordablehousing_com"
     title = "AffordableHousing.com (income restricted, NYC)"
     url = f"{BASE}/kings-county-ny/income-restricted/"
-    every_hours = 4
     min_listings = 10  # 34 across the five counties in Oct 2026
 
     def fetch(self) -> Result:

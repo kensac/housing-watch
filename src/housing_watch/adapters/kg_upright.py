@@ -255,7 +255,6 @@ class KgUpright(PageAdapter):
     title = "K&G Upright"
     url = URL
     pages = [URL]
-    every_hours = 4
     min_listings = 1
 
     def fetch(self) -> Result:
