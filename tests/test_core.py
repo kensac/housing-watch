@@ -37,6 +37,13 @@ def test_listing_verdicts():
     assert listing_verdict(L([good], status="closed")).verdict == EXCLUDED
     assert listing_verdict(L([good], senior_only=True)).verdict == EXCLUDED
     assert listing_verdict(L([])).verdict == POSSIBLE
+    # not applicable yet (upcoming) or now (no status): excluded unless plainly eligible
+    unsized = Unit("unknown", 2400, 130, bands=[Band(1, 80000, 154440)])
+    assert listing_verdict(L([unsized], borough="Queens", status="upcoming")).verdict == EXCLUDED
+    assert listing_verdict(L([], borough="Queens", status="upcoming")).verdict == EXCLUDED
+    assert listing_verdict(L([good], borough="Queens", status="upcoming")).verdict == ELIGIBLE
+    assert listing_verdict(L([good], borough="Queens", status="unknown")).verdict == EXCLUDED
+    assert listing_verdict(L([unsized], borough="Queens", status="waitlist")).verdict == POSSIBLE
 
 
 def test_parse_helpers():
