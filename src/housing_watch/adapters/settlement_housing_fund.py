@@ -452,6 +452,17 @@ def registration_listing(name: str, addr: str, link: str, target: str, cfg: dict
     )
 
 
+def read_form(form_url: str, table) -> tuple[list[Listing], set[str]]:
+    """The re-rental form -> (its listings, the table image urls); `table(url)` OCRs one image."""
+    form = fetch.json(form_api_url(form_url))
+    tables = {}
+    for q in form.get("questions", []):
+        img = (q.get("image") or {}).get("resourceUrl")
+        if q.get("type") == "Question.Choice" and img:
+            tables[img] = table(img)
+    return parse_form(form, form_url, tables), set(tables)
+
+
 class SettlementHousingFund(PageAdapter):
     name = SOURCE
     title = "Settlement Housing Fund"
@@ -475,14 +486,8 @@ class SettlementHousingFund(PageAdapter):
         listings: list[Listing] = []
         imgs: set[str] = set()
         if form_url:
-            form = fetch.json(form_api_url(form_url))
-            tables = {}
-            for q in form.get("questions", []):
-                img = (q.get("image") or {}).get("resourceUrl")
-                if q.get("type") == "Question.Choice" and img:
-                    tables[img] = self._table(img)
-                    imgs.add(img)
-            listings += parse_form(form, form_url, tables)
+            found, imgs = read_form(form_url, self._table)
+            listings += found
         for img in [k for k in self.cache.get("ocr", {}) if k not in imgs]:
             del self.cache["ocr"][img]
         for name, addr, link in links:

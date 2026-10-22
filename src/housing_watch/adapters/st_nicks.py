@@ -68,6 +68,21 @@ def openings(html: str) -> list[tuple[str, str]]:
     return out
 
 
+def senior_waitlists(html: str) -> list[str]:
+    """Buildings listed under "Senior Housing" (HUD, for elderly or disabled residents), each with its own waitlist."""
+    s = parse.soup(html)
+    head = s.find(["h2", "h3"], string=re.compile(r"Senior Housing\s*$", re.I))
+    out = []
+    for el in head.find_all_next(["a", "h2", "h3"]) if head else []:
+        if el.name != "a":
+            if "senior" not in el.get_text(" ").lower():
+                break
+            continue
+        if el.get("href", "").lower().endswith(".pdf") and (name := el.get_text(" ", strip=True)):
+            out.append(name)
+    return out
+
+
 def mail_address(app_text: str) -> str | None:
     m = re.search(r"MAIL COMPLETE APPLICATION TO:\s*\n((?:[ \t]*\S.*\n){1,4})", app_text or "", re.I)
     if not m:

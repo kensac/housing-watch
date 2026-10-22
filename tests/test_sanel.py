@@ -1,11 +1,14 @@
 import json
+import shutil
+import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from housing_watch import adapters, runner
 from housing_watch.adapters import PLAN, sanel
-from housing_watch.adapters.sanel import Sanel, parse_page, reside_match
+from housing_watch.adapters.sanel import Sanel, parse_page, reside_buildings, reside_match
 from housing_watch.criteria import listing_verdict
 from housing_watch.fetch import FetchError
 from housing_watch.models import Band
@@ -172,7 +175,7 @@ def doc(name):
     return json.loads(t) if name.endswith(".json") else t
 
 
-def enriched(name, monkeypatch, **docs):
+def enriched(name, monkeypatch, cache=None, **docs):
     """parse_page + enrich, with each official url answered from a fixture (any other url fails the test)."""
 
     def answer(u, **kw):
@@ -183,6 +186,7 @@ def enriched(name, monkeypatch, **docs):
     for f in ("json", "html", "pdf_text"):
         monkeypatch.setattr(sanel.fetch, f, answer)
     a = Sanel()
+    a.cache.update(cache or {})
     return a.enrich(page(name), (F / f"{name}.html").read_text()), a
 
 
@@ -247,8 +251,71 @@ def test_reside_root_link_matched_by_unit(monkeypatch):
     assert lst.units[0].bands[0] == Band(1, 120011, 154440) and listing_verdict(lst).verdict == "eligible"
 
 
+def test_reside_unit_page_newer_than_cached_list(monkeypatch):
+    unit = "https://residenewyork.com/property/36-10-31-street-apartment-unit-3a/"
+    monkeypatch.setattr(Sanel, "_reside_urls", lambda self: [unit])
+    old = {"doc:reside": {"fetched": time.time() - 2 * 3600, "data": []}}  # read before the unit page existed
+    lst, _ = enriched(
+        "queens__36-10-31st-street-unit-3a-1qm2xf", monkeypatch, old, **{"unit-3a": "reside-36-10-31-unit-3a.html"}
+    )
+    assert listing_verdict(lst).verdict == "eligible"
+
+
+def test_reside_building_tier_at_unit_rent(monkeypatch):
+    urls = [
+        "https://residenewyork.com/property/28-08-38th-avenue-apartments/",  # header range only: no tier
+        "https://residenewyork.com/property/28-08-38th-avenue-apartment-om/",
+        "https://residenewyork.com/property/2588-7th-ave-apartment-unit-4j/",
+    ]
+    assert reside_buildings("28-08 38th Avenue #2F", urls) == urls[:2]
+    assert reside_buildings("2588 7th Ave #4N", urls) == []
+    monkeypatch.setattr(Sanel, "_reside_urls", lambda self: urls)
+    lst, _ = enriched(
+        "queens__28-08-38th-avenue-unit-2f-1jnbzw",
+        monkeypatch,
+        **{
+            "apartment-om": "reside-28-08-38th-avenue-apartment-om.html",
+            "avenue-apartments": "reside-28-08-38th-avenue-apartments.html",
+        },
+    )
+    (u,) = lst.units  # SANEL: $3,423, size unknown; the building table's $3,423 row is a 130% studio
+    assert (u.size, u.rent, u.ami, u.bands[0]) == ("studio", 3423, 130, Band(1, 122298, 154440))
+    assert listing_verdict(lst).verdict == "eligible" and "building page" in lst.notes
+
+
+@pytest.mark.skipif(not shutil.which("tesseract"), reason="tesseract not installed")
+def test_shf_unit_from_re_rental_form(monkeypatch):
+    shf = Path(__file__).parent / "fixtures" / "settlement_housing_fund"
+    form = json.loads((shf / "form.json").read_text())
+    pngs = {
+        q["image"]["resourceUrl"]: "table-130.png" if "130%" in q["title"] else "table-40-60.png"
+        for q in form["questions"]
+        if q["type"] == "Question.Choice" and q["image"]["resourceUrl"]
+    }
+    monkeypatch.setattr(sanel.fetch, "get", lambda u, **kw: SimpleNamespace(content=(shf / pngs[u]).read_bytes()))
+    docs = {
+        "find-housing": "../settlement_housing_fund/find-housing.html",
+        "formapi": "../settlement_housing_fund/form.json",
+    }
+    lst, a = enriched("brooklyn__30-kent-street-unit-310-11i1pi", monkeypatch, **docs)
+    (u,) = lst.units
+    assert (u.size, u.unit_no, u.rent, u.bands[0]) == ("1br", "310", 2858, Band(1, 101692, 154440))
+    assert listing_verdict(lst).verdict == "eligible" and "doc:shf" in a.cache
+
+
+def test_tax_solute_card(monkeypatch):
+    # the card prints household 1-3 but income rows from 2 people only
+    lst, _ = enriched("brooklyn__217-greene-st-2ctnxc", monkeypatch, affordablelivingnyc="tax-solute-home.html")
+    assert lst.units[0].rent == 2773.15 and listing_verdict(lst).reason == "needs household of 2+"
+
+
+def test_st_nicks_senior_building(monkeypatch):
+    lst, _ = enriched("brooklyn__ellery-court-eosufd", monkeypatch, stnicksalliance="../st_nicks/index.html")
+    assert lst.senior_only and listing_verdict(lst).reason == "senior only"
+
+
 def test_nothing_public_is_explained(monkeypatch):
-    lst, _ = enriched("brooklyn__ellery-court-eosufd", monkeypatch)
+    lst, _ = enriched("brooklyn__270-pulaski-street-u12rpt", monkeypatch, stnicksalliance="../st_nicks/index.html")
     assert listing_verdict(lst).reason == "no income table" and "lists no rents or income limits" in lst.notes
 
 
