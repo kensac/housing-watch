@@ -1,6 +1,6 @@
-import { Button, Center, Group, Loader, Stack, Table, Text, UnstyledButton } from '@mantine/core'
+import { Alert, Button, Center, Flex, Group, Loader, Stack, Table, Text, UnstyledButton } from '@mantine/core'
 import { useIntersection } from '@mantine/hooks'
-import { IconChevronDown, IconChevronUp, IconSelector } from '@tabler/icons-react'
+import { IconAlertTriangle, IconArrowDown, IconArrowUp, IconArrowsSort, IconListSearch } from '@tabler/icons-react'
 import { memo, useEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -8,8 +8,9 @@ import type { Chip, Page, ViewState } from '../api'
 import { num } from '../format'
 import { descending, openHref, rowClick, stateUrl, TITLES, useListState, useMeta, useTitle, useViews } from '../hooks'
 import { FilterBar } from './FilterBar'
+import classes from './ListPage.module.css'
 import { Loading, LoadError } from './State'
-import { Toolbar } from './Toolbar'
+import { SearchInput, Toolbar } from './Toolbar'
 import { ViewBar } from './ViewBar'
 
 export type ListCtx = ReturnType<typeof useListState>
@@ -19,7 +20,7 @@ export type ListCtx = ReturnType<typeof useListState>
 const FILL = { base: 'auto', sm: 'calc(100dvh - var(--app-shell-header-offset, 0rem) - 2 * var(--app-shell-padding))' }
 
 /** A list page: its saved view, toolbar and filters, then whatever table `children` renders for the state. */
-export function ListPage({ page, chips, problems, summary, children, search, error, retry }: {
+export function ListPage({ page, chips, problems, summary, children, search = true, error, retry }: {
   page: Page; chips: Chip[]; problems: string[]; summary: ReactNode; search?: boolean
   error?: unknown; retry?: () => void
   children: (ctx: ListCtx) => ReactNode
@@ -38,11 +39,21 @@ export function ListPage({ page, chips, problems, summary, children, search, err
   if (setupError) return <LoadError what="the page setup" error={setupError} retry={() => { meta.refetch(); views.refetch() }} />
   if (!ctx.ready) return <Loading rows={10} label={`Loading ${TITLES[page].toLowerCase()}…`} />
   return (
-    <Stack gap="sm" h={FILL}>
+    <Stack gap={0} h={FILL}>
       <ViewBar page={page} state={ctx.state} view={ctx.view} modified={ctx.modified} />
-      <Toolbar page={page} state={ctx.state} set={ctx.set} search={search} />
-      <FilterBar page={page} f={ctx.state.f} chips={chips} problems={problems} q={ctx.state.q} onChange={(f) => ctx.set({ f })} />
-      <Text size="sm" c="dimmed" aria-live="polite">{summary}</Text>
+      {/* search and filters on the left, sort and columns on the right; stacked on a phone */}
+      <Flex direction={{ base: 'column', sm: 'row' }} justify="space-between" align={{ base: 'stretch', sm: 'flex-start' }} gap="sm" mt="md">
+        <Group gap="xs" style={{ flex: 1, minWidth: 0 }}>
+          {search && <SearchInput page={page} q={ctx.state.q} set={ctx.set} />}
+          <FilterBar page={page} f={ctx.state.f} chips={chips} q={ctx.state.q} onChange={(f) => ctx.set({ f })} />
+        </Group>
+        <Toolbar page={page} state={ctx.state} set={ctx.set} />
+      </Flex>
+      {problems.map((p) => (
+        <Alert key={p} mt="sm" color="red" variant="light" icon={<IconAlertTriangle size={16} aria-hidden />}
+          title="Filter ignored: it has no effect on the list">{p}</Alert>
+      ))}
+      <Text size="xs" c="dimmed" aria-live="polite" mt="sm" mb="xs">{summary}</Text>
       {error ? <LoadError what={TITLES[page].toLowerCase()} error={error} retry={retry} /> : children(ctx)}
     </Stack>
   )
@@ -83,7 +94,7 @@ export const ListRows = memo(function ListRows<T>({ page, rows, cols, base, cell
     const to = k ? openHref(page, base, k) : null
     return (
       <Table.Tr key={rowKey(x)} onClick={to ? rowClick(() => navigate(to)) : undefined} style={{ cursor: to ? 'pointer' : undefined }}
-        opacity={dim?.(x) ? 0.6 : 1}>
+        className={dim?.(x) ? classes.dim : undefined}>
         {lead(x, to)}
         {shown.map((c) => <Table.Td key={c} ta={cells[c].right ? 'right' : undefined} style={{ whiteSpace: 'nowrap' }}>{cells[c].cell(x)}</Table.Td>)}
       </Table.Tr>
@@ -91,32 +102,34 @@ export const ListRows = memo(function ListRows<T>({ page, rows, cols, base, cell
   })
 }) as <T>(p: RowsProps<T>) => ReactNode
 
+/** The leading cell of a list row: a title line over a muted detail line; it gets whatever width the other columns leave. */
+export const LeadTd = ({ children }: { children: ReactNode }) => <Table.Td className={classes.lead}>{children}</Table.Td>
+
 /** The dense, sticky-header table every list page uses; dimmed while a changed query is loading. */
 export function ListTable({ label, minWidth, stale, children }: { label: string; minWidth: number; stale: boolean; children: ReactNode }) {
   return (
     <Table.ScrollContainer type="native" minWidth={minWidth} flex={1} mih={0} style={{ scrollPaddingTop: 40 }}>
-      <Table stickyHeader highlightOnHover tabularNums verticalSpacing={6} aria-label={label} aria-busy={stale}
-        opacity={stale ? 0.6 : 1}>
+      <Table stickyHeader highlightOnHover tabularNums fz="sm" className={classes.table} aria-label={label} aria-busy={stale}>
         {children}
       </Table>
     </Table.ScrollContainer>
   )
 }
 
-/** A column header that sorts by `sort` (click again to reverse). */
-export function SortTh({ label, sort, state, set, ta }: {
-  label: string; sort?: string; state: ViewState; set: (p: Partial<ViewState>) => void; ta?: 'right'
+/** A column header that sorts by `sort` (click again to reverse); `lead` marks the column that takes the slack. */
+export function SortTh({ label, sort, state, set, ta, lead }: {
+  label: string; sort?: string; state?: ViewState; set?: (p: Partial<ViewState>) => void; ta?: 'right'; lead?: boolean
 }) {
-  if (!sort) return <Table.Th ta={ta}>{label}</Table.Th>
+  const className = lead ? classes.lead : undefined
+  if (!sort || !state || !set) return <Table.Th ta={ta} className={className}>{label}</Table.Th>
   const on = state.sort.replace(/^-/, '') === sort
   const desc = descending(state.sort)
-  const Icon = !on ? IconSelector : desc ? IconChevronDown : IconChevronUp
+  const Icon = !on ? IconArrowsSort : desc ? IconArrowDown : IconArrowUp
   return (
-    <Table.Th ta={ta} aria-sort={on ? (desc ? 'descending' : 'ascending') : 'none'}>
-      <UnstyledButton onClick={() => set({ sort: on && !state.sort.startsWith('-') ? `-${sort}` : sort })}>
-        <Group gap={4} wrap="nowrap" justify={ta === 'right' ? 'flex-end' : undefined}>
-          <Text fw={on ? 700 : 500} size="sm">{label}</Text><Icon size={14} aria-hidden />
-        </Group>
+    <Table.Th ta={ta} className={className} aria-sort={on ? (desc ? 'descending' : 'ascending') : 'none'}>
+      <UnstyledButton className={classes.sort} data-on={on || undefined} data-right={ta === 'right' || undefined}
+        onClick={() => set({ sort: on && !state.sort.startsWith('-') ? `-${sort}` : sort })}>
+        {label}<Icon size={14} className={classes.sortIcon} aria-hidden />
       </UnstyledButton>
     </Table.Th>
   )
@@ -133,21 +146,22 @@ export function MoreRow({ cols, more, loading, failed, onMore, total, noun, onCl
   return (
     <Table.Tr ref={ref}>
       <Table.Td colSpan={cols}>
-        <Center py="xs" role="status">
+        <Center py="sm" role="status">
           {failed && !loading ? (
-            <Group gap="xs">
-              <Text size="sm" c="red">Couldn’t load more {noun}. Check the server, then try again.</Text>
+            <Group gap="sm">
+              <Text size="sm" c="red.8">Couldn’t load more {noun}. Check the server, then try again.</Text>
               <Button size="xs" variant="default" onClick={onMore}>Try Again</Button>
             </Group>
-          ) : more || loading ? <Group gap="xs"><Loader size="sm" /><Text size="sm" c="dimmed">Loading {noun}…</Text></Group>
+          ) : more || loading ? <Group gap="xs"><Loader size="xs" /><Text size="sm" c="dimmed">Loading {noun}…</Text></Group>
             : total ? <Text size="sm" c="dimmed">All {num(total)} {noun} shown</Text>
             : (
-              <Stack gap={6} align="center" py="md">
-                <Text size="sm" fw={500}>No {noun} match</Text>
+              <Stack gap={4} align="center" py="xl">
+                <IconListSearch size={22} className={classes.emptyIcon} aria-hidden />
+                <Text size="sm" fw={500} mt={4}>No {noun} match</Text>
                 {onClear ? (
                   <>
                     <Text size="sm" c="dimmed">Remove a filter or change the search to widen the list.</Text>
-                    <Button size="xs" variant="default" onClick={onClear}>{clearLabel}</Button>
+                    <Button size="xs" variant="default" mt="xs" onClick={onClear}>{clearLabel}</Button>
                   </>
                 ) : <Text size="sm" c="dimmed">Nothing has been recorded yet. Sources fill this in as they run.</Text>}
               </Stack>

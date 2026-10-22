@@ -1,0 +1,35 @@
+/* An active filter: a quiet grey chip the height of the toolbar's controls; click it to edit, × to remove. */
+.chip {
+  --pill-fz: var(--mantine-font-size-sm);
+  --pill-height: 30px;
+  --pill-radius: var(--mantine-radius-md);
+  background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-5));
+  padding-inline: 10px 4px;
+}
+
+.chip:hover {
+  background-color: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-4));
+}
+
+.edit {
+  font: inherit;
+  color: inherit;
+  border-radius: var(--mantine-radius-sm);
+}
+
+.remove {
+  --cb-icon-size: 14px;
+  flex: none;
+  width: 22px;
+  min-width: 22px;
+  height: 22px;
+  margin-inline: 2px 4px;
+  padding: 0;
+  border-radius: var(--mantine-radius-sm);
+  color: var(--mantine-color-dimmed);
+}
+
+.remove:hover {
+  color: var(--mantine-color-text);
+  background-color: light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-3));
+}

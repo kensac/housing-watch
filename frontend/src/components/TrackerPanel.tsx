@@ -15,7 +15,7 @@ const HOW: Record<string, string> = {
 /** A tracker row's stages as the syncs saw them change, oldest first. */
 function StageTimeline({ steps }: { steps: StageStep[] }) {
   return (
-    <Timeline bulletSize={14} lineWidth={2} aria-label="Stage history">
+    <Timeline aria-label="Stage history">
       {steps.map((e, i) => (
         <Timeline.Item key={i} title={
           <Group gap="xs">
@@ -53,14 +53,13 @@ export function TrackerPanel({ x }: { x: Listing }) {
   const rows = tracker.data?.rows ?? []
   const row = rows.find((r) => r.property === x.tracker_row)
   return (
-    <Stack gap="xs">
+    <Stack gap="sm">
       {x.tracker_row ? (
         <>
           <Group gap="xs">
-            <ApplicationBadge s={x.application} group={x.application_group} since={x.application_since} baseline={x.application_since_baseline} />
-            {x.application_group && <Text size="xs" c="dimmed">{x.application_group}</Text>}
             <Text size="sm" fw={500}>{x.tracker_row}</Text>
-            <Text size="xs" c="dimmed">{HOW[x.tracker_match ?? ''] ?? ''}</Text>
+            <ApplicationBadge s={x.application} group={x.application_group} since={x.application_since} baseline={x.application_since_baseline} />
+            <Text size="xs" c="dimmed">{[x.application_group, HOW[x.tracker_match ?? '']].filter(Boolean).join(' · ')}</Text>
           </Group>
           {x.application_notes && <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x.application_notes}</Text>}
           {row && row.events.length > 0 && <StageTimeline steps={row.events} />}

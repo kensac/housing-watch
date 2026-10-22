@@ -1,0 +1,70 @@
+.shell {
+  --app-shell-border-color: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+}
+
+.navbar,
+.header {
+  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8));
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--mantine-spacing-xs);
+  height: 48px;
+  padding: 0 var(--mantine-spacing-xs);
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: var(--mantine-font-size-md);
+  letter-spacing: -0.01em;
+}
+
+.brandMark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--mantine-radius-md);
+  background-color: var(--mantine-primary-color-filled);
+  color: var(--mantine-primary-color-contrast, var(--mantine-color-white));
+}
+
+/* Nav items: 32px rows, quiet by default, a soft grey pill when active. */
+.link {
+  --nl-bg: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+  --nl-hover: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6));
+  --nl-color: var(--mantine-color-text);
+  height: 32px;
+  padding: 0 var(--mantine-spacing-xs);
+  border-radius: var(--mantine-radius-md);
+  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-1));
+  font-size: var(--mantine-font-size-md);
+}
+
+.link[data-active] {
+  font-weight: 500;
+}
+
+.link:hover:not([data-active]) {
+  color: var(--mantine-color-text);
+}
+
+.icon {
+  color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
+}
+
+.link[data-active] .icon {
+  color: inherit;
+}
+
+.sub {
+  height: 28px;
+  font-size: var(--mantine-font-size-sm);
+}
+
+.count {
+  font-size: var(--mantine-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--mantine-color-dimmed);
+}

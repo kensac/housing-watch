@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 
 import { api, qs, type Event, type EventsResponse } from '../api'
 import { EventBadge, VerdictBadge } from '../components/Badges'
-import { ListPage, ListRows, ListTable, MoreRow, type Cells } from '../components/ListPage'
+import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { ago, num, when } from '../format'
 import { useListState } from '../hooks'
@@ -22,13 +22,13 @@ const lead = (e: Event, to: string | null) => {
   const what = e.title ?? e.summary ?? e.source
   return (
     <>
-      <Table.Td style={{ whiteSpace: 'nowrap' }}><Text size="sm" title={when(e.at)}>{ago(e.at)}</Text></Table.Td>
+      <Table.Td style={{ whiteSpace: 'nowrap' }} c="dimmed" title={when(e.at)}>{ago(e.at)}</Table.Td>
       <Table.Td><EventBadge t={e.type} baseline={e.baseline} /></Table.Td>
-      <Table.Td maw={520}>
+      <LeadTd>
         {to
-          ? <Anchor component={Link} to={to} c="inherit" size="sm" lineClamp={1}>{what}</Anchor>
+          ? <Anchor component={Link} to={to} c="inherit" size="sm" fw={500} lineClamp={1}>{what}</Anchor>
           : <Text size="sm" lineClamp={1}>{what}</Text>}
-      </Table.Td>
+      </LeadTd>
     </>
   )
 }
@@ -57,7 +57,7 @@ export function EventsPage() {
             <ListTable label="Events" minWidth={800} stale={q.isPlaceholderData}>
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Time</Table.Th><Table.Th>Event</Table.Th><Table.Th>What</Table.Th>
+                  <Table.Th>Time</Table.Th><Table.Th>Event</Table.Th><SortTh label="What" lead />
                   {cols.map((c) => <Table.Th key={c}>{CELLS[c].label}</Table.Th>)}
                 </Table.Tr>
               </Table.Thead>

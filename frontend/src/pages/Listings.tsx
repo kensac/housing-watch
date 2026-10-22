@@ -5,14 +5,15 @@ import { Link } from 'react-router-dom'
 
 import { api, qs, type Listing, type ListResponse, type ViewState } from '../api'
 import { ApplicationBadge, SizeBadge, StatusBadge, VerdictBadge } from '../components/Badges'
-import { ListPage, ListRows, ListTable, MoreRow, SortTh, Summary, type Cells } from '../components/ListPage'
+import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, Summary, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { ago, date, minutes, money, pct, range, when } from '../format'
 import { useListState } from '../hooks'
 
 const CELLS: Cells<Listing> = {
   verdict: { label: 'Verdict', sort: 'verdict', cell: (x) => <VerdictBadge v={x.verdict} why={x.reason} /> },
-  sizes: { label: 'Sizes', cell: (x) => (x.sizes.length ? <Group gap={4} wrap="nowrap">{x.sizes.map((s) => <SizeBadge key={s} s={s} />)}</Group> : '—') },
+  // a fixed width, so a listing with many sizes wraps onto the row's second line instead of widening the column
+  sizes: { label: 'Sizes', cell: (x) => (x.sizes.length ? <Group gap={4} w={144}>{x.sizes.map((s) => <SizeBadge key={s} s={s} />)}</Group> : '—') },
   rent: { label: 'Rent (Fits You)', sort: 'rent', right: true, cell: (x) => range(x.rent_min, x.rent_max, money) },
   ami: { label: 'AMI', right: true, cell: (x) => range(x.ami_min, x.ami_max, pct) },
   commute: { label: 'Commute', sort: 'commute', right: true, cell: (x) => minutes(x.commute) },
@@ -30,10 +31,10 @@ const CELLS: Cells<Listing> = {
 const rowKey = (x: Listing) => x.key
 const dim = (x: Listing) => x.status === 'gone'
 const lead = (x: Listing, to: string | null) => (
-  <Table.Td maw={420}>
+  <LeadTd>
     <Anchor component={Link} to={to!} c="inherit" size="sm" fw={500} lineClamp={1}>{x.title}</Anchor>
     <Text size="xs" c="dimmed" lineClamp={1}>{[x.address, x.borough].filter(Boolean).join(' · ') || x.source}</Text>
-  </Table.Td>
+  </LeadTd>
 )
 
 function useListings(st: ViewState, enabled: boolean) {
@@ -63,7 +64,7 @@ export function ListingsPage() {
             <ListTable label="Listings" minWidth={900} stale={q.isPlaceholderData}>
               <Table.Thead>
                 <Table.Tr>
-                  <SortTh label="Listing" sort="title" state={state} set={set} />
+                  <SortTh label="Listing" sort="title" state={state} set={set} lead />
                   {cols.map((c) => <SortTh key={c} label={CELLS[c].label} sort={CELLS[c].sort} state={state} set={set} ta={CELLS[c].right ? 'right' : undefined} />)}
                 </Table.Tr>
               </Table.Thead>

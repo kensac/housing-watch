@@ -3,27 +3,41 @@ import { Badge, Group, Text, Tooltip } from '@mantine/core'
 import type { StageGroup, Verdict } from '../api'
 import { EVENT_COLOR, STATUS_COLOR, stageAge, VERDICT_COLOR, when } from '../format'
 import { useMotion } from '../hooks'
+import classes from './Badges.module.css'
 
 // a badge never shrinks below its label (its ellipsis would otherwise let a table squeeze it to nothing)
 const whole = { minWidth: 'max-content' }
+
+// enum values arrive lowercase ("eligible", "page_changed"); shown in sentence case
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export function VerdictBadge({ v, why }: { v: Verdict | null; why?: string }) {
   const motion = useMotion()
   if (!v) return null
   return (
     <Tooltip label={why} disabled={!why} withinPortal transitionProps={motion}>
-      <Badge color={VERDICT_COLOR[v]} variant="light" style={whole}>{v}</Badge>
+      <Badge color={VERDICT_COLOR[v]} style={whole}>{cap(v)}</Badge>
     </Tooltip>
   )
 }
 
-export const SizeBadge = ({ s }: { s: string }) => <Badge variant="default" size="sm" style={whole}>{s}</Badge>
+/** A unit size: "Studio", "1BR". */
+export const SizeBadge = ({ s }: { s: string }) => (
+  <Badge variant="default" c="dimmed" style={whole}>{/^\d/.test(s) ? s.toUpperCase() : cap(s)}</Badge>
+)
 
-export const StatusBadge = ({ s }: { s: string }) => <Badge color={STATUS_COLOR[s] ?? 'gray'} variant="outline" style={whole}>{s}</Badge>
+/** A coloured dot: a status that reads at a glance without a filled chip. */
+export const Dot = ({ color }: { color: string }) => (
+  <span className={classes.dot} style={{ '--dot': `var(--mantine-color-${color}-6)` } as React.CSSProperties} aria-hidden />
+)
+
+export const StatusBadge = ({ s }: { s: string }) => (
+  <span className={classes.status} style={whole}><Dot color={STATUS_COLOR[s] ?? 'gray'} />{cap(s)}</span>
+)
 
 export const EventBadge = ({ t, baseline }: { t: string; baseline?: boolean }) => (
-  <Badge color={EVENT_COLOR[t] ?? 'gray'} variant={baseline ? 'outline' : 'light'} style={whole}>
-    {baseline && t === 'new' ? 'first run' : t.replaceAll('_', ' ')}
+  <Badge color={EVENT_COLOR[t] ?? 'gray'} variant={baseline ? 'default' : 'light'} c={baseline ? 'dimmed' : undefined} style={whole}>
+    {baseline && t === 'new' ? 'First run' : cap(t.replaceAll('_', ' '))}
   </Badge>
 )
 
@@ -39,7 +53,7 @@ export function ApplicationBadge({ s, group, since, baseline }: {
   const age = group === 'your move' || group === 'their move' ? stageAge(since, baseline) : null
   return (
     <Group gap={6} wrap="nowrap">
-      <Badge color={stageColor(s, group)} variant="light" style={whole} title={group ?? 'not a known stage'}>{s}</Badge>
+      <Badge color={stageColor(s, group)} style={whole} title={group ?? 'not a known stage'}>{s}</Badge>
       {age && <Text size="xs" c="dimmed" style={whole} title={baseline ? `Already ${s} when tracking began, ${when(since)}` : when(since)}>{age}</Text>}
     </Group>
   )
