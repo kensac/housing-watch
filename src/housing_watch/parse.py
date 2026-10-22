@@ -164,7 +164,9 @@ _STREET = {
     "west": "w", "east": "e", "north": "n", "south": "s", "of": "", "the": "",
 }  # fmt: skip
 _SUFFIX = {"st", "ave", "blvd", "rd", "pl", "dr", "pkwy", "ln", "ct", "ter", "plz", "way", "sq", "cir", "hwy"}
-_UNIT = re.compile(r"(?:\bunits?\s+|#|\bapt\.?\s+)((?:[a-z]*\d[\w-]*)(?:\s*(?:,|/|&|and)\s*#?[a-z]*\d[\w-]*)*)", re.I)
+_UNIT = re.compile(
+    r"(?:\bunits?\s+|#|\bapt\.?\s+)((?:[a-z]*\d[\w-]*)(?:\s*(?:,\s*and|,|/|&|and)\s*#?[a-z]*\d[\w-]*)*)", re.I
+)
 _ADDR = re.compile(
     r"\b(\d+(?:-\d+)?)\s+((?:[a-z0-9.']+\s?){1,5}?)(?=$|,|\(|\)|\s(?:apt|unit|#|aka|apartments?)\b|\s#)", re.I
 )
