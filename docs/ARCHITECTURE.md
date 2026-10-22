@@ -117,6 +117,11 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   event feed, overview counts.
   It attaches verdicts by calling `criteria` at read time.
   Every listing is judged once per store version and cached in memory, so pages filter in Python.
+- `changes.py` turns a `changed` event's `before`/`after` into lines (status, deadline, units relabeled,
+  added or removed, rent, availability, income limits) and flags noise: a status moving to "unknown", or
+  back from it to what it was, with nothing else changed. `db.py` stores both in the event's detail.
+- `mcp_server.py` exposes `queries.py` over MCP (streamable HTTP, a thread of `serve` on `HW_MCP_PORT`),
+  read-only, with FastMCP's OIDC proxy for sign-in (clients register themselves; the upstream decides who).
 - `digest.py` builds the email from `queries.py`: `send(engine, dry_run)` and `urgent(engine)` (an open,
   eligible listing has a pending new/reopened/changed event). Events with `detail.baseline = true` come from
   a source's first run; they collapse into one summary line and only their eligible listings are listed.

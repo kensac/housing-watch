@@ -29,7 +29,12 @@ tables), so the same input always gives the same output.
   generates the filled PDF on request and stores nothing.
 - `digest.py` sends a digest at `HW_DIGEST_HOURS`, only when an eligible listing is new,
   changed or closed (possible listings and page changes stay in the UI). When a new
-  eligible unit is open, it sends right away instead.
+  eligible unit is open, it sends right away instead. A change leads with what changed
+  (`changes.py`: "Rent: 1BR #8L $2,900 → $2,750"); a status flapping to "unknown" and
+  back is noise and never mailed.
+- `mcp_server.py` is a read-only MCP server (search, fetch, find listings/units, recent
+  changes, overview, sources) for agents and chat apps, behind OAuth via an upstream OIDC
+  provider; it has no unauthenticated mode.
 
 `docs/ARCHITECTURE.md` is the full design.
 
@@ -46,6 +51,8 @@ tables), so the same input always gives the same output.
 | `HW_WORKER_CONCURRENCY` | jobs a worker runs at once (default 4); politeness is per host regardless |
 | `HW_WORKER_CAPS` | extra queues: `byparr` (has `BYPARR_URL`), `digest` (has profile + SMTP) |
 | `HW_WEB_HOST`, `HW_WEB_PORT` | `serve` also runs the web UI when the port is set (default host `0.0.0.0`) |
+| `HW_MCP_PORT`, `HW_MCP_BASE_URL` | `serve` also runs the MCP server (at `<base>/mcp`) when the port is set |
+| `HW_MCP_OIDC_CONFIG_URL`, `HW_MCP_CLIENT_ID`, `HW_MCP_CLIENT_SECRET`, `HW_MCP_JWT_KEY` | its OIDC client upstream, and the key that signs its own tokens; `FASTMCP_HOME` keeps client registrations |
 | `HW_METRICS_PORT` | Prometheus exporter (default 9091; `0` disables) |
 | `HW_DIGEST_TO`, `HW_DIGEST_FROM`, `HW_DIGEST_HOURS` | digest delivery (hours in container local time) |
 | `HW_RUN_TIMEOUT_HOURS` | an unfinished run older than this is failed as abandoned (default 6) |

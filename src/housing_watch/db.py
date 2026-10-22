@@ -3,7 +3,7 @@
 Every listing a source publishes is stored, normalized into listings -> units -> bands, whatever it
 would be judged. Change events come only from the data:
 
-  new | changed (detail.before/after) | closed | gone | reopened             listings
+  new | changed (detail.before/after/changes, noise) | closed | gone | reopened   listings
   watching (first sight) | page_changed (detail.added/removed/new_links)    snapshots
   source_failed (2nd and 10th consecutive failure) | source_recovered       sources
 
@@ -25,6 +25,7 @@ from sqlalchemy import Engine, create_engine, delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, selectinload
 
+from . import changes
 from .mapping import apply_listing, listing_from_row
 from .models import Listing, Snapshot
 from .orm import (
@@ -85,11 +86,31 @@ def _fp(lst: Listing) -> str:
 
 
 def _brief(lst: Listing) -> dict:
+    """What a `changed` event keeps of each side; changes.py reads it (units: size, no, rent, ami, available,
+    set-aside, bands)."""
     return {
         "status": lst.status,
         "deadline": lst.deadline,
-        "units": [[u.size, u.unit_no, u.rent, u.ami, u.available] for u in lst.units],
-    }
+        "kind": lst.kind,
+        "borough": lst.borough,
+        "senior_only": lst.senior_only,
+        "units": [
+            [u.size, u.unit_no, u.rent, u.ami, u.available, u.set_aside,
+             [[b.household, b.income_min, b.income_max] for b in u.bands]]
+            for u in lst.units
+        ],
+    }  # fmt: skip
+
+
+def _status_before_unknown(s: Session, key: str) -> str | None:
+    """The status a listing had when it last went "unknown", from that event."""
+    d = s.scalar(
+        select(EventRow.detail)
+        .where(EventRow.key == key, EventRow.type == "changed", EventRow.detail["after"]["status"].astext == "unknown")
+        .order_by(EventRow.id.desc())
+        .limit(1)
+    )
+    return (d or {}).get("before", {}).get("status")
 
 
 def _event(s: Session, source, key, typ, summary="", detail=None, now=None, baseline=False) -> None:
@@ -142,7 +163,13 @@ def record_listings(
             typ = "reopened"
         elif row.fingerprint != fp:
             typ = "closed" if lst.status == "closed" and row.status != "closed" else "changed"
-        detail = {"before": _brief(listing_from_row(row)), "after": _brief(lst)} if typ == "changed" else None
+        detail = None
+        if typ == "changed":
+            before, after = _brief(listing_from_row(row)), _brief(lst)
+            prior = _status_before_unknown(s, key) if before["status"] == changes.UNKNOWN else None
+            detail = {"before": before, "after": after, "changes": changes.describe(before, after)}
+            if changes.is_noise(before, after, prior):
+                detail["noise"] = True
         apply_listing(lst, row, units=row.fingerprint != fp)
         row.source, row.fingerprint, row.last_seen, row.gone_since = source, fp, now, None
         if typ:
