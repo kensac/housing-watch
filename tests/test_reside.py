@@ -230,12 +230,13 @@ FORM_UNITS = (F / "form_units.txt").read_text().splitlines()  # Reside's form pi
 
 
 def test_form_option_labels():
-    assert reside.form_option("2 Blue Slip - Apt 9D - $2589.74 -") == ({"2 blue slip"}, {"9D"})
+    assert reside.form_option("2 Blue Slip - Apt 9D - $2589.74 -") == ({"2 blue slip"}, {"9D"}, 2589.74)
     assert reside.form_option("2180 Walton Avenue - Apt. 10D - Apt 10B - $3128 -")[1] == {"10D", "10B"}
-    assert reside.form_option("36-10 31st Street - Unit 3A - Apt 3A - $3308.31 -") == ({"36-10 31 st"}, {"3A"})
-    assert reside.form_option("3317 Parkside PL Apt 3B - Apt 3B - $1857.63 -") == ({"3317 parkside pl"}, {"3B"})
-    assert reside.form_option("647 Sheffield Ave- Apt. 1A - Apt 1A - $2800.41 -") == ({"647 sheffield ave"}, {"1A"})
-    assert reside.form_option("2061Crotona - Apt 4B - $3787.95 -") == ({"2061 crotona"}, {"4B"})
+    assert reside.form_option("36-10 31st Street - Unit 3A - Apt 3A - $3308.31 -")[:2] == ({"36-10 31 st"}, {"3A"})
+    assert reside.form_option("3317 Parkside PL Apt 3B - Apt 3B - $1857.63 -")[:2] == ({"3317 parkside pl"}, {"3B"})
+    assert reside.form_option("647 Sheffield Ave- Apt. 1A - Apt 1A - $2800.41 -")[:2] == ({"647 sheffield ave"}, {"1A"})
+    assert reside.form_option("2061Crotona - Apt 4B - $3787.95 -")[:2] == ({"2061 crotona"}, {"4B"})
+    assert reside.form_option("1281 Hoe Ave - Apt 7E - $1601.25 - Senior Preferece 60+")[2] == 1601.25
     assert all(reside.form_option(x)[0] and reside.form_option(x)[1] for x in FORM_UNITS), "every label parses"
 
 
@@ -270,3 +271,40 @@ def test_a_stale_form_is_not_used(site, monkeypatch):
     a = Reside()
     a.cache[reside.FORM] = {"at": 0, "units": FORM_UNITS}  # 1970: far older than FORM_MAX_AGE
     assert a._form_options() is None
+
+
+def test_multi_unit_page_takes_the_units_the_form_dropped():
+    # "Units 619, 325, and 503": the form (2026-10-22) offers 325 ($3,299, the studio) and 503 ($4,316, the 2BR)
+    lst = page("25-01-queens-plaza-north-units-619-325-and-503")
+    assert lst.address == "25-01 Queens Plaza North" and reside.parse.units(lst.title) == {"619", "325", "503"}
+    labels = [f"25-01 Queens Plaza North - Apt {n} - ${r} -" for n, r in (("325", 3299), ("503", 4316), ("905", 3653))]
+    got = reside.with_form(lst, [reside.form_option(x) for x in labels])
+    assert got.status == "open" and [u.available for u in got.units] == [None, False, None]
+    assert "no longer offers the 1br unit(s)" in got.notes
+    v = listing_verdict(got)
+    assert v.verdict == "eligible" and [r for _, _, r in v.units][1] == "unit marked rented/closed"
+    labels[0] = "25-01 Queens Plaza North - Apt 325 - $3310 -"  # a rent the page does not print: no pairing
+    got = reside.with_form(lst, [reside.form_option(x) for x in labels])
+    assert got.status == "open" and all(u.available is None for u in got.units)
+
+
+def test_size_labels_match_a_page_without_unit_numbers_by_rent():
+    # the form names 28-08 38th Avenue's units "Apt 1 BR" / "Apt 2 BR"; the page names none, so rents pair them
+    lst = page("28-08-38th-avenue-apartment-om")
+    assert [(u.size, u.rent, u.unit_no) for u in lst.units] == [
+        ("studio", 3423, None),
+        ("1br", 3661, None),
+        ("2br", 4376, None),
+    ]
+    options = [reside.form_option(x) for x in FORM_UNITS]  # 2026-10-19: also "Apt 2F - $3423", the studio
+    assert all(u.available is None for u in reside.with_form(lst, options).units)
+    options = [o for o in options if o[2] != 3423]  # 2026-10-22: the studio is gone
+    got = reside.with_form(lst, options)
+    assert got.status == "open" and [u.available for u in got.units] == [False, None, None]
+    assert listing_verdict(got).verdict == "eligible"
+
+
+def test_rent_alone_never_matches_a_page_that_names_its_unit():
+    lst = page("2-blue-slip-apartment-unit-7n")
+    (u,) = lst.units
+    assert reside.with_form(lst, [reside.form_option(f"2 Blue Slip - Apt 9D - ${u.rent} -")]).status == "unknown"

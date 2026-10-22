@@ -25,7 +25,7 @@ APPLY = "https://airtable.com/appsseXTOVx59HC0W/pagcVengefPFQvMZC/form"
 FORM = "_form"  # cache: {"at": epoch s, "units": [picker labels]}: the units Reside's form accepts
 FORM_MAX_AGE = 12 * 3600  # an older list is not used to judge status
 MAX_FAILED = 20  # more page failures than this in one run = something is wrong with the site
-PARSER = 5  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
+PARSER = 6  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
 
 
 _W = "one two three four five six seven eight".split()
@@ -224,7 +224,7 @@ def parse_page(url: str, html: str) -> Listing:
         ext_id=url.rstrip("/").split("/")[-1],
         title=title,
         url=url,
-        address=re.sub(r",?\s*(Apartment|Apt\.?|Unit)\b.*$", "", title, flags=re.I),
+        address=re.sub(r"\s*[,–—-]?\s*(Apartment|Apt\.?|Units?)\b.*$", "", title, flags=re.I),
         borough=borough,
         status=status,
         senior_only=bool(re.search(r"\bsenior\b|62 (years|and older)", flat[:4000], re.I)),
@@ -267,29 +267,54 @@ def read_form() -> list[str]:
     return sorted(seen)
 
 
-def form_option(label: str) -> tuple[set[str], set[str]]:
-    """(address keys, unit numbers) of a picker label like "2180 Walton Avenue - Apt. 10D - Apt 10B - $3128 -"
+Option = tuple[set[str], set[str], float | None]  # a form label's (address keys, unit numbers, rent)
+
+
+def form_option(label: str) -> Option:
+    """(address keys, unit numbers, rent) of a picker label like "2180 Walton Avenue - Apt. 10D - Apt 10B - $3128 -"
     or "36-10 31st Street - Unit 3A - Apt 3A - $3308.31 -" (the street part sometimes repeats the unit)."""
     addr = re.split(r"\s*-\s+|\s+Apt\.?\s|\s+Unit\s", label, maxsplit=1)[0]
     addr = re.sub(r"^(\d+(?:-\d+)?)(?=[a-z]{3})", r"\1 ", addr, flags=re.I)  # "2061Crotona"
-    return parse.addr_keys(addr), parse.units(label.split(" - $")[0])
+    rent = parse.money(label.split(" - $", 1)[1]) if " - $" in label else None
+    return parse.addr_keys(addr), parse.units(label.split(" - $")[0]), rent
 
 
-def accepting(lst: Listing, options: list[tuple[set[str], set[str]]]) -> bool:
-    """Whether the form offers this listing's unit (same address, same unit number)."""
+def _same(a: float | None, b: float | None) -> bool:
+    return bool(a and b and abs(a - b) < 1)
+
+
+def offered(lst: Listing, options: list[Option]) -> list[float | None]:
+    """Rents of the form's options for this listing: same address and unit number, or, on a page naming no unit,
+    same rent (some labels name a size, not a unit: "28-08 38th Avenue - Apt 1 BR - $3661 -")."""
     keys = parse.addr_keys(lst.address) | parse.addr_keys(lst.title)
     nums = {u.unit_no.upper() for u in lst.units if u.unit_no} or parse.units(lst.title)
-    return any(keys & a and nums & u for a, u in options) if keys and nums else False
+
+    def same(u: set[str], r: float | None) -> bool:
+        return bool(nums & u) if nums else any(_same(r, x.rent) for x in lst.units)
+
+    return [r for a, u, r in options if keys & a and same(u, r)]
 
 
-def with_form(lst: Listing, options: list[tuple[set[str], set[str]]]) -> Listing:
+def accepting(lst: Listing, options: list[Option]) -> bool:
+    """Whether the form offers this listing's unit."""
+    return bool(offered(lst, options))
+
+
+def with_form(lst: Listing, options: list[Option]) -> Listing:
     """Status from the form, which is what decides whether you can apply: a unit it offers is open whatever
-    its page says; an "open" page whose unit it does not offer is unknown. Upcoming stays upcoming."""
+    its page says; an "open" page whose unit it does not offer is unknown. Upcoming stays upcoming.
+    On a multi-unit page whose units the form's rents pair off one to one, the units it no longer lists are taken."""
     from dataclasses import replace
 
-    if accepting(lst, options):
+    if rents := offered(lst, options):
         note = "" if lst.status == "open" else f"page says {lst.status}, but Reside's application form offers this unit"
-        return replace(lst, status="open", notes="; ".join(x for x in (lst.notes, note) if x))
+        units = lst.units
+        hit = [any(_same(r, u.rent) for r in rents) for u in units]
+        if len(units) > 1 and 0 < sum(hit) == len(rents) < len(units):
+            units = [u if h else replace(u, available=False) for u, h in zip(units, hit, strict=True)]
+            gone = ", ".join(u.size for u, h in zip(units, hit, strict=True) if not h)
+            note = "; ".join(x for x in (note, f"Reside's application form no longer offers the {gone} unit(s)") if x)
+        return replace(lst, status="open", units=units, notes="; ".join(x for x in (lst.notes, note) if x))
     if lst.status in ("open", "unknown"):
         note = "Reside's application form does not offer this unit, so it cannot be applied for now"
         return replace(lst, status="unknown", notes="; ".join(x for x in (lst.notes, note) if x))
@@ -333,7 +358,7 @@ class Reside(Adapter):
             log.warning("reside: application form not read (%s); using the last list if it is fresh", e)
         return list(c[PLAN])
 
-    def _form_options(self) -> list[tuple[set[str], set[str]]] | None:
+    def _form_options(self) -> list[Option] | None:
         f = self.cache.get(FORM) or {}
         if not f.get("units") or time.time() - f.get("at", 0) > FORM_MAX_AGE:
             return None

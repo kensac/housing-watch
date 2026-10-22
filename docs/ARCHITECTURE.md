@@ -38,6 +38,8 @@ queries.py  digest.py  web/ frontend/  READ      what changed, what fits        
   headless browser (`fetch.browser()`, Playwright; `NeedsByparr` sends planning to hetzner) into
   `cache["_form"]`, and every chunk marks a unit open if the form offers it, else `unknown` (verdict
   possible). A failed read keeps the last list for 12 h, then statuses fall back to the page labels.
+  A label matches by address and unit number, or by rent on a page naming no unit (some labels name a
+  size: "Apt 1 BR"); on a multi-unit page the units whose rents the form no longer lists are taken.
 
 ## Rules (criteria)
 
