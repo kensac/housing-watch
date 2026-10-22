@@ -1,6 +1,8 @@
 """Eligibility rules as code (profile from HW_* env vars). Every unit gets eligible / possible / excluded plus a reason.
 
-"possible" is deliberately generous: anything not provably excluded is reported, so no rental is lost.
+"possible" is for open or waitlisted listings whose data is missing or ambiguous. A listing that can't be applied
+for yet (upcoming) or now (the source shows no status) is excluded unless it is plainly eligible; verdicts are
+computed on read, so it comes back as soon as its source says more.
 """
 
 from __future__ import annotations
@@ -84,16 +86,19 @@ def listing_verdict(lst: Listing, p: Profile = PROFILE) -> Verdict:
     if lst.kind == "homeownership":
         return Verdict(EXCLUDED, "homeownership, not a rental")
     if not lst.units:
+        if lst.status in ("upcoming", "unknown"):
+            return Verdict(EXCLUDED, "upcoming, details not published yet" if lst.status == "upcoming"
+                           else "not offered for application (the source shows no status)")  # fmt: skip
         return Verdict(POSSIBLE, "no unit details published")
     judged = [(u, *unit_verdict(u, p)) for u in lst.units]
+    if lst.status == "unknown":
+        return Verdict(EXCLUDED, "not offered for application (the source shows no status)", judged)
     if any(v == ELIGIBLE for _, v, _ in judged):
-        if lst.status == "unknown":
-            return Verdict(
-                POSSIBLE, "eligible unit(s), but the source shows no status (likely no longer marketed)", judged
-            )
         if lst.borough is None and p.excluded_boroughs:
             return Verdict(POSSIBLE, "eligible unit(s), borough unknown", judged)
         return Verdict(ELIGIBLE, "eligible unit(s)", judged)
     if any(v == POSSIBLE for _, v, _ in judged):
+        if lst.status == "upcoming":
+            return Verdict(EXCLUDED, "upcoming, details not published yet", judged)
         return Verdict(POSSIBLE, next(r for _, v, r in judged if v == POSSIBLE), judged)
     return Verdict(EXCLUDED, judged[0][2] if len(judged) == 1 else "no qualifying unit", judged)

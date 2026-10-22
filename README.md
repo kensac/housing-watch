@@ -21,8 +21,9 @@ tables), so the same input always gives the same output.
 - `tasks.py` is the fleet: a per-minute `tick` queues due sources, any worker
   runs them, and big sources split into chunks that run on several workers.
 - `criteria.py` labels each listing **eligible**, **possible** or **excluded**
-  when it is read, and gives a reason. Anything it cannot rule out counts as
-  possible and shows in the web UI.
+  when it is read, and gives a reason. An open or waitlisted listing it cannot
+  rule out counts as possible and shows in the web UI; an upcoming one, or one
+  whose source shows no status, is excluded unless it is plainly eligible.
 - `applications.py` pre-fills paper application PDFs that are a known form (today HPD's HC2.0
   application, used by Tax Solute, iAfford, AFNY and others) from `HW_APPLICANT_FILE`. The UI
   generates the filled PDF on request and stores nothing.

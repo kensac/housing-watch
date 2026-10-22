@@ -5,7 +5,7 @@ import pytest
 from housing_watch import adapters, runner
 from housing_watch.adapters import PLAN, reside
 from housing_watch.adapters.reside import Reside, parse_page
-from housing_watch.criteria import listing_verdict
+from housing_watch.criteria import listing_verdict, unit_verdict
 
 F = Path(__file__).parent / "fixtures" / "reside"
 
@@ -40,7 +40,7 @@ def test_page_without_status_label_is_unknown_not_open():
     lst = page("no-status-label")
     assert lst.status == "unknown" and [u.size for u in lst.units] == ["1br"]
     v = listing_verdict(lst)
-    assert v.verdict == "possible" and "no status" in v.reason
+    assert v.verdict == "excluded" and "no status" in v.reason
 
 
 def test_upcoming_project():
@@ -64,7 +64,7 @@ def test_word_pasted_table_and_continuation_rows():
     assert (u.size, u.unit_no, u.rent, u.ami) == ("1br", "1E", 2370.74, 150)
     assert bands(u) == [(1, 86152, 170100), (2, 86152, 194400), (3, 86152, 218700)]
     # the page carries no status label, and Reside's form does not offer #1E: not marketed, so not open
-    assert lst.borough == "Manhattan" and lst.status == "unknown" and listing_verdict(lst).verdict == "possible"
+    assert lst.borough == "Manhattan" and lst.status == "unknown" and listing_verdict(lst).verdict == "excluded"
 
 
 def test_multi_value_cells():
@@ -92,9 +92,8 @@ def test_header_range_without_table():
     assert lst.status == "upcoming" and lst.borough == "Queens"
     assert (u.size, u.rent) == ("unknown", 2722) and bands(u)[0] == (1, 99738, 147420)
     assert "rent $2,722-$2,823" in lst.notes and u.chart_year == 2025
-    assert (
-        listing_verdict(lst).reason == "income fits on 2026 limits (ad prints 2025 limits: max $147,420), size unknown"
-    )
+    assert listing_verdict(lst).reason == "upcoming, details not published yet"
+    assert unit_verdict(u)[1] == "income fits on 2026 limits (ad prints 2025 limits: max $147,420), size unknown"
 
 
 def test_header_range_with_floor_plan_sizes():
@@ -111,7 +110,7 @@ def test_rent_only_page():
 def test_placeholder_page_says_so():
     lst = page("2512-newkirk-ave-unit-4b")
     assert lst.units == [] and "publishes no unit sizes, rent or income" in lst.notes
-    assert listing_verdict(lst).reason == "no unit details published"
+    assert lst.status == "unknown" and "no status" in listing_verdict(lst).reason
 
 
 def test_bronx_by_address_zip_over_wrong_city_term():
