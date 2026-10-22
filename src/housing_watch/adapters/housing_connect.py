@@ -114,7 +114,6 @@ class HousingConnect(Adapter):
     name = "housing_connect"
     title = "NYC Housing Connect"
     url = "https://housingconnect.nyc.gov/PublicWeb/search-lotteries"
-    every_hours = 4
     min_listings = 3  # 18 open rental lotteries on 2026-10-19; it has never been near empty
 
     def fetch(self) -> Result:

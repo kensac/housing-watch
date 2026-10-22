@@ -108,7 +108,6 @@ class FifthAvenue(Adapter):
     name = "fifth_avenue"
     title = "Fifth Avenue Committee"
     url = URL
-    every_hours = 4  # first come, first served re-rentals
     min_listings = 1  # buildings, or a snapshot of the page when it lists none
 
     def fetch(self) -> Result:

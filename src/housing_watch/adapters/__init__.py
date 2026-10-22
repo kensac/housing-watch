@@ -22,7 +22,7 @@ class Adapter:
     name: ClassVar[str]  # stable id, used as the source key in the database
     title: ClassVar[str]  # human name for the digest
     url: ClassVar[str]  # page a human would open
-    every_hours: ClassVar[float] = 4  # run cadence
+    every_hours: ClassVar[float] = 1  # run cadence
     min_listings: ClassVar[int] = 0  # fewer results than this is treated as a broken adapter
     parallel: ClassVar[int] = 1  # how many of this source's chunks may run at once (each on a different worker)
 

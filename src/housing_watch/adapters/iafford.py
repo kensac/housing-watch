@@ -15,5 +15,4 @@ class IAfford(WebarycoAdapter):
     title = "iAfford NY"
     url = "https://iaffordny.com/re-rentals"
     site = "https://iaffordny.com"
-    every_hours = 4  # first come, first served
     min_listings = 3

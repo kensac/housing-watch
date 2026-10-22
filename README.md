@@ -1,7 +1,7 @@
 # housing-watch
 
 A deterministic watcher for NYC affordable-housing listings. It polls about 50
-sources on their own schedules (every source at least every 4 hours): Housing Connect, HPD's re-rental agents, HDC,
+sources on their own schedules (every source at least hourly): Housing Connect, HPD's re-rental agents, HDC,
 HCR, Mitchell-Lama, Pronto, SANEL, Reside, MGNY, and others. It keeps every
 listing and its change history in Postgres, then emails a digest of what is new
 or has changed. A small fleet of workers on different hosts shares the fetching

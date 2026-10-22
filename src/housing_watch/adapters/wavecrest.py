@@ -203,7 +203,6 @@ class Wavecrest(PageAdapter):
     title = "Wavecrest Rentals"
     url = INDEX
     pages = [INDEX]
-    every_hours = 4
     min_listings = 1
 
     def fetch(self) -> Result:

@@ -258,7 +258,6 @@ class Sanel(Adapter):
     name = "sanel"
     title = "SANEL (aggregator)"
     url = "https://sanel.nyc/listings"
-    every_hours = 4
     min_listings = 150
     parallel = 4
     _aura = None

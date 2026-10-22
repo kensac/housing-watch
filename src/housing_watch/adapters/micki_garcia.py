@@ -145,7 +145,6 @@ class MickiGarcia(PageAdapter):
     title = "Micki Garcia Realty"
     url = URL
     pages = [URL, SALES]
-    every_hours = 4
     min_listings = 1
     ignore = [r"press to zoom", r"\d+/\d+"]
 

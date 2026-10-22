@@ -130,5 +130,4 @@ class AFNY(WebarycoAdapter):
     title = "Affordable for New York (AFNY)"
     url = "https://afny.org/re-rentals"
     site = "https://afny.org"
-    every_hours = 4  # first come, first served
     min_listings = 1  # only a handful of listings at a time

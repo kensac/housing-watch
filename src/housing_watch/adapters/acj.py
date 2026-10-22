@@ -128,7 +128,6 @@ class ACJ(Adapter):
     name = "acj"
     title = "ACJ International Realty"
     url = INDEX
-    every_hours = 3  # first come, first served
     min_listings = 0  # the index is often empty between re-rentals (1 listing on 2026-10-19)
 
     def fetch(self) -> Result:

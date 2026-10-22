@@ -31,7 +31,6 @@ class HpdHub(PageAdapter):
     title = "NYC HPD re-rentals hub (marketing agents)"
     url = URL
     pages = [URL]
-    every_hours = 4
 
     def fetch(self) -> Result:
         text, links = parse_hub(fetch.html(URL))

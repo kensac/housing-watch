@@ -131,7 +131,6 @@ class MGNY(Adapter):
     name = "mgny"
     title = "MGNY Consulting"
     url = "https://mgnyconsulting.com/listings/"
-    every_hours = 4  # first come, first served
     min_listings = 8
 
     def fetch(self) -> Result:

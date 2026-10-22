@@ -243,7 +243,6 @@ class NysHousingSearch(Adapter):
     name = "nys_housing_search"
     title = "NYS HCR Housing Search"
     url = "https://housingsearch.hcr.ny.gov/housing/s/"
-    every_hours = 4
     min_listings = 20  # NYC records: 51 of 122 on 2026-10-18
 
     def fetch(self) -> Result:

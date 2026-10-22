@@ -300,7 +300,6 @@ class Reside(Adapter):
     name = "reside"
     title = "Reside New York"
     url = "https://residenewyork.com/property-status/open-market/"
-    every_hours = 3
     min_listings = 1000
 
     parallel = 4

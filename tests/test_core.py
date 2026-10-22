@@ -93,10 +93,10 @@ def test_fingerprint_with_missing_rent(pg):
         assert db.record_listings(s, "t", [lst]) == 1
 
 
-def test_every_source_runs_at_least_every_4_hours():
+def test_every_source_runs_at_least_hourly():
     from housing_watch.adapters import load_all
 
-    slow = {name: cls.every_hours for name, cls in load_all().items() if cls.every_hours > 4}
+    slow = {name: cls.every_hours for name, cls in load_all().items() if cls.every_hours > 1}
     assert not slow, slow
 
 
