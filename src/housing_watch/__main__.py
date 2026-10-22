@@ -1,6 +1,6 @@
 """CLI.
 
-python -m housing_watch serve                  migrate + worker (+ web when HW_WEB_PORT is set); hetzner's command
+python -m housing_watch serve                  migrate + worker (+ web on HW_WEB_PORT, MCP on HW_MCP_PORT); hetzner's
 python -m housing_watch worker                 migrate + Procrastinate worker; every other host's command
 python -m housing_watch migrate                alembic upgrade head (advisory-locked)
 python -m housing_watch run --source NAME ...  run sources now, inline, without the queue
@@ -41,6 +41,20 @@ def _web(eng) -> None:
     server = uvicorn.Server(uvicorn.Config(create_app(eng), host=os.environ.get("HW_WEB_HOST", "0.0.0.0"), port=port))
     threading.Thread(target=server.run, name="web", daemon=True).start()
     log.info("web on :%d", port)
+
+
+def _mcp(eng) -> None:
+    """The MCP server (mcp_server.py) in a thread of this process, on HW_WEB_HOST:HW_MCP_PORT."""
+    port = int(os.environ.get("HW_MCP_PORT") or 0)
+    if not port:
+        return
+    import uvicorn
+
+    from .mcp_server import app
+
+    server = uvicorn.Server(uvicorn.Config(app(eng), host=os.environ.get("HW_WEB_HOST", "0.0.0.0"), port=port))
+    threading.Thread(target=server.run, name="mcp", daemon=True).start()
+    log.info("mcp on :%d", port)
 
 
 def _worker(eng, migrate: bool = True) -> None:
@@ -91,6 +105,7 @@ def main(argv=None) -> int:
     elif a.cmd == "serve":
         db.migrate(eng)  # before the web starts reading
         _web(eng)
+        _mcp(eng)
         _worker(eng, migrate=False)
     elif a.cmd == "list":
         from sqlalchemy.orm import Session

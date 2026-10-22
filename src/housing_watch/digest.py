@@ -1,8 +1,10 @@
 """Turn un-notified events into one email. It goes out only when an eligible listing is new, changed or closed.
 
 Possible verdicts and watched-page changes are read in the web UI, not mailed; source failures ride along
-in a digest that is going out anyway. A source's first run (events marked `baseline`) is its starting
-inventory, not news: it becomes one summary line with counts, and only its eligible listings are shown.
+in a digest that is going out anyway. A changed listing leads with what changed (changes.py), every pending
+change to it in order; a status flapping to "unknown" and back is noise, marked read and never mailed.
+A source's first run (events marked `baseline`) is its starting inventory, not news: it becomes one summary
+line with counts, and only its eligible listings are shown.
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from . import queries
+from . import changes, queries
 from .criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, listing_verdict, unit_verdict
 from .models import Listing
 from .orm import EventRow
@@ -42,6 +44,17 @@ def _units(lst: Listing, p: Profile) -> list[str]:
     return out
 
 
+def _noise(r: EventRow) -> bool:
+    d = r.detail or {}
+    if r.type != "changed":
+        return False
+    return bool(d.get("noise") or (d.get("before") and changes.is_noise(d["before"], d["after"])))
+
+
+def _changes(d: dict) -> list[str]:
+    return d.get("changes") or changes.describe(d.get("before") or {}, d.get("after") or {})
+
+
 def _names(xs: set[str], n: int = 6) -> str:
     xs = sorted(xs)
     return ", ".join(xs[:n]) + (f" and {len(xs) - n} more" if len(xs) > n else "")
@@ -50,12 +63,10 @@ def _names(xs: set[str], n: int = 6) -> str:
 def urgent(engine: Engine, p: Profile = PROFILE) -> bool:
     """An open listing became eligible and nobody was told yet: first come, first served, so mail now."""
     with Session(engine) as s:
-        keys = s.scalars(
-            select(EventRow.key)
-            .distinct()
-            .where(EventRow.notified.is_(None), EventRow.type.in_(("new", "reopened", "changed")))
+        rows = s.scalars(
+            select(EventRow).where(EventRow.notified.is_(None), EventRow.type.in_(("new", "reopened", "changed")))
         ).all()
-        lsts = queries.load_listings(s, keys).values()
+        lsts = queries.load_listings(s, {r.key for r in rows if not _noise(r)}).values()
     return any(lst.status == "open" and listing_verdict(lst, p).verdict == ELIGIBLE for lst in lsts)
 
 
@@ -67,6 +78,11 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
             return None
         listings = queries.load_listings(s, (r.key for r in rows if r.type in queries.LISTING_EVENTS))
     ids = [r.id for r in rows]
+    rows = [r for r in rows if not _noise(r)]
+    changed: dict[str, list[str]] = {}  # key -> what changed, over every pending change, oldest first
+    for r in rows:
+        if r.type == "changed" and not queries.is_baseline(r.detail):
+            changed.setdefault(r.key, []).extend(_changes(r.detail or {}))
     sections: dict[str, list[tuple[str, list[str]]]] = {
         k: [] for k in ("eligible", "possible", "pages", "failed", "recovered", "closed")
     }
@@ -112,7 +128,8 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
             if listing_verdict(queries.as_open(lst), p).verdict == ELIGIBLE:  # was it worth knowing about?
                 sections["closed"].append((head, []))
             continue
-        detail = [f"source: {r.source}  verdict: {v.verdict} ({v.reason})  status: {lst.status}"]
+        detail = [f"changed: {x}" for x in dict.fromkeys(changed.get(r.key, []))] if typ == "changed" else []
+        detail.append(f"source: {r.source}  verdict: {v.verdict} ({v.reason})  status: {lst.status}")
         if lst.deadline:
             detail.append(f"deadline: {lst.deadline}")
         if lst.notes:
