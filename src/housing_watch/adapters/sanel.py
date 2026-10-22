@@ -8,8 +8,9 @@ RealEstateListing (name, official source in `isBasedOn`, address), a facts block
 Household, Income, Deadline), links to the official page or flyer and, when the source publishes one, a tier
 table with one row per household size. Without a tier table the facts block only summarises every tier, so the
 official data is read where it is public (Housing Connect's API, HDC's flyer PDF, Pronto's API, HPD's
-Mitchell-Lama list, Reside's page, HCR Housing Search), cached per document for DOC_TTL_H; otherwise `notes`
-says what the source does not publish. Applying is never through SANEL.
+Mitchell-Lama list, Reside's unit page or its building table's row at the unit's rent, SHF's re-rental form,
+Tax Solute's page, St. Nicks' senior-housing list, HCR Housing Search), cached per document for DOC_TTL_H;
+otherwise `notes` says what the source does not publish. Applying is never through SANEL.
 """
 
 from __future__ import annotations
@@ -24,7 +25,20 @@ from datetime import datetime
 from .. import ami, fetch, parse
 from ..fetch import FetchError
 from ..models import Band, Listing, Result, Unit
-from . import PLAN, Adapter, housing_connect, mitchell_lama, nychdc, nys_housing_search, pronto, reside, spread
+from . import (
+    PLAN,
+    Adapter,
+    housing_connect,
+    mitchell_lama,
+    nychdc,
+    nys_housing_search,
+    pronto,
+    reside,
+    spread,
+    st_nicks,
+    tax_solute,
+)
+from . import settlement_housing_fund as shf
 
 log = logging.getLogger("housing_watch")
 SITEMAP = "https://sanel.nyc/sitemap.xml"
@@ -59,7 +73,7 @@ OLD_CHART = " Income limits are printed on HUD's {} chart ({} caps are higher; c
 # sources with nothing public beyond SANEL's summary
 NOT_PUBLISHED = {
     "St. Nicks Alliance": "St. Nicks' waitlist application lists no rents or income limits (HUD-assisted).",
-    "Settlement Housing Fund": "SHF publishes this unit's income table only as an image in its form.",
+    "Settlement Housing Fund": "SHF's re-rental form has no income table for this unit.",
     "MHANY Management": "MHANY's page lists no unit sizes or income limits for this building.",
 }
 
@@ -246,6 +260,34 @@ def reside_match(title: str, urls: list[str]) -> str | None:
     return best[1] if best else None
 
 
+def reside_buildings(title: str, urls: list[str]) -> list[str]:
+    """'1440 Amsterdam Avenue #1' -> Reside building pages (no unit in the url) with its numbers and 2+ words."""
+    m = re.match(r"(.*?)\s*#\s*\w+\s*$", title)
+    want = set(_tokens(m.group(1))) if m else set()
+    nums = {t for t in want if t.isdigit()}
+    found = []
+    for u in urls:
+        toks = set(_tokens(u.rstrip("/").rsplit("/", 1)[-1]))
+        if nums and nums <= toks and len(want & toks) >= 2 and "unit" not in toks:
+            found.append((len(want & toks), u))
+    return [u for _, u in sorted(found, reverse=True)[:3]]
+
+
+def _in_table(u: Unit, rows: list[list[str]]) -> bool:
+    """A table row with the unit's size, rent and lowest minimum income (not the header's building-wide range)."""
+    lo = next((b.income_min for b in u.bands if b.income_min), None)
+    for row in rows:
+        line = " ".join(row)
+        if (
+            u.size != "unknown"
+            and any(parse.size(c) == u.size for c in row)
+            and any("$" in c and round(parse.money(c) or 0) == round(u.rent or 0) for c in row)
+            and (lo is None or f"{lo:,}" in line)
+        ):
+            return True
+    return False
+
+
 def _unit(u: dict) -> Unit:
     return Unit(**{**u, "bands": [Band(**b) for b in u["bands"]]})
 
@@ -262,11 +304,11 @@ class Sanel(Adapter):
     parallel = 4
     _aura = None
 
-    def _doc(self, key: str, load):
-        """An official document's parsed content (json-serializable), cached for DOC_TTL_H."""
+    def _doc(self, key: str, load, ttl_h: float = DOC_TTL_H):
+        """An official document's parsed content (json-serializable), cached for ttl_h."""
         k = f"doc:{key}"  # a top-level key per document, so concurrent chunks' caches merge without loss
         hit = self.cache.get(k)
-        if hit and time.time() - hit["fetched"] < DOC_TTL_H * 3600:
+        if hit and time.time() - hit["fetched"] < ttl_h * 3600:
             return hit["data"]
         self.cache[k] = {"fetched": time.time(), "data": load()}
         return self.cache[k]["data"]
@@ -296,20 +338,16 @@ class Sanel(Adapter):
             lst.senior_only = lst.senior_only or dev["senior_only"]
             return [_unit(u) for u in dev["units"]], "Sizes and income caps from HPD's Mitchell-Lama list and limits."
         if src == "Reside":
-            page = (
-                official
-                if "/property/" in official
-                else reside_match(lst.title, self._doc("reside", self._reside_urls))
-            )
-            units = reside.parse_page(page, self._doc(f"page:{page}", lambda: fetch.html(page))).units if page else []
-            rents = {round(u.rent) for u in lst.units if u.rent}
-            if page and page != official and rents and not rents & {round(u.rent) for u in units if u.rent}:
-                page = None  # a same-named unit from an older listing (the rent differs)
-            if page is None:
-                return None, "Reside has no public page for this unit, only its Airtable form."
-            if not any(b.income_max for u in units for b in u.bands) and all(u.size == "unknown" for u in units):
-                return None, f"Reside's page {page} lists no sizes or income limits."
-            return units, f"Unit details from Reside's page {page}."
+            return self._reside(lst, official)
+        if src == "Settlement Housing Fund":
+            return self._shf(lst)
+        if src == "Tax Solute":
+            return self._tax_solute(lst)
+        if src == "St. Nicks Alliance":
+            seniors = self._doc("stnicks", lambda: st_nicks.senior_waitlists(fetch.html(st_nicks.INDEX)))
+            if parse.name_key(lst.title) in {parse.name_key(n) for n in seniors}:
+                lst.senior_only = True
+                return None, "St. Nicks lists it under its HUD senior housing (elderly or disabled residents)."
         if m := re.search(r"nyshcr\.my\.site\.com/housing/s/waitlist/(\w+)", official):
             units = nys_housing_search.rule_units(self._doc(f"nys:{m.group(1)}", lambda: self._hcr_rules(m.group(1))))
             return (
@@ -317,6 +355,61 @@ class Sanel(Adapter):
                 "Tiers from HCR Housing Search." if units else "HCR Housing Search shows no units table.",
             )
         return None, NOT_PUBLISHED.get(src, f"{src} publishes no income table for this listing.")
+
+    def _reside_units(self, page: str) -> list[Unit]:
+        return reside.parse_page(page, self._doc(f"page:{page}", lambda: fetch.html(page))).units
+
+    def _reside(self, lst: Listing, official: str) -> tuple[list[Unit] | None, str]:
+        rents = {round(u.rent) for u in lst.units if u.rent}
+        if "/property/" in official:
+            page = official
+        else:
+            page = reside_match(lst.title, self._doc("reside", self._reside_urls))
+            page = page or reside_match(lst.title, self._doc("reside", self._reside_urls, ttl_h=1))  # a new page
+        units = self._reside_units(page) if page else []
+        if page and page != official and rents and not rents & {round(u.rent) for u in units if u.rent}:
+            page = None  # a same-named unit from an older listing (the rent differs)
+        if page is None:
+            # no unit page: the building's page may tabulate a tier at exactly this unit's rent
+            for b in reside_buildings(lst.title, self._doc("reside", self._reside_urls)):
+                rows = parse.table_rows(self._doc(f"page:{b}", lambda b=b: fetch.html(b)))
+                tier = [u for u in self._reside_units(b) if u.rent and round(u.rent) in rents and _in_table(u, rows)]
+                if tier:
+                    return tier, f"Tier at this unit's rent from Reside's building page {b}."
+            return None, "Reside has no public page for this unit, only its Airtable form."
+        if not any(b.income_max for u in units for b in u.bands) and all(u.size == "unknown" for u in units):
+            return None, f"Reside's page {page} lists no sizes or income limits."
+        return units, f"Unit details from Reside's page {page}."
+
+    def _shf(self, lst: Listing) -> tuple[list[Unit] | None, str]:
+        """'30 Kent Street #310' -> that unit on SHF's re-rental form (its table image OCR'd)."""
+
+        def load() -> list[dict]:
+            form_url, _ = shf.index_links(fetch.html(shf.URL))
+            ocr = lambda img: shf.ocr_table(fetch.get(img).content)  # noqa: E731
+            return [asdict(x) for x in shf.read_form(form_url, ocr)[0]] if form_url else []
+
+        m = re.match(r"(.*?)\s*#\s*(\w+)\s*$", lst.title)
+        if m:
+            key, no = shf.addr_key(m.group(1)), m.group(2).upper()
+            for d in self._doc("shf", load):
+                units = [_unit(u) for u in d["units"] if u["unit_no"] == no]
+                if shf.addr_key(d["title"]) == key and units and units[0].bands:
+                    return units, "Income table from SHF's re-rental form."
+        return None, NOT_PUBLISHED["Settlement Housing Fund"]
+
+    def _tax_solute(self, lst: Listing) -> tuple[list[Unit] | None, str]:
+        """The Tax Solute card at the same address (and rent, when SANEL shows one)."""
+        page = lambda: [asdict(x) for x in tax_solute.parse_page(fetch.html(tax_solute.URL))[0]]  # noqa: E731
+        cards = self._doc("taxsolute", page)
+        keys = parse.addr_keys(lst.address or lst.title)
+        rents = {round(u.rent) for u in lst.units if u.rent}
+        for d in cards:
+            if keys & parse.addr_keys(d["address"] or d["title"]):
+                units = [_unit(u) for u in d["units"]]
+                if units and (not rents or rents & {round(u.rent) for u in units if u.rent}):
+                    return units, "Income table from Tax Solute's page."
+        return None, "Tax Solute's page has no card for this address."
 
     def _hcr_rules(self, wid: str) -> list[dict]:
         self._aura = self._aura or nys_housing_search.Aura()  # one page load per run
@@ -362,7 +455,7 @@ class Sanel(Adapter):
             return lst
         try:
             units, note = self._official_units(lst, doc_links(html))
-        except (FetchError, RuntimeError, ValueError, KeyError) as e:
+        except (FetchError, RuntimeError, ValueError, KeyError, OSError) as e:
             log.warning("sanel: official source for %s: %s", lst.url, e)
             units, note = None, "Official source unreadable this run; units are SANEL's summary."
         if units:
