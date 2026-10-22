@@ -1,16 +1,27 @@
 import { Badge, Button, Code, Drawer, Group, Loader, SimpleGrid, Stack, Table, Text, Timeline, Title } from '@mantine/core'
 import { IconDownload, IconExternalLink } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 
 import { api, qs, type Applications, type Detail } from '../api'
 import { commute, date, money, pct, when } from '../format'
 import { useMotion } from '../hooks'
-import { EventBadge, StatusBadge, VerdictBadge } from './Badges'
+import { EventBadge, SizeBadge, StatusBadge, VerdictBadge } from './Badges'
 import { Loading, LoadError } from './State'
 import { TrackerPanel } from './TrackerPanel'
 
-function Fact({ label, children }: { label: string; children: React.ReactNode }) {
-  return <Stack gap={0} miw={0}><Text size="xs" c="dimmed">{label}</Text><Text size="sm" style={{ overflowWrap: 'anywhere' }}>{children}</Text></Stack>
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return <Stack gap={2} miw={0}><Text size="xs" c="dimmed">{label}</Text><Text size="sm" style={{ overflowWrap: 'anywhere' }}>{children}</Text></Stack>
+}
+
+/** A titled part of the drawer; sections are separated by space alone. */
+function Section({ title, right, children }: { title: ReactNode; right?: ReactNode; children: ReactNode }) {
+  return (
+    <Stack gap="xs">
+      <Group justify="space-between" gap="xs"><Title order={2}>{title}</Title>{right}</Group>
+      {children}
+    </Stack>
+  )
 }
 
 function ApplicationsPanel({ k }: { k: string }) {
@@ -26,13 +37,13 @@ function ApplicationsPanel({ k }: { k: string }) {
             {p.form ?? (p.error ? 'The PDF link failed' : 'Not a form housing-watch can fill')}
           </Text>
           <Group gap="xs" wrap="nowrap">
+            <Button size="xs" variant="default" component="a" href={p.url} target="_blank" rel="noopener noreferrer">Open Blank PDF</Button>
             {p.form && q.data.ready && (
               <Button size="xs" component="a" href={`/api/listing/application${qs({ key: k, n: p.n })}`} download
                 leftSection={<IconDownload size={14} aria-hidden />}>
                 Download Filled PDF
               </Button>
             )}
-            <Button size="xs" variant="default" component="a" href={p.url} target="_blank" rel="noopener noreferrer">Open Blank PDF</Button>
           </Group>
         </Group>
       ))}
@@ -57,16 +68,22 @@ export function ListingDrawer({ k, onClose }: { k: string | null; onClose: () =>
       {q.isLoading && <Loading rows={8} label="Loading the listing…" />}
       {q.error && <LoadError what="this listing" error={q.error} retry={() => q.refetch()} />}
       {d && x && (
-        <Stack gap="lg">
-          <Group gap="xs">
-            <VerdictBadge v={x.verdict} />
-            <Text size="sm" c="dimmed">{x.verdict === 'eligible' ? `${x.eligible_units} of ${x.units} units fit your profile` : x.reason}</Text>
-            <StatusBadge s={x.status} />
-            <Badge variant="default" translate="no">{x.source} · {x.kind}</Badge>
-            {x.url && <Button size="xs" variant="light" component="a" href={x.url} target="_blank" rel="noopener noreferrer"
-              rightSection={<IconExternalLink size={14} aria-hidden />}>View on Source Site</Button>}
-          </Group>
-          <SimpleGrid cols={{ base: 2, sm: 3 }}>
+        <Stack gap="xl">
+          <Stack gap="sm">
+            <Group gap="xs">
+              <VerdictBadge v={x.verdict} />
+              <StatusBadge s={x.status} />
+              <Badge variant="default" c="dimmed" translate="no">{x.source} · {x.kind}</Badge>
+              <Text size="sm" c="dimmed">{x.verdict === 'eligible' ? `${x.eligible_units} of ${x.units} units fit your profile` : x.reason}</Text>
+            </Group>
+            {x.url && (
+              <Group>
+                <Button size="xs" variant="default" component="a" href={x.url} target="_blank" rel="noopener noreferrer"
+                  rightSection={<IconExternalLink size={14} aria-hidden />}>View on Source Site</Button>
+              </Group>
+            )}
+          </Stack>
+          <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md" verticalSpacing="sm">
             <Fact label="Address">{x.address ?? '—'}</Fact>
             <Fact label="Borough">{x.borough ?? 'Unknown'}</Fact>
             <Fact label="Deadline">{date(x.deadline)}</Fact>
@@ -78,56 +95,55 @@ export function ListingDrawer({ k, onClose }: { k: string | null; onClose: () =>
             {x.senior_only && <Fact label="Restriction">Seniors only</Fact>}
           </SimpleGrid>
 
-          <Stack gap="xs">
-            <Title order={3} size="h5">Units ({d.units.length})</Title>
+          <Section title={<>Units <Text span c="dimmed" fw={400}>({d.units.length})</Text></>}>
             {d.units.length ? (
               <Table.ScrollContainer minWidth={560}>
-                <Table striped tabularNums aria-label="Units">
+                <Table tabularNums fz="sm" verticalSpacing={6} aria-label="Units">
                   <Table.Thead>
                     <Table.Tr><Table.Th>Unit</Table.Th><Table.Th ta="right">Rent</Table.Th><Table.Th ta="right">AMI</Table.Th><Table.Th>Income Band</Table.Th><Table.Th>Verdict</Table.Th></Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
                     {d.units.map((u, i) => (
-                      <Table.Tr key={i} opacity={u.verdict === 'excluded' ? 0.6 : 1}>
+                      <Table.Tr key={i} opacity={u.verdict === 'excluded' ? 0.55 : 1}>
                         <Table.Td>
                           <Group gap={4}>
-                            <Badge variant="default">{u.size}</Badge>{u.unit_no && <Text size="sm">#{u.unit_no}</Text>}
-                            {u.set_aside && <Badge color="orange" variant="light">{u.set_aside}</Badge>}
-                            {u.available === false && <Badge variant="outline">rented</Badge>}
-                            {u.chart_year && <Badge variant="outline" color={u.reason.includes('limits') ? 'orange' : 'gray'}>{u.chart_year} chart</Badge>}
+                            <SizeBadge s={u.size} />{u.unit_no && <Text size="sm">#{u.unit_no}</Text>}
+                            {u.set_aside && <Badge color="orange">{u.set_aside}</Badge>}
+                            {u.available === false && <Badge variant="default" c="dimmed">Rented</Badge>}
+                            {u.chart_year && <Badge variant={u.reason.includes('limits') ? 'light' : 'default'} color="orange" c={u.reason.includes('limits') ? undefined : 'dimmed'}>{u.chart_year} chart</Badge>}
                           </Group>
                         </Table.Td>
                         <Table.Td ta="right">{money(u.rent)}</Table.Td>
                         <Table.Td ta="right">{u.ami ? pct(u.ami) : '—'}</Table.Td>
                         <Table.Td>
                           {u.bands.length ? u.bands.map(([h, lo, hi]) => (
-                            <Text key={h} size="xs" fw={h === d.household ? 700 : 400} c={h === d.household ? undefined : 'dimmed'}>
+                            <Text key={h} size="xs" fw={h === d.household ? 600 : 400} c={h === d.household ? undefined : 'dimmed'}>
                               {h}p {lo == null ? '?' : money(lo)}–{hi == null ? '?' : money(hi)}{h === d.household ? ' (you)' : ''}
                             </Text>
                           )) : <Text size="xs" c="dimmed">No income table</Text>}
                         </Table.Td>
-                        <Table.Td><Group gap={4} wrap="nowrap"><VerdictBadge v={u.verdict} />{(u.verdict !== 'eligible' || u.reason.includes('limits')) && <Text size="xs" c="dimmed">{u.reason}</Text>}</Group></Table.Td>
+                        <Table.Td><Group gap={6} wrap="nowrap"><VerdictBadge v={u.verdict} />{(u.verdict !== 'eligible' || u.reason.includes('limits')) && <Text size="xs" c="dimmed">{u.reason}</Text>}</Group></Table.Td>
                       </Table.Tr>
                     ))}
                   </Table.Tbody>
                 </Table>
               </Table.ScrollContainer>
             ) : <Text size="sm" c="dimmed">The source publishes no unit details for this listing; check the source site for rents and sizes.</Text>}
-          </Stack>
+          </Section>
 
-          <Stack gap="xs"><Title order={3} size="h5">Tracker</Title><TrackerPanel x={x} /></Stack>
+          <Section title="Tracker"><TrackerPanel x={x} /></Section>
 
-          {d.pdfs.length > 0 && <Stack gap="xs"><Title order={3} size="h5">Application</Title><ApplicationsPanel k={x.key} /></Stack>}
+          {d.pdfs.length > 0 && <Section title="Application"><ApplicationsPanel k={x.key} /></Section>}
 
           {d.notes && (
-            <Stack gap="xs"><Title order={3} size="h5">Notes</Title>
-              <Code block style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{d.notes}</Code></Stack>
+            <Section title="Notes">
+              <Code block style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{d.notes}</Code>
+            </Section>
           )}
 
-          <Stack gap="xs">
-            <Title order={3} size="h5">History</Title>
+          <Section title="History">
             {d.events.length ? (
-              <Timeline bulletSize={14} lineWidth={2}>
+              <Timeline>
                 {d.events.map((e) => (
                   <Timeline.Item key={e.id} title={<Group gap="xs"><EventBadge t={e.type} baseline={e.baseline} /><Text size="xs" c="dimmed">{when(e.at)}{e.notified ? ' · mailed' : ''}</Text></Group>}>
                     {e.summary && <Text size="sm" c="dimmed">{e.summary}</Text>}
@@ -135,7 +151,7 @@ export function ListingDrawer({ k, onClose }: { k: string | null; onClose: () =>
                 ))}
               </Timeline>
             ) : <Text size="sm" c="dimmed">No events recorded for this listing yet.</Text>}
-          </Stack>
+          </Section>
           <Text size="xs" c="dimmed">Key <Code translate="no">{x.key}</Code></Text>
         </Stack>
       )}

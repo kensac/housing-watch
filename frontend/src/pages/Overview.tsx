@@ -1,22 +1,26 @@
 import { Alert, Anchor, Card, Code, Group, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core'
+import { IconAlertTriangle } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 
 import { api, type Overview } from '../api'
 import { EventBadge, StatusBadge, VerdictBadge } from '../components/Badges'
 import { ListingDrawer } from '../components/ListingDrawer'
+import { PageHeader } from '../components/PageHeader'
 import { Loading, LoadError } from '../components/State'
 import { ago, money, num, range, when } from '../format'
 import { rowClick, useMeta, useTitle } from '../hooks'
+import classes from './Overview.module.css'
 
 function Stat({ label, value, hint, to }: { label: string; value: number; hint?: string; to?: string }) {
-  return (
-    <Card withBorder padding="md">
-      <Text size="sm" c="dimmed">{label}</Text>
-      <Text fz="h2" fw={700} lh="h2">{to ? <Anchor component={Link} to={to} inherit>{num(value)}</Anchor> : num(value)}</Text>
-      {hint && <Text size="xs" c="dimmed">{hint}</Text>}
-    </Card>
+  const body = (
+    <>
+      <Text size="xs" c="dimmed">{label}</Text>
+      <div className={classes.value}>{num(value)}</div>
+      {hint && <Text size="xs" c="dimmed" lineClamp={1}>{hint}</Text>}
+    </>
   )
+  return to ? <Link to={to} className={classes.stat}>{body}</Link> : <div className={classes.stat}>{body}</div>
 }
 
 const openSearch = (key: string) => `?${new URLSearchParams({ open: key })}`
@@ -35,20 +39,18 @@ export function OverviewPage() {
   const statuses = m.statuses.filter((s) => s !== 'gone')
   return (
     <Stack gap="lg">
-      <Stack gap={2}>
-        <Title order={1} size="h3">Overview</Title>
-        <Text size="sm" c="dimmed">
-          Your profile: {p.household} person · {money(p.income)} · {p.sizes.join(', ')}{p.excluded_boroughs.length ? ` · not ${p.excluded_boroughs.join(', ')}` : ''}
-          {' · '}{num(o.total)} listings from {num(o.n_sources)} sources
-        </Text>
-      </Stack>
+      <PageHeader title="Overview" description={<>
+        Your profile: {p.household} person · {money(p.income)} · {p.sizes.join(', ')}{p.excluded_boroughs.length ? ` · not ${p.excluded_boroughs.join(', ')}` : ''}
+        {' · '}{num(o.total)} listings from {num(o.n_sources)} sources
+      </>} />
       {o.failing.length > 0 && (
-        <Alert color="red" variant="light" title={`${o.failing.length} source${o.failing.length > 1 ? 's' : ''} failing`}>
+        <Alert color="red" variant="light" icon={<IconAlertTriangle size={16} aria-hidden />}
+          title={`${o.failing.length} source${o.failing.length > 1 ? 's' : ''} failing`}>
           <span translate="no">{o.failing.join(', ')}</span>. Listings from {o.failing.length > 1 ? 'these sources' : 'this source'} may be out of date.{' '}
           <Anchor component={Link} to="/sources" size="sm">See errors on Sources</Anchor>
         </Alert>
       )}
-      <SimpleGrid cols={{ base: 2, sm: 3, lg: 6 }}>
+      <div className={classes.stats}>
         <Stat label="Eligible & open" value={o.eligible_open} hint={`${num(o.eligible_live)} incl. waitlist / upcoming`}
           to="/listings?f=verdict.in.eligible&f=status.in.open" />
         <Stat label="New in 24h" value={o.new_24h} hint={`${num(o.new_7d)} in 7 days${o.baseline_24h ? ` · ${num(o.baseline_24h)} first-run` : ''}`} />
@@ -56,14 +58,14 @@ export function OverviewPage() {
         <Stat label="Digest pending" value={o.pending} hint={`last sent ${ago(o.last_digest)}`} />
         <Stat label="Sources" value={o.n_sources} hint={o.failing.length ? `${o.failing.length} failing` : 'all healthy'} to="/sources" />
         <Stat label="Listings" value={o.total} to="/listings" />
-      </SimpleGrid>
+      </div>
 
-      <SimpleGrid cols={{ base: 1, lg: 2 }}>
-        <Card withBorder>
-          <Title order={2} size="h5" mb="sm">Eligible Now</Title>
+      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
+        <Card>
+          <Title order={2} mb="sm">Eligible Now</Title>
           {o.eligible_now.length ? (
             <Table.ScrollContainer minWidth={420}>
-              <Table highlightOnHover tabularNums aria-label="Eligible listings">
+              <Table highlightOnHover tabularNums fz="sm" verticalSpacing={6} aria-label="Eligible listings">
                 <Table.Tbody>
                   {o.eligible_now.map((x) => (
                     <Table.Tr key={x.key} onClick={rowClick(() => setParams({ open: x.key }))} style={{ cursor: 'pointer' }}>
@@ -86,21 +88,21 @@ export function OverviewPage() {
             </Text>
           )}
         </Card>
-        <Card withBorder>
+        <Card>
           <Group justify="space-between" mb="sm">
-            <Title order={2} size="h5">Recent Events</Title>
+            <Title order={2}>Recent Events</Title>
             <Anchor component={Link} to="/events" size="sm">All events</Anchor>
           </Group>
           {o.recent.length ? (
             <Table.ScrollContainer minWidth={420}>
-              <Table highlightOnHover aria-label="Recent events">
+              <Table highlightOnHover fz="sm" verticalSpacing={6} aria-label="Recent events">
                 <Table.Tbody>
                   {o.recent.map((e) => (
                     <Table.Tr key={e.id} onClick={e.key ? rowClick(() => setParams({ open: e.key! })) : undefined} style={{ cursor: e.key ? 'pointer' : undefined }}>
                       <Table.Td><EventBadge t={e.type} baseline={e.baseline} /></Table.Td>
-                      <Table.Td>
+                      <Table.Td w="100%">
                         {e.key
-                          ? <Anchor component={Link} to={openSearch(e.key)} c="inherit" size="sm" lineClamp={1}>{e.title ?? e.summary ?? e.source}</Anchor>
+                          ? <Anchor component={Link} to={openSearch(e.key)} c="inherit" size="sm" fw={500} lineClamp={1}>{e.title ?? e.summary ?? e.source}</Anchor>
                           : <Text size="sm" lineClamp={1}>{e.title ?? e.summary ?? e.source}</Text>}
                       </Table.Td>
                       <Table.Td><VerdictBadge v={e.verdict} /></Table.Td>
@@ -114,13 +116,13 @@ export function OverviewPage() {
         </Card>
       </SimpleGrid>
 
-      <SimpleGrid cols={{ base: 1, lg: 2 }}>
-        <Card withBorder>
-          <Title order={2} size="h5" mb="sm">Listings by Verdict and Status</Title>
+      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
+        <Card>
+          <Title order={2} mb="sm">Listings by Verdict and Status</Title>
           <Table.ScrollContainer minWidth={360}>
-            <Table tabularNums aria-label="Listings by verdict and status">
+            <Table tabularNums fz="sm" verticalSpacing={6} aria-label="Listings by verdict and status">
               <Table.Thead>
-                <Table.Tr><Table.Th>Verdict</Table.Th>{statuses.map((s) => <Table.Th key={s} ta="right">{s}</Table.Th>)}</Table.Tr>
+                <Table.Tr><Table.Th>Verdict</Table.Th>{statuses.map((s) => <Table.Th key={s} ta="right" tt="capitalize">{s}</Table.Th>)}</Table.Tr>
               </Table.Thead>
               <Table.Tbody>
                 {m.verdicts.map((v) => (
@@ -138,9 +140,9 @@ export function OverviewPage() {
             </Table>
           </Table.ScrollContainer>
         </Card>
-        <Card withBorder>
+        <Card>
           <Group justify="space-between" mb="sm">
-            <Title order={2} size="h5">Next Digest</Title>
+            <Title order={2}>Next Digest</Title>
             {o.digest && <Text size="xs" c="dimmed">{num(o.digest.events)} events</Text>}
           </Group>
           {o.digest ? (

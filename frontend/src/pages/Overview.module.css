@@ -1,0 +1,40 @@
+/* The headline numbers: one bordered strip, cells separated by hairlines in both directions (the 1px gap shows the border colour). */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  background-color: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+  border: 1px solid light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-5));
+  border-radius: var(--mantine-radius-lg);
+  overflow: hidden;
+}
+
+@media (min-width: 48em) {
+  .stats { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 75em) {
+  .stats { grid-template-columns: repeat(6, 1fr); }
+}
+
+.stat {
+  display: block;
+  min-width: 0;
+  padding: var(--mantine-spacing-sm) var(--mantine-spacing-md);
+  background-color: var(--mantine-color-body);
+  color: inherit;
+  text-decoration: none;
+}
+
+a.stat:hover {
+  background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
+}
+
+.value {
+  margin: 2px 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}

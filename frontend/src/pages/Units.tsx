@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 
 import { api, qs, type ListResponse, type Unit } from '../api'
 import { ApplicationBadge, SizeBadge, StatusBadge, VerdictBadge } from '../components/Badges'
-import { ListPage, ListRows, ListTable, MoreRow, SortTh, Summary, type Cells } from '../components/ListPage'
+import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, Summary, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { ago, date, minutes, money, pct, when } from '../format'
 import { useListState } from '../hooks'
@@ -32,13 +32,13 @@ const rowKey = (u: Unit) => u.id
 const openKey = (u: Unit) => u.key
 const dim = (u: Unit) => u.verdict === 'excluded'
 const lead = (u: Unit, to: string | null) => (
-  <Table.Td maw={420}>
+  <LeadTd>
     <Group gap={6} wrap="nowrap" miw={0}>
       <Anchor component={Link} to={to!} c="inherit" size="sm" fw={500} lineClamp={1}>{u.title}</Anchor>
-      {u.set_aside && <Badge color="orange" variant="light" size="sm" style={{ minWidth: 'max-content' }}>{u.set_aside}</Badge>}
+      {u.set_aside && <Badge color="orange" style={{ minWidth: 'max-content' }}>{u.set_aside}</Badge>}
     </Group>
     <Text size="xs" c="dimmed" lineClamp={1}>{[u.address, u.source].filter(Boolean).join(' · ')}</Text>
-  </Table.Td>
+  </LeadTd>
 )
 
 /** One row per unit, so rent, AMI and income sort exactly; unit filters hold on the row's own unit. */
@@ -66,7 +66,7 @@ export function UnitsPage() {
             <ListTable label="Units" minWidth={900} stale={q.isPlaceholderData}>
               <Table.Thead>
                 <Table.Tr>
-                  <SortTh label="Building" sort="title" state={state} set={set} />
+                  <SortTh label="Building" sort="title" state={state} set={set} lead />
                   {cols.map((c) => <SortTh key={c} label={CELLS[c].label} sort={CELLS[c].sort} state={state} set={set} ta={CELLS[c].right ? 'right' : undefined} />)}
                 </Table.Tr>
               </Table.Thead>

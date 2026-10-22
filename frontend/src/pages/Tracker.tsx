@@ -1,4 +1,4 @@
-import { Anchor, Badge, Group, Select, Stack, Table, Text, Title } from '@mantine/core'
+import { Anchor, Badge, Group, Select, Stack, Table, Text } from '@mantine/core'
 import { useDebouncedValue } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { useQuery } from '@tanstack/react-query'
@@ -8,6 +8,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { api, qs, type Listing, type ListResponse, type TrackerRow } from '../api'
 import { ApplicationBadge, VerdictBadge } from '../components/Badges'
 import { ListingDrawer } from '../components/ListingDrawer'
+import { PageHeader } from '../components/PageHeader'
 import { Loading, LoadError } from '../components/State'
 import { ago, minutes, num, when } from '../format'
 import { useTitle, useTracker, useTrackerRefresh } from '../hooks'
@@ -53,32 +54,29 @@ export function TrackerPage() {
   const yours = t.rows.filter((r) => r.group === 'your move').length
   const theirs = t.rows.filter((r) => r.group === 'their move').length
   return (
-    <Stack gap="sm">
-      <Title order={1} size="h3">Tracker</Title>
-      <Text size="sm" c="dimmed">
-        {t.configured
-          ? <>Your Apartment Search Tracker sheet, read-only, synced every 5 minutes (last <span title={when(t.synced)}>{ago(t.synced)}</span>) · {num(t.rows.length)} rows by stage, longest waiting first · {num(yours)} your move · {num(theirs)} their move · {num(unmatched)} not matched to a listing</>
-          : 'The tracker sheet isn’t connected (HW_TRACKER_SHEET).'}
-      </Text>
+    <Stack gap="lg">
+      <PageHeader title="Tracker" description={t.configured
+        ? <>Your Apartment Search Tracker sheet, read-only, synced every 5 minutes (last <span title={when(t.synced)}>{ago(t.synced)}</span>) · {num(t.rows.length)} rows by stage, longest waiting first · {num(yours)} your move · {num(theirs)} their move · {num(unmatched)} not matched to a listing</>
+        : 'The tracker sheet isn’t connected (HW_TRACKER_SHEET).'} />
       <Table.ScrollContainer minWidth={1000}>
-        <Table highlightOnHover verticalSpacing={6} aria-label="Tracker rows">
+        <Table highlightOnHover fz="sm" aria-label="Tracker rows">
           <Table.Thead>
             <Table.Tr><Table.Th ta="right">Row</Table.Th><Table.Th>Property</Table.Th><Table.Th>Stage</Table.Th><Table.Th>Listings</Table.Th><Table.Th>Notes</Table.Th></Table.Tr>
           </Table.Thead>
           <Table.Tbody>
             {t.rows.length === 0 && (
-              <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed" ta="center" py="md">The sheet has no rows yet.</Text></Table.Td></Table.Tr>
+              <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed" ta="center" py="xl">The sheet has no rows yet.</Text></Table.Td></Table.Tr>
             )}
             {t.rows.map((r) => (
               <Table.Tr key={r.row_key}>
-                <Table.Td ta="right" c="dimmed">{r.position}</Table.Td>
+                <Table.Td ta="right" c="dimmed" fz="xs">{r.position}</Table.Td>
                 <Table.Td maw={280}>
-                  <Text size="sm" fw={500}>{r.page_url ? <Anchor href={r.page_url} target="_blank" rel="noopener noreferrer" inherit>{r.property}</Anchor> : r.property}</Text>
+                  <Text size="sm" fw={500}>{r.page_url ? <Anchor href={r.page_url} target="_blank" rel="noopener noreferrer" inherit c="inherit">{r.property}</Anchor> : r.property}</Text>
                   {r.cells.Borough && <Text size="xs" c="dimmed">{r.cells.Borough}</Text>}
                 </Table.Td>
                 <Table.Td>
                   <ApplicationBadge s={r.stage} group={r.group} since={r.stage_since} baseline={r.stage_since_baseline} />
-                  {r.group && <Text size="xs" c="dimmed">{r.group}</Text>}
+                  {r.group && <Text size="xs" c="dimmed" mt={2}>{r.group}</Text>}
                   {r.status && r.status !== r.stage && <Text size="xs" c="dimmed">sheet: {r.status}</Text>}
                 </Table.Td>
                 <Table.Td maw={340}>
@@ -87,9 +85,9 @@ export function TrackerPage() {
                       {r.listings.map((x) => (
                         <Group key={x.key} gap={6} wrap="nowrap">
                           <VerdictBadge v={x.verdict} />
-                          <Anchor component={Link} to={`?${new URLSearchParams({ open: x.key })}`} size="sm" lineClamp={1}>{x.title}</Anchor>
+                          <Anchor component={Link} to={`?${new URLSearchParams({ open: x.key })}`} size="sm" c="inherit" lineClamp={1}>{x.title}</Anchor>
                           {x.commute != null && <Text size="xs" c="dimmed">{minutes(x.commute)}</Text>}
-                          {x.how === 'manual' && <Badge size="xs" variant="outline">linked</Badge>}
+                          {x.how === 'manual' && <Badge size="xs" variant="default" c="dimmed">linked</Badge>}
                         </Group>
                       ))}
                     </Stack>
