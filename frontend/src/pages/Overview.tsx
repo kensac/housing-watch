@@ -3,7 +3,8 @@ import { IconAlertTriangle } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 
-import { gql, Q, type Overview } from '../api'
+import { request } from '../api'
+import { graphql } from '../gql'
 import { EventBadge, StatusBadge, VerdictBadge } from '../components/Badges'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { PageHeader } from '../components/PageHeader'
@@ -11,6 +12,16 @@ import { Loading, LoadError } from '../components/State'
 import { ago, money, num, range, when } from '../format'
 import { rowClick, useMeta, useTitle } from '../hooks'
 import classes from './Overview.module.css'
+
+const OverviewDoc = graphql(`
+  query Overview {
+    overview {
+      matrix { verdict status count } eligible_open eligible_live new_24h new_7d baseline_24h changed_24h changed_7d
+      failing last_digest pending eligible_now { ...ListingFields } recent { ...EventFields } total n_sources
+      digest { subject text events }
+    }
+  }
+`)
 
 function Stat({ label, value, hint, to }: { label: string; value: number; hint?: string; to?: string }) {
   const body = (
@@ -27,7 +38,7 @@ const openSearch = (key: string) => `?${new URLSearchParams({ open: key })}`
 
 export function OverviewPage() {
   useTitle('Overview')
-  const q = useQuery({ queryKey: ['overview'], queryFn: () => gql<{ overview: Overview }>(Q.overview).then((d) => d.overview), refetchInterval: 60_000 })
+  const q = useQuery({ queryKey: ['overview'], queryFn: () => request(OverviewDoc).then((d) => d.overview), refetchInterval: 60_000 })
   const meta = useMeta()
   const [params, setParams] = useSearchParams()
   const open = params.get('open')
@@ -37,6 +48,7 @@ export function OverviewPage() {
   const m = meta.data
   const p = m.profile
   const statuses = m.statuses.filter((s) => s !== 'gone')
+  const count = (v: string, s: string) => o.matrix.find((c) => c.verdict === v && c.status === s)?.count ?? 0
   return (
     <Stack gap="lg">
       <PageHeader title="Overview" description={<>
@@ -131,7 +143,7 @@ export function OverviewPage() {
                     {statuses.map((s) => (
                       <Table.Td key={s} ta="right">
                         <Anchor component={Link} to={`/listings?f=verdict.in.${v}&f=status.in.${s}`} size="sm"
-                          aria-label={`${num(o.matrix[v]?.[s] ?? 0)} ${v} ${s} listings`}>{num(o.matrix[v]?.[s] ?? 0)}</Anchor>
+                          aria-label={`${num(count(v, s))} ${v} ${s} listings`}>{num(count(v, s))}</Anchor>
                       </Table.Td>
                     ))}
                   </Table.Tr>

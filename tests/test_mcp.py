@@ -39,18 +39,21 @@ def test_graphql_tool(pg):
     from fastmcp.exceptions import ToolError
 
     seed(pg)
-    res = call(pg, "graphql", query='{ listings(f: ["verdict.in.eligible"]) { items { key } } }')
-    assert res["data"]["listings"]["items"] == [{"key": "a:1"}] and res["errors"] == []
+    q = '{ listings(f: ["verdict.in.eligible"], first: 5) { edges { node { key } } page_info { has_next_page } } }'
+    res = call(pg, "graphql", query=q)
+    assert res["data"]["listings"]["edges"] == [{"node": {"key": "a:1"}}] and res["errors"] == []
+    ev = call(pg, "graphql", query="{ events { edges { node { listing { key } } } } }")["data"]["events"]
+    assert {"listing": {"key": "a:1"}} in [e["node"] for e in ev["edges"]]  # DataLoaders work in-process too
     fields = call(pg, "graphql", query="{ __schema { queryType { fields { name } } } }")["data"]["__schema"]
     assert "listings" in {f["name"] for f in fields["queryType"]["fields"]}
     with pytest.raises(ToolError, match="read-only"):
-        call(pg, "graphql", query="mutation { deleteView(id: 1) }")
+        call(pg, "graphql", query="mutation { deleteView(input: { id: 1 }) { id } }")
     with pytest.raises(ToolError, match="read-only"):
-        call(pg, "graphql", query="query A { views { id } } mutation B { deleteView(id: 1) }")
+        call(pg, "graphql", query="query A { views { id } } mutation B { deleteView(input: { id: 1 }) { id } }")
     bad = call(pg, "graphql", query="{ listings(")
     assert bad["data"] is None and "Syntax Error" in bad["errors"][0]["message"]
-    missing = call(pg, "graphql", query="query($k: String!) { listing(key: $k) { key } }", variables={"k": "x"})
-    assert missing["errors"]
+    missing = call(pg, "graphql", query="query($k: String!) { listing(key: $k) { ext_id } }", variables={"k": "x"})
+    assert missing["errors"][0]["extensions"]["code"] == "NOT_FOUND"
 
 
 def test_never_runs_without_auth(monkeypatch):

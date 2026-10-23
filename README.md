@@ -81,7 +81,14 @@ The web UI is `frontend/` (React + Mantine). `cd frontend && npm ci && npm run b
 `src/housing_watch/web/dist/` for `serve`; `npm run dev` serves it with hot reload and proxies `/graphql`
 and `/api` to `HW_API` (a running `serve`). The UI's API is GraphQL at `/graphql` (Strawberry,
 `web/schema.py`; GraphiQL on GET), plus one REST route for the filled application PDF,
-`/api/listing/application`.
+`/api/listing/application`. Its types are derived from the read-model dataclasses in `queries.py`, and
+the SDL is committed as `schema.graphql`; the UI's types are generated from it. After changing a
+dataclass or the schema:
+
+```bash
+python -m housing_watch schema           # rewrite schema.graphql (CI fails when it is stale)
+cd frontend && npm run codegen           # rewrite src/gql/ (CI fails when it is stale or a query is invalid)
+```
 
 The image is `ghcr.io/kensac/housing-watch` (amd64 and arm64), built on every
 push to `main`. Its entrypoint is `python -m housing_watch`, with `serve` as the

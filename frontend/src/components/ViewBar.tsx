@@ -5,8 +5,25 @@ import { IconAlertTriangle, IconArrowDown, IconArrowUp, IconBookmark, IconCopy, 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { gql, Q, type Page, type SavedView, type ViewState } from '../api'
+import { request, type Page, type SavedView, type ViewState } from '../api'
+import { graphql } from '../gql'
 import { stateUrl, TITLES, useMeta, useMotion, useRefreshViews } from '../hooks'
+
+const CreateViewDoc = graphql(`
+  mutation CreateView($input: CreateViewInput!) { createView(input: $input) { view { ...ViewFields } } }
+`)
+
+const ChangeViewDoc = graphql(`
+  mutation ChangeView($input: ChangeViewInput!) { changeView(input: $input) { view { ...ViewFields } } }
+`)
+
+const DuplicateViewDoc = graphql(`
+  mutation DuplicateView($id: Int!) { duplicateView(input: { id: $id }) { view { ...ViewFields } } }
+`)
+
+const DeleteViewDoc = graphql(`
+  mutation DeleteView($id: Int!) { deleteView(input: { id: $id }) { id } }
+`)
 
 const message = (e: unknown) => String((e as Error)?.message ?? e)
 
@@ -45,8 +62,8 @@ export function ViewBar({ page, state, view, modified }: { page: Page; state: Vi
     setBusy('save the view')
     try {
       const v = naming === 'new'
-        ? (await gql<{ createView: SavedView }>(Q.createView, { page, name: n, is_default: isDefault, state })).createView
-        : (await gql<{ changeView: SavedView }>(Q.changeView, { id: view!.id, name: n })).changeView
+        ? (await request(CreateViewDoc, { input: { page, name: n, is_default: isDefault, state } })).createView.view
+        : (await request(ChangeViewDoc, { input: { id: view!.id, name: n } })).changeView.view
       await refresh()
       setNaming(null)
       notifications.show({ color: 'green', message: naming === 'new' ? `Saved “${n}”` : `Renamed to “${n}”` })
@@ -76,7 +93,7 @@ export function ViewBar({ page, state, view, modified }: { page: Page; state: Vi
           </Button>
           {view && modified && (
             <Button size="xs" loading={busy === 'save the changes'}
-              onClick={() => run('save the changes', `Saved changes to “${view.name}”`, () => gql<void>(Q.changeView, { id: view.id, state }))}>
+              onClick={() => run('save the changes', `Saved changes to “${view.name}”`, () => request(ChangeViewDoc, { input: { id: view.id, state } }).then(() => undefined))}>
               Save Changes
             </Button>
           )}
@@ -91,23 +108,23 @@ export function ViewBar({ page, state, view, modified }: { page: Page; state: Vi
                 <Menu.Item leftSection={<IconPencil size={15} aria-hidden />} onClick={() => openName('rename')}>Rename…</Menu.Item>
                 <Menu.Item leftSection={view.is_default ? <IconStarOff size={15} aria-hidden /> : <IconStar size={15} aria-hidden />}
                   onClick={() => run('change the default view', view.is_default ? `“${view.name}” no longer opens by default` : `“${view.name}” now opens by default`,
-                    () => gql<void>(Q.changeView, { id: view.id, is_default: !view.is_default }))}>
+                    () => request(ChangeViewDoc, { input: { id: view.id, is_default: !view.is_default } }).then(() => undefined))}>
                   {view.is_default ? 'Stop Opening by Default' : 'Open by Default'}
                 </Menu.Item>
                 <Menu.Item leftSection={<IconCopy size={15} aria-hidden />}
-                  onClick={() => run('duplicate the view', `Duplicated “${view.name}”`, () => gql<{ duplicateView: SavedView }>(Q.duplicateView, { id: view.id }).then((d) => d.duplicateView), (v) => v && go(v))}>
+                  onClick={() => run('duplicate the view', `Duplicated “${view.name}”`, () => request(DuplicateViewDoc, { id: view.id }).then((d) => d.duplicateView.view), (v) => v && go(v))}>
                   Duplicate
                 </Menu.Item>
                 <Menu.Item leftSection={<IconArrowUp size={15} aria-hidden />}
-                  onClick={() => run('move the view', `Moved “${view.name}” up`, () => gql<void>(Q.changeView, { id: view.id, move: -1 }))}>Move Up</Menu.Item>
+                  onClick={() => run('move the view', `Moved “${view.name}” up`, () => request(ChangeViewDoc, { input: { id: view.id, move: -1 } }).then(() => undefined))}>Move Up</Menu.Item>
                 <Menu.Item leftSection={<IconArrowDown size={15} aria-hidden />}
-                  onClick={() => run('move the view', `Moved “${view.name}” down`, () => gql<void>(Q.changeView, { id: view.id, move: 1 }))}>Move Down</Menu.Item>
+                  onClick={() => run('move the view', `Moved “${view.name}” down`, () => request(ChangeViewDoc, { input: { id: view.id, move: 1 } }).then(() => undefined))}>Move Down</Menu.Item>
                 <Menu.Divider />
                 <Menu.Item color="red" leftSection={<IconTrash size={15} aria-hidden />} onClick={() => modals.openConfirmModal({
                   title: `Delete “${view.name}”?`, children: 'The view’s filters, sort and columns are removed. Listings are not affected.',
                   labels: { confirm: 'Delete View', cancel: 'Keep View' }, confirmProps: { color: 'red' }, cancelProps: { variant: 'default' },
                   transitionProps: motion,
-                  onConfirm: () => run('delete the view', `Deleted “${view.name}”`, () => gql<void>(Q.deleteView, { id: view.id }), () => navigate(stateUrl(page, view.state, meta))),
+                  onConfirm: () => run('delete the view', `Deleted “${view.name}”`, () => request(DeleteViewDoc, { id: view.id }).then(() => undefined), () => navigate(stateUrl(page, view.state, meta))),
                 })}>Delete…</Menu.Item>
               </Menu.Dropdown>
             </Menu>

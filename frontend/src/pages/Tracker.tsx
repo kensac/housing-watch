@@ -5,13 +5,15 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
-import { gql, Q, type Listing, type ListResponse, type TrackerRow } from '../api'
+import { LinkTrackerDoc, ListingsDoc, request, STAGE_GROUP, type TrackerRow } from '../api'
 import { ApplicationBadge, VerdictBadge } from '../components/Badges'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { PageHeader } from '../components/PageHeader'
 import { Loading, LoadError } from '../components/State'
 import { ago, minutes, num, when } from '../format'
 import { useTitle, useTracker, useTrackerRefresh } from '../hooks'
+
+const borough = (r: TrackerRow) => r.cells.find((c) => c.name === 'Borough')?.value
 
 /** Search listings by text and link the chosen one to this sheet row. */
 function LinkListing({ row }: { row: TrackerRow }) {
@@ -20,13 +22,13 @@ function LinkListing({ row }: { row: TrackerRow }) {
   const refresh = useTrackerRefresh()
   const found = useQuery({
     queryKey: ['link-search', q],
-    queryFn: () => gql<{ listings: ListResponse<Listing> }>(Q.listings, { q, limit: 20, f: ['gone_since.empty'] }).then((d) => d.listings),
+    queryFn: () => request(ListingsDoc, { q, first: 20, f: ['gone_since.empty'] }).then((d) => d.listings),
     enabled: q.trim().length >= 2,
   })
   const link = async (key: string | null) => {
     if (!key) return
     try {
-      await gql(Q.linkTracker, { listing_key: key, row_key: row.row_key })
+      await request(LinkTrackerDoc, { listing_key: key, row_key: row.row_key })
       await refresh()
       notifications.show({ message: `Linked to “${row.property}”` })
     } catch (e) {
@@ -36,7 +38,7 @@ function LinkListing({ row }: { row: TrackerRow }) {
   return (
     <Select size="xs" w={260} aria-label={`Link a listing to ${row.property}`} placeholder="Link a listing…" searchable
       searchValue={search} onSearchChange={setSearch} value={null} onChange={link} filter={({ options }) => options}
-      data={(found.data?.items ?? []).map((x) => ({ value: x.key, label: `${x.title} · ${x.source}` }))}
+      data={(found.data?.edges ?? []).map(({ node: x }) => ({ value: x.key, label: `${x.title} · ${x.source}` }))}
       nothingFoundMessage={q.trim().length < 2 ? 'Type a building or address' : found.isFetching ? 'Searching…' : 'No listing matches'} />
   )
 }
@@ -51,8 +53,8 @@ export function TrackerPage() {
   if (q.isLoading) return <Loading rows={12} label="Loading the tracker…" />
   const t = q.data!
   const unmatched = t.rows.filter((r) => !r.listings.length).length
-  const yours = t.rows.filter((r) => r.group === 'your move').length
-  const theirs = t.rows.filter((r) => r.group === 'their move').length
+  const yours = t.rows.filter((r) => r.group === 'your_move').length
+  const theirs = t.rows.filter((r) => r.group === 'their_move').length
   return (
     <Stack gap="lg">
       <PageHeader title="Tracker" description={t.configured
@@ -72,11 +74,11 @@ export function TrackerPage() {
                 <Table.Td ta="right" c="dimmed" fz="xs">{r.position}</Table.Td>
                 <Table.Td maw={280}>
                   <Text size="sm" fw={500}>{r.page_url ? <Anchor href={r.page_url} target="_blank" rel="noopener noreferrer" inherit c="inherit">{r.property}</Anchor> : r.property}</Text>
-                  {r.cells.Borough && <Text size="xs" c="dimmed">{r.cells.Borough}</Text>}
+                  {borough(r) && <Text size="xs" c="dimmed">{borough(r)}</Text>}
                 </Table.Td>
                 <Table.Td>
                   <ApplicationBadge s={r.stage} group={r.group} since={r.stage_since} baseline={r.stage_since_baseline} />
-                  {r.group && <Text size="xs" c="dimmed" mt={2}>{r.group}</Text>}
+                  {r.group && <Text size="xs" c="dimmed" mt={2}>{STAGE_GROUP[r.group]}</Text>}
                   {r.status && r.status !== r.stage && <Text size="xs" c="dimmed">sheet: {r.status}</Text>}
                 </Table.Td>
                 <Table.Td maw={340}>
@@ -87,7 +89,7 @@ export function TrackerPage() {
                           <VerdictBadge v={x.verdict} />
                           <Anchor component={Link} to={`?${new URLSearchParams({ open: x.key })}`} size="sm" c="inherit" lineClamp={1}>{x.title}</Anchor>
                           {x.commute != null && <Text size="xs" c="dimmed">{minutes(x.commute)}</Text>}
-                          {x.how === 'manual' && <Badge size="xs" variant="default" c="dimmed">linked</Badge>}
+                          {x.tracker_match === 'manual' && <Badge size="xs" variant="default" c="dimmed">linked</Badge>}
                         </Group>
                       ))}
                     </Stack>

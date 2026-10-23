@@ -7,7 +7,8 @@ upstream tokens are kept encrypted under FASTMCP_HOME; losing them means reconne
 
 `search` and `fetch` have the shapes ChatGPT's connectors and deep research expect; the other tools take the
 web UI's filter grammar (filters.py) and return the same fields as its API, minus the applicant's PDFs.
-`graphql` runs a query in-process against the web app's own schema (web/schema.py); it refuses mutations.
+`graphql` runs a query in-process against the web app's own schema (web/schema.py, `schema.graphql`); it
+refuses mutations.
 """
 
 from __future__ import annotations
@@ -30,11 +31,10 @@ GRAMMAR = (
     "`borough.in.Brooklyn,Queens`, `units.rent.le.3000`, `status.in.open,waitlist`, `commute.le.45`, "
     "`last_changed.last.7d`. `filter_fields` lists every field and its operators."
 )
-_PRIVATE = ("unit_sizes", "unit_rents", "haystack")
 
 
 def _summary(x: queries.ListingSummary) -> dict:
-    return {k: v for k, v in asdict(x).items() if k not in _PRIVATE}
+    return queries.public(x)
 
 
 def _conds(page: str, raw: list[str]) -> list[F.Cond]:
@@ -61,7 +61,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     from graphql import GraphQLSyntaxError, OperationDefinitionNode, OperationType, parse
     from strawberry.types.graphql import OperationType as Op
 
-    from .web.schema import schema
+    from .web.schema import context, schema
 
     mcp = FastMCP(
         "housing-watch",
@@ -116,7 +116,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         """Individual units or rent tiers (size, rent, AMI, income band) with their listing and verdict."""
         uq = queries.ListingQuery(_conds("units", filters), q, sort or views.DEFAULT_SORT["units"], offset, limit)
         res = queries.search_units(engine, uq, p)
-        items = [{k: v for k, v in asdict(u).items() if k != "haystack"} for u in res.items]
+        items = [queries.public(u) for u in res.items]
         return {"items": items, "total": res.total, "next_offset": res.next_offset}
 
     @mcp.tool(annotations=READ)
@@ -162,18 +162,20 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
                  "choices": list(f.choices)} for f in views.FIELDS[page].values()]  # fmt: skip
 
     @mcp.tool(annotations=READ)
-    def graphql(query: str, variables: dict | None = None) -> dict:
+    async def graphql(query: str, variables: dict | None = None) -> dict:
         """Run a read-only GraphQL query against the web app's schema; mutations are refused. Introspect it
-        first: `{ __schema { queryType { fields { name description } } } }`. Filter arguments (`f`) take
-        `field.op.values` strings, as in the other tools."""
+        first: `{ __schema { queryType { fields { name description } } } }`. Lists are Relay connections:
+        `{ listings(f: ["verdict.in.eligible"], first: 20) { total edges { node { key title } } page_info {
+        has_next_page end_cursor } } }`, the next page with `after: <end_cursor>`. Filter arguments (`f`) take
+        `field.op.values` strings, as in the other tools. Errors carry `extensions.code`."""
         try:
             doc = parse(query)
         except GraphQLSyntaxError as e:
             return {"data": None, "errors": [e.formatted]}
         if any(isinstance(d, OperationDefinitionNode) and d.operation != OperationType.QUERY for d in doc.definitions):
             raise ToolError("graphql tool is read-only")
-        res = schema.execute_sync(query, variables, context_value={"engine": engine, "profile": p},
-                                  allowed_operation_types={Op.QUERY})  # fmt: skip
+        res = await schema.execute(query, variables, context_value=context(engine, p),
+                                   allowed_operation_types={Op.QUERY})  # fmt: skip
         return {"data": res.data, "errors": [e.formatted for e in res.errors or []]}
 
     return mcp

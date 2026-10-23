@@ -3,9 +3,16 @@ import { DateInput } from '@mantine/dates'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 
-import { gql, Q, type Chip, type Field, type Page } from '../api'
+import { request, type Chip, type Field, type Page } from '../api'
+import { graphql } from '../gql'
 import { num } from '../format'
 import { useMeta } from '../hooks'
+
+const ValuesDoc = graphql(`
+  query Values($page: Page!, $field: String!, $f: [String!], $q: String! = "") {
+    values(page: $page, field: $field, f: $f, q: $q) { enum counts { value count } }
+  }
+`)
 
 const NO_VALUE = new Set(['empty', 'notempty'])
 const escape = (v: string) => v.replace(/,/g, '\\,')
@@ -34,12 +41,12 @@ interface Props {
 export function FilterEditor({ page, current, others, q, onApply, onRemove }: Props) {
   const meta = useMeta().data!
   const fields = meta.pages[page].fields
+  const opLabel: Record<string, string> = useMemo(() => Object.fromEntries(meta.ops.map((o) => [o.op, o.label])), [meta.ops])
   const [name, setName] = useState<string | null>(current?.field ?? null)
   const field = fields.find((f) => f.name === name)
   const values = useQuery({
     queryKey: ['values', page, name, others, q],
-    queryFn: () => gql<{ values: { enum: boolean; counts: { value: string | null; count: number }[] } }>(
-      Q.values, { page, field: name, f: others, q }).then((d) => d.values),
+    queryFn: () => request(ValuesDoc, { page, field: name!, f: others, q }).then((d) => d.values),
     enabled: Boolean(field && field.type === 'text'),
   })
   const isEnum = Boolean(values.data?.enum)
@@ -81,7 +88,7 @@ export function FilterEditor({ page, current, others, q, onApply, onRemove }: Pr
         {field && effOp && (
           <>
             <Select label="Condition" data={field.ops.filter((o) => isEnum || field.type !== 'text' || !['in', 'nin'].includes(o) || field.choices.length)
-              .map((o) => ({ value: o, label: meta.op_labels[o] ?? o }))} value={effOp}
+              .map((o) => ({ value: o, label: opLabel[o] ?? o }))} value={effOp}
               onChange={(o) => { setOp(o); setVals([]) }} allowDeselect={false} comboboxProps={{ withinPortal: false }} />
             <ValueInput field={field} op={effOp} vals={vals} setVals={setVals} counts={values.data?.counts} error={valueError} />
           </>

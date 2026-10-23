@@ -122,7 +122,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   back from it to what it was, with nothing else changed. `db.py` stores both in the event's detail.
 - `mcp_server.py` exposes `queries.py` over MCP (streamable HTTP, a thread of `serve` on `HW_MCP_PORT`),
   read-only, with FastMCP's OIDC proxy for sign-in (clients register themselves; the upstream decides who).
-  Its `graphql` tool runs a query in-process against the web schema and refuses mutations.
+  Its `graphql` tool runs a query in-process against the web schema (with the same DataLoaders and limits)
+  and refuses mutations.
 - `digest.py` builds the email from `queries.py`: `send(engine, dry_run)` and `urgent(engine)` (an open,
   eligible listing has a pending new/reopened/changed event). Events with `detail.baseline = true` come from
   a source's first run; they collapse into one summary line and only their eligible listings are listed.
@@ -133,9 +134,31 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   Python after the SQL prefilter.
 - `web/app.py` serves GraphQL at `/graphql` (Strawberry; the schema is `web/schema.py`, snake_case fields,
   GraphiQL on GET) over `queries.py`, `views.py` and `tracker.py`, plus one REST route,
-  `/api/listing/application`, for the filled application PDF (a binary download). `frontend/` is the UI,
-  React + Mantine (default theme) + TanStack Query with a small `gql()` fetch helper, built by the image into
-  `web/dist/`, which the same app serves for every other path. List state (filters, search, sort, columns,
+  `/api/listing/application`, for the filled application PDF (a binary download).
+  - Types: one source of truth, the read model's dataclasses. `web/derive.py` turns each into a Strawberry
+    type (nested dataclasses, optionals, lists; a field's trailing comment is its description), so a field
+    added to a dataclass is in the API with no other change. Fields made with `queries.internal()`
+    (`haystack`, `unit_sizes`, `unit_rents`) stay out. The DTOs, not the tables, are the source because
+    verdicts, commutes and tracker stages are computed at read time. Domain string constants become enums
+    (Verdict, Status, EventType, Page, StageGroup, TrackerMatch, FilterOp, FieldType, Health; a value that
+    is not a GraphQL name, "your move", is `your_move`). An event's detail is the `EventDetail` union
+    (ListingChange, PageChange, SourceFailure). JSON remains only for a failed job's `args`, a task's own
+    kwargs. Only envelopes (connections, inputs, payloads, meta) are declared in `schema.py`.
+  - `schema.graphql` is the committed SDL (`python -m housing_watch schema`); a test and CI fail when it
+    is stale.
+  - Lists are Relay connections (`edges { cursor node }`, `page_info`, `first` ≤ 500, opaque `after`
+    cursors: a position for listings and units, an event id for events), carrying `total`, `filters`,
+    `problems`, and for listings and units `verdict_counts` and `hidden_gone`.
+  - Errors carry `extensions.code`: NOT_FOUND, BAD_USER_INPUT (also every document or variable error),
+    FORBIDDEN (a cross-origin mutation), INTERNAL (a bug, the only kind logged).
+  - Depth (10), token (2000) and alias (15) limits; introspection stays on. Resolvers are async and run
+    the blocking store reads in a worker thread; `Event.listing` goes through a per-request DataLoader.
+    Mutations take an `input` and return a payload.
+  `frontend/` is the UI, React + Mantine (default theme) + TanStack Query, built by the image into
+  `web/dist/`, which the same app serves for every other path. Its documents are written with GraphQL Code
+  Generator's `graphql()` (client preset, from `schema.graphql`, into the committed `src/gql/`), so each is a
+  TypedDocumentNode sent by `api.ts`'s `request()`; shared shapes are fragments (`ListingFields`, ...).
+  List state (filters, search, sort, columns,
   saved view, open listing) lives in the app's URL, and filters cross the API as `f: [String!]` in the
   filters.py grammar (one that does not parse comes back in `problems`); lists scroll in batches of 200. Three list
   pages: Listings (a row per listing; its rent and AMI ranges cover the units that fit and match the unit

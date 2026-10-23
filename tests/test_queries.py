@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from housing_watch import filters as F
 from housing_watch import queries as Q
 from housing_watch import tasks
+from housing_watch.models import Band
 from housing_watch.orm import RunRow
 from seed import seed, seed_jobs
 
@@ -86,7 +87,7 @@ def test_value_counts(db):
 def test_listing_detail(db):
     d = Q.listing_detail(db, "a:1")
     assert d.summary.verdict == "eligible" and d.notes == "Apply by mail" and d.household == 1
-    assert d.units[0].verdict == "eligible" and d.units[0].bands[0] == (1, 82557, 154440)
+    assert d.units[0].verdict == "eligible" and d.units[0].bands[0] == Band(1, 82557, 154440)
     assert [e.type for e in d.events] == ["new"]
     bronx = Q.listing_detail(db, "a:2")
     assert bronx.summary.reason == "in Bronx" and bronx.units[0].verdict == "eligible"  # unit judged on its own
@@ -138,7 +139,7 @@ def test_events(db):
 def test_fleet_without_procrastinate(db, monkeypatch):
     monkeypatch.setattr(Q, "JOBS_TABLE", "procrastinate_missing")
     f = Q.fleet(db)
-    assert not f.available and {h["name"] for h in f.hosts} == {"oci", "hetzner"}
+    assert not f.available and {h.name for h in f.hosts} == {"oci", "hetzner"}
 
 
 def test_fleet(db):
@@ -152,9 +153,9 @@ def test_fleet(db):
     with Session(db) as s, s.begin():
         s.add(RunRow(source="c", started=t, workers=["oci"]))  # in flight
     (w,) = Q.fleet(db).workers
-    assert w["name"] == w["host"] == "oci" and w["queues"] == ["sources", "byparr"] and w["concurrency"] == 2
-    assert w["doing"] == ["c"] and w["age"] < 60
-    assert f.failures[0]["error"] == "TimeoutError: boom"
+    assert w.name == "oci" and w.queues == ["sources", "byparr"] and w.concurrency == 2
+    assert w.doing == ["c"] and w.age < 60
+    assert f.failures[0].error == "TimeoutError: boom" and f.failures[0].args == {"source": "b"}
 
 
 def test_units_page(db):

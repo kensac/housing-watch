@@ -26,14 +26,14 @@ export function Toolbar({ page, state, set }: { page: Page; state: ViewState; se
   const pm = useMeta().data!.pages[page]
   const motion = useMotion()
   const sortName = state.sort.replace(/^-/, '')
-  const sorts = Object.entries(pm.sorts)
+  const sorts = pm.sorts
   const desc = descending(state.sort)
   const Direction = desc ? IconSortDescending : IconSortAscending
   return (
     <Group gap="xs" wrap="nowrap">
       {sorts.length > 0 && (
         <Group gap={4} wrap="nowrap">
-          <Select size="xs" w={{ base: 170, xs: 190 }} aria-label="Sort by" data={sorts.map(([value, label]) => ({ value, label: `Sort: ${label}` }))} value={sortName}
+          <Select size="xs" w={{ base: 170, xs: 190 }} aria-label="Sort by" data={sorts.map((s) => ({ value: s.key, label: `Sort: ${s.label}` }))} value={sortName}
             onChange={(v) => v && set({ sort: v })} allowDeselect={false} comboboxProps={{ transitionProps: motion }} />
           <ActionIcon size="input-xs" variant="default" aria-label={desc ? 'Sorted descending; sort ascending' : 'Sorted ascending; sort descending'}
             title={desc ? 'Descending' : 'Ascending'}
@@ -47,12 +47,12 @@ export function Toolbar({ page, state, set }: { page: Page; state: ViewState; se
           <Button size="xs" variant="default" leftSection={<IconColumns size={15} aria-hidden />}>Columns</Button>
         </Popover.Target>
         <Popover.Dropdown>
-          <Checkbox.Group label="Shown columns" size="sm" value={state.columns.filter((c) => c in pm.columns)} onChange={(on) => {
-            const next = Object.keys(pm.columns).filter((c) => on.includes(c))
+          <Checkbox.Group label="Shown columns" size="sm" value={state.columns.filter((c) => pm.columns.some((x) => x.key === c))} onChange={(on) => {
+            const next = pm.columns.map((x) => x.key).filter((c) => on.includes(c))
             set({ columns: next.length ? next : pm.default_columns })
           }}>
             <Stack gap={8} mt="xs">
-              {Object.entries(pm.columns).map(([k, label]) => <Checkbox key={k} value={k} label={label} />)}
+              {pm.columns.map((x) => <Checkbox key={x.key} value={x.key} label={x.label} />)}
             </Stack>
           </Checkbox.Group>
           <Text size="xs" c="dimmed" mt="sm">Unchecking every column restores the defaults.</Text>

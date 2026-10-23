@@ -32,6 +32,8 @@ jobs:
       - run: uv sync --frozen
       - run: uv run ruff check src tests alembic
       - run: uv run ruff format --check src tests alembic
+      - name: schema.graphql matches the schema in code
+        run: uv run python -m housing_watch schema --check schema.graphql
       # Offline: adapter tests parse saved fixtures; store/fleet/web tests use the postgres service.
       - run: uv run python -m pytest -q
 
@@ -48,5 +50,10 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: Generated types are current and every document validates against schema.graphql
+        run: |
+          npm run codegen
+          git status --porcelain -- src/gql
+          test -z "$(git status --porcelain -- src/gql)" || { echo "src/gql is stale: run npm run codegen and commit it"; exit 1; }
       - run: npm run lint
       - run: npm run build # tsc -b (typecheck) + vite build

@@ -1,0 +1,804 @@
+type ApplicationPdf {
+  n: Int!
+  url: String!
+
+  """The form housing-watch can fill, if it is one."""
+  form: String
+
+  """Why the PDF could not be read."""
+  error: String
+}
+
+type Applications {
+  pdfs: [ApplicationPdf!]!
+
+  """An applicant file is configured, so known forms can be filled."""
+  ready: Boolean!
+}
+
+"""One side of a `changed` event: what db._brief keeps of the listing."""
+type Brief {
+  status: String
+  deadline: String
+  kind: String
+  borough: String
+  senior_only: Boolean
+  units: [BriefUnit!]!
+}
+
+type BriefUnit {
+  size: String
+  unit_no: String
+  rent: Float
+  ami: Int
+  available: Boolean
+  set_aside: String
+  bands: [IncomeBand!]!
+}
+
+input ChangeViewInput {
+  id: Int!
+  name: String = null
+  state: ViewStateInput = null
+  is_default: Boolean = null
+
+  """-1 or 1: one place up or down."""
+  move: Int = null
+}
+
+"""
+A filter of the request that parsed, as a chip; `i` is its index in `f`.
+"""
+type Chip {
+  i: Int!
+  f: String!
+  label: String!
+  field: String!
+  op: FilterOp!
+  values: [String!]!
+}
+
+type Choice {
+  key: String!
+  label: String!
+}
+
+"""How a commute goes, as summarize() saw it."""
+type CommuteRoute {
+  """Transit lines in riding order, e.g. ["A", "Q32"]"""
+  lines: [String!]!
+
+  """Minutes on foot, all legs together"""
+  walk_min: Int
+  transfers: Int
+}
+
+input CreateViewInput {
+  page: Page!
+  name: String!
+  is_default: Boolean! = false
+  state: ViewStateInput = null
+}
+
+"""Date with time (isoformat)"""
+scalar DateTime
+
+type DeleteViewPayload {
+  id: Int!
+}
+
+type DetailUnit {
+  size: String!
+  unit_no: String
+  rent: Float
+  ami: Int
+  set_aside: String
+  available: Boolean
+  bands: [IncomeBand!]!
+  verdict: Verdict!
+  reason: String!
+
+  """HUD chart the ad's printed income caps come from"""
+  chart_year: Int
+}
+
+type Digest {
+  subject: String!
+  text: String!
+  events: Int!
+}
+
+type Event {
+  id: Int!
+  at: DateTime!
+  source: String!
+  key: String
+  type: EventType!
+  summary: String
+  notified: DateTime
+  baseline: Boolean!
+  title: String
+  verdict: Verdict
+  detail: EventDetail
+  listing: Listing
+}
+
+type EventConnection {
+  edges: [EventEdge!]!
+  page_info: PageInfo!
+
+  """Everything matching, across pages."""
+  total: Int!
+  filters: [Chip!]!
+
+  """Why each filter that did not parse was ignored."""
+  problems: [String!]!
+}
+
+union EventDetail = ListingChange | PageChange | SourceFailure
+
+type EventEdge {
+  cursor: String!
+  node: Event!
+}
+
+enum EventType {
+  new
+  reopened
+  changed
+  closed
+  gone
+  page_changed
+  watching
+  source_failed
+  source_recovered
+}
+
+enum FieldType {
+  text
+  number
+  time
+  bool
+}
+
+type FilterField {
+  """As it appears in the URL"""
+  name: String!
+  label: String!
+  group: String!
+
+  """Text, number, time or bool: which operators apply"""
+  type: FieldType!
+
+  """Fixed values (computed enums)"""
+  choices: [String!]!
+  money: Boolean!
+  ops: [FilterOp!]!
+}
+
+enum FilterOp {
+  in
+  nin
+  contains
+  ncontains
+  empty
+  notempty
+  between
+  after
+  before
+  last
+  is
+  eq
+  ne
+  lt
+  le
+  gt
+  ge
+}
+
+type Fleet {
+  """Procrastinate's tables exist"""
+  available: Boolean!
+  workers: [FleetWorker!]!
+  failures: [FleetFailure!]!
+  hosts: [FleetHost!]!
+  queues: [QueueCount!]!
+}
+
+"""A failed Procrastinate job."""
+type FleetFailure {
+  id: Int!
+  queue_name: String!
+  task_name: String!
+
+  """The task's keyword arguments, as queued"""
+  args: JSON!
+  attempts: Int!
+  at: DateTime
+
+  """From the job's last run"""
+  error: String
+}
+
+"""A host that ran sources, from runs.workers."""
+type FleetHost {
+  name: String!
+  last_run: DateTime!
+  runs_24h: Int!
+  fails_24h: Int!
+  sources: Int!
+}
+
+"""A worker process, from its fleet_workers heartbeat."""
+type FleetWorker {
+  """The host it runs on"""
+  name: String!
+  queues: [String!]!
+  concurrency: Int!
+  started: DateTime!
+  last_seen: DateTime!
+
+  """Seconds since its last heartbeat"""
+  age: Float!
+
+  """Sources it is running now"""
+  doing: [String!]!
+}
+
+enum Health {
+  ok
+  failing
+  never
+}
+
+"""Income range for one household size."""
+type IncomeBand {
+  household: Int!
+  income_min: Int
+  income_max: Int
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
+"""
+scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
+
+input LinkTrackerInput {
+  listing_key: String!
+
+  """null: the listing is in no row."""
+  row_key: String = null
+}
+
+"""A listing, summarized and judged for the profile."""
+type Listing {
+  key: String!
+  source: String!
+  title: String!
+  url: String!
+  address: String
+  borough: String
+
+  """As published, or "gone" once the source stopped listing it"""
+  status: Status!
+  kind: String!
+  deadline: String
+  senior_only: Boolean!
+  first_seen: DateTime!
+  last_changed: DateTime!
+  gone_since: DateTime
+  verdict: Verdict!
+  reason: String!
+  units: Int!
+  eligible_units: Int!
+  sizes: [String!]!
+  rent_min: Float
+  rent_max: Float
+  ami_min: Int
+  ami_max: Int
+
+  """Transit minutes to HW_COMMUTE_TO (eligible listings only)"""
+  commute: Int
+  commute_route: CommuteRoute
+
+  """The stage of this listing's tracker row (tracker.stage of its Status)"""
+  application: String
+
+  """Whose move that stage is; None for an unknown status"""
+  application_group: StageGroup
+
+  """When the row entered that stage, as first recorded"""
+  application_since: DateTime
+
+  """The stage predates tracking: it began before application_since"""
+  application_since_baseline: Boolean!
+  application_notes: String
+
+  """That row's Property"""
+  tracker_row: String
+
+  """How the row was matched to this listing"""
+  tracker_match: TrackerMatch
+}
+
+"""What a `changed` event changed."""
+type ListingChange {
+  before: Brief!
+  after: Brief!
+
+  """The differences in words (changes.describe), most decisive first"""
+  changes: [String!]!
+
+  """A status flap to or from "unknown", not news"""
+  noise: Boolean!
+}
+
+type ListingConnection {
+  edges: [ListingEdge!]!
+  page_info: PageInfo!
+
+  """Everything matching, across pages."""
+  total: Int!
+  filters: [Chip!]!
+
+  """Why each filter that did not parse was ignored."""
+  problems: [String!]!
+
+  """Counts by verdict, ignoring a verdict filter."""
+  verdict_counts: VerdictCounts!
+
+  """Removed listings are left out: no filter asks about removal."""
+  hidden_gone: Boolean!
+}
+
+type ListingDetail {
+  summary: Listing!
+  notes: String
+  ext_id: String!
+  last_seen: DateTime!
+  units: [DetailUnit!]!
+  events: [Event!]!
+  household: Int!
+  pdfs: [String!]!
+}
+
+type ListingEdge {
+  cursor: String!
+  node: Listing!
+}
+
+type MatrixCell {
+  verdict: Verdict!
+  status: Status!
+  count: Int!
+}
+
+"""The profile and the registries the app builds its pages from."""
+type Meta {
+  profile: Profile!
+  statuses: [Status!]!
+  verdicts: [Verdict!]!
+  ops: [OpLabel!]!
+  pages: Pages!
+}
+
+type Mutation {
+  """Save a view of a page."""
+  createView(input: CreateViewInput!): ViewPayload!
+
+  """
+  Rename, replace the state, set or clear the default, or move it one place.
+  """
+  changeView(input: ChangeViewInput!): ViewPayload!
+
+  """A copy of a view, named "<name> (copy)"."""
+  duplicateView(input: ViewIdInput!): ViewPayload!
+  deleteView(input: ViewIdInput!): DeleteViewPayload!
+
+  """Link a listing to a sheet row, or mark it as in no row (row_key null)."""
+  linkTracker(input: LinkTrackerInput!): TrackerLinkPayload!
+
+  """Drop a manual link: the listing goes back to automatic matching."""
+  unlinkTracker(input: UnlinkTrackerInput!): TrackerLinkPayload!
+}
+
+type OpLabel {
+  op: FilterOp!
+  label: String!
+}
+
+type Overview {
+  eligible_open: Int!
+
+  """Eligible and open, waitlist or upcoming"""
+  eligible_live: Int!
+  new_24h: Int!
+  new_7d: Int!
+  baseline_24h: Int!
+  changed_24h: Int!
+  changed_7d: Int!
+  failing: [String!]!
+  last_digest: DateTime
+  pending: Int!
+  eligible_now: [Listing!]!
+  recent: [Event!]!
+  total: Int!
+  n_sources: Int!
+  matrix: [MatrixCell!]!
+  digest: Digest
+}
+
+"""A list page of the app."""
+enum Page {
+  listings
+  units
+  events
+}
+
+"""What changed on a watched page (`page_changed`)."""
+type PageChange {
+  """New lines of text"""
+  added: [String!]!
+  removed: [String!]!
+  new_links: [String!]!
+}
+
+type PageInfo {
+  has_next_page: Boolean!
+  has_previous_page: Boolean!
+  start_cursor: String
+  end_cursor: String
+}
+
+type PageMeta {
+  fields: [FilterField!]!
+  columns: [Choice!]!
+  default_columns: [String!]!
+  default_sort: String!
+  sorts: [Choice!]!
+}
+
+type Pages {
+  listings: PageMeta!
+  units: PageMeta!
+  events: PageMeta!
+}
+
+type Profile {
+  household: Int!
+
+  """Annual household income; required to run"""
+  income: Int!
+  max_rent: Float
+  sizes: [String!]!
+  excluded_boroughs: [String!]!
+}
+
+type Query {
+  """The profile and the registries the app builds its pages from."""
+  meta: Meta!
+
+  """
+  Listings matching the filters and search, one per building or opportunity. Filters (`f`) are `field.op.values` strings; `meta.pages` lists the fields and operators.
+  """
+  listings(f: [String!] = null, q: String! = "", sort: String! = "", first: Int! = 200, after: String = null): ListingConnection!
+
+  """
+  Every unit or rent tier of the matching listings; unit filters hold on its own unit. Filters (`f`) are `field.op.values` strings; `meta.pages` lists the fields and operators.
+  """
+  units(f: [String!] = null, q: String! = "", sort: String! = "", first: Int! = 200, after: String = null): UnitConnection!
+
+  """One listing with every unit, its notes and its history."""
+  listing(key: String!): ListingDetail!
+
+  """
+  Each linked application PDF, fetched to see whether it is a form we can fill.
+  """
+  listingApplications(key: String!): Applications!
+
+  """
+  Distinct values of a field with counts under the other filters (send them without the one being
+  edited); `enum` says whether the field has few enough values to pick from.
+  """
+  values(page: Page!, field: String!, f: [String!] = null, q: String! = ""): Values!
+
+  """
+  What happened, newest first. Listing filters apply through the event's listing.
+  """
+  events(f: [String!] = null, first: Int! = 200, after: String = null): EventConnection!
+
+  """
+  Counts by verdict and status, eligible listings open now, recent events and failing sources.
+  """
+  overview: Overview!
+
+  """Every source with its health, schedule and listing counts."""
+  sources: [Source!]!
+
+  """
+  Procrastinate's workers, queues and failed jobs, and the hosts that ran sources.
+  """
+  fleet: Fleet!
+
+  """
+  Every tracker sheet row with its stage history and the listings matched to it.
+  """
+  tracker: Tracker!
+
+  """Every saved view with its current match count."""
+  views: [View!]!
+}
+
+type QueueCount {
+  queue: String!
+  status: String!
+  count: Int!
+}
+
+type Source {
+  source: String!
+  title: String
+  url: String
+  every_hours: Float
+
+  """Ok, failing, or never (no run has succeeded yet)"""
+  health: Health!
+  last_ok: DateTime
+  last_attempt: DateTime
+  failing_since: DateTime
+  consecutive_failures: Int!
+  next_due: DateTime
+
+  """Seconds"""
+  last_duration: Float
+  last_error: String
+  last_events: Int
+
+  """Listed now (not gone)"""
+  listings: Int!
+  eligible: Int!
+  possible: Int!
+
+  """Who ran it in the last 7 days"""
+  workers: [String!]!
+}
+
+"""A `source_failed` event."""
+type SourceFailure {
+  error: String
+
+  """Consecutive failures when it was recorded"""
+  fails: Int
+}
+
+"""Whose move an application stage is."""
+enum StageGroup {
+  your_move
+  their_move
+  done
+}
+
+"""
+A row entering a stage. `baseline`: it was already there when tracking began, so it entered earlier.
+"""
+type StageStep {
+  at: DateTime!
+  stage_from: String
+  stage_to: String
+
+  """Already in this stage when tracking began"""
+  baseline: Boolean!
+  group: StageGroup
+}
+
+"""A listing's status as published; gone once its source dropped it."""
+enum Status {
+  open
+  waitlist
+  upcoming
+  unknown
+  closed
+  gone
+}
+
+type Tracker {
+  """HW_TRACKER_SHEET is set"""
+  configured: Boolean!
+  synced: DateTime
+
+  """By stage, then longest in it"""
+  rows: [TrackerRow!]!
+}
+
+"""One column of a sheet row."""
+type TrackerCell {
+  """The column header"""
+  name: String!
+  value: String!
+
+  """The cell's hyperlink, if it has one"""
+  link: String
+}
+
+type TrackerLinkPayload {
+  listing_key: String!
+  row_key: String
+
+  """The listing as it reads after the change."""
+  listing: Listing
+}
+
+"""How a listing was matched to its tracker row."""
+enum TrackerMatch {
+  url
+  address
+  name
+  manual
+}
+
+"""
+A tracker sheet row with its stage history and the listings matched to it.
+"""
+type TrackerRow {
+  row_key: String!
+
+  """The sheet row number"""
+  position: Int!
+  property: String!
+
+  """As written in the sheet"""
+  status: String
+
+  """The stage that status means (tracker.stage)"""
+  stage: String
+
+  """Whose move that stage is"""
+  group: StageGroup
+
+  """When the row entered its stage"""
+  stage_since: DateTime
+
+  """The stage predates tracking: it began before stage_since"""
+  stage_since_baseline: Boolean!
+
+  """Stage changes, oldest first"""
+  events: [StageStep!]!
+  notes: String
+  source_url: String
+  page_url: String
+
+  """Every column of the row, as the sheet has them"""
+  cells: [TrackerCell!]!
+
+  """Empty: unmatched, link one by hand"""
+  listings: [Listing!]!
+}
+
+"""One unit with its listing's context: the row of the Units page."""
+type Unit {
+  id: Int!
+
+  """The listing's key"""
+  key: String!
+  source: String!
+  title: String!
+  url: String!
+  address: String
+  borough: String
+  status: Status!
+  kind: String!
+  deadline: String
+  first_seen: DateTime!
+  last_changed: DateTime!
+  gone_since: DateTime
+  listing_verdict: Verdict!
+  size: String!
+  unit_no: String
+  rent: Float
+  ami: Int
+  set_aside: String
+  available: Boolean
+  chart_year: Int
+
+  """The band for the profile's household size"""
+  income_min: Int
+  income_max: Int
+
+  """
+  This unit's, after the listing-level rules (closed, borough, senior, ...)
+  """
+  verdict: Verdict!
+  reason: String!
+  commute: Int
+  application: String
+  application_group: StageGroup
+  application_since: DateTime
+  application_since_baseline: Boolean!
+}
+
+type UnitConnection {
+  edges: [UnitEdge!]!
+  page_info: PageInfo!
+
+  """Everything matching, across pages."""
+  total: Int!
+  filters: [Chip!]!
+
+  """Why each filter that did not parse was ignored."""
+  problems: [String!]!
+
+  """Counts by verdict, ignoring a verdict filter."""
+  verdict_counts: VerdictCounts!
+
+  """Units of removed listings are left out."""
+  hidden_gone: Boolean!
+}
+
+type UnitEdge {
+  cursor: String!
+  node: Unit!
+}
+
+input UnlinkTrackerInput {
+  listing_key: String!
+}
+
+type ValueCount {
+  value: String
+  count: Int!
+}
+
+type Values {
+  """The field has few enough values to pick from."""
+  enum: Boolean!
+  counts: [ValueCount!]!
+}
+
+"""How a listing or unit fits the profile, judged at read time."""
+enum Verdict {
+  eligible
+  possible
+  excluded
+}
+
+type VerdictCounts {
+  eligible: Int!
+  possible: Int!
+  excluded: Int!
+}
+
+"""A saved view: a named filter, search, sort and columns."""
+type View {
+  id: Int!
+  page: Page!
+  name: String!
+  position: Int!
+  is_default: Boolean!
+  state: ViewState!
+  warnings: [String!]!
+  updated: DateTime
+  count: Int
+}
+
+input ViewIdInput {
+  id: Int!
+}
+
+type ViewPayload {
+  view: View!
+}
+
+"""What a list page shows: the part of its URL a saved view captures."""
+type ViewState {
+  q: String!
+  sort: String!
+  columns: [String!]!
+  f: [String!]!
+}
+
+input ViewStateInput {
+  f: [String!] = null
+  q: String = null
+  sort: String = null
+  columns: [String!] = null
+}

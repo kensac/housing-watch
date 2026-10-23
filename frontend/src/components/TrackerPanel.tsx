@@ -2,7 +2,7 @@ import { Button, Group, Select, Stack, Text, Timeline } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
 
-import { gql, Q, type Listing, type StageStep } from '../api'
+import { LinkTrackerDoc, request, STAGE_GROUP, UnlinkTrackerDoc, type Listing, type StageStep } from '../api'
 import { when } from '../format'
 import { useTracker, useTrackerRefresh } from '../hooks'
 import { ApplicationBadge } from './Badges'
@@ -46,9 +46,9 @@ export function TrackerPanel({ x }: { x: Listing }) {
       setBusy(false)
     }
   }
-  const link = (row: string | null) => run(() => gql(Q.linkTracker, { listing_key: x.key, row_key: row }),
+  const link = (row: string | null) => run(() => request(LinkTrackerDoc, { listing_key: x.key, row_key: row }),
     row ? 'Linked to the tracker row' : 'Marked as not in the tracker')
-  const reset = () => run(() => gql(Q.unlinkTracker, { listing_key: x.key }), 'Back to automatic matching')
+  const reset = () => run(() => request(UnlinkTrackerDoc, { listing_key: x.key }), 'Back to automatic matching')
   if (tracker.data && !tracker.data.configured) return <Text size="sm" c="dimmed">The tracker sheet isn’t connected.</Text>
   const rows = tracker.data?.rows ?? []
   const row = rows.find((r) => r.property === x.tracker_row)
@@ -59,7 +59,7 @@ export function TrackerPanel({ x }: { x: Listing }) {
           <Group gap="xs">
             <Text size="sm" fw={500}>{x.tracker_row}</Text>
             <ApplicationBadge s={x.application} group={x.application_group} since={x.application_since} baseline={x.application_since_baseline} />
-            <Text size="xs" c="dimmed">{[x.application_group, HOW[x.tracker_match ?? '']].filter(Boolean).join(' · ')}</Text>
+            <Text size="xs" c="dimmed">{[x.application_group && STAGE_GROUP[x.application_group], HOW[x.tracker_match ?? '']].filter(Boolean).join(' · ')}</Text>
           </Group>
           {x.application_notes && <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x.application_notes}</Text>}
           {row && row.events.length > 0 && <StageTimeline steps={row.events} />}

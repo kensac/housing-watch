@@ -81,3 +81,12 @@ def gql(client, query: str, headers: dict | None = None, **variables) -> dict:
 
 def gql_error(res: dict) -> str | None:
     return res["errors"][0]["message"] if res.get("errors") else None
+
+
+def gql_code(res: dict) -> str | None:
+    return res["errors"][0]["extensions"]["code"] if res.get("errors") else None
+
+
+def nodes(conn: dict) -> list[dict]:
+    """A connection's nodes, in order."""
+    return [e["node"] for e in conn["edges"]]

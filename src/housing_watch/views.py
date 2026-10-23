@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from urllib.parse import urlencode
 
 from sqlalchemy import func, select, update
@@ -99,7 +100,7 @@ class View:
     is_default: bool
     state: State
     warnings: list[str]
-    updated: object = None
+    updated: datetime | None = None
     count: int | None = None
 
     def url(self) -> str:
