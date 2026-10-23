@@ -7,6 +7,7 @@ python -m housing_watch run --source NAME ...  run sources now, inline, without 
 python -m housing_watch digest [--dry-run]     email un-notified events (--dry-run prints, marks nothing)
 python -m housing_watch list                   adapters and their state
 python -m housing_watch show NAME              what one adapter returns, nothing stored
+python -m housing_watch schema [--check] PATH   write the GraphQL SDL to PATH (--check: fail if PATH is stale)
 """
 
 from __future__ import annotations
@@ -71,6 +72,22 @@ def _worker(eng, migrate: bool = True) -> None:
     tasks.run_worker(name, concurrency, queues)
 
 
+def _schema(path: str, check: bool) -> int:
+    """The web API's SDL, as frontend/codegen.ts reads it."""
+    from pathlib import Path
+
+    from .web.schema import schema
+
+    sdl, f = schema.as_str() + "\n", Path(path)
+    if not check:
+        f.write_text(sdl)
+        return 0
+    if f.is_file() and f.read_text() == sdl:
+        return 0
+    print(f"{path} is stale: run `python -m housing_watch schema {path}` and commit it", file=sys.stderr)
+    return 1
+
+
 def main(argv=None) -> int:
     logging.basicConfig(level=os.environ.get("HW_LOG", "INFO"), format="%(asctime)s %(levelname)s %(message)s")
     ap = argparse.ArgumentParser(prog="housing_watch")
@@ -85,6 +102,9 @@ def main(argv=None) -> int:
     sub.add_parser("list")
     s = sub.add_parser("show")
     s.add_argument("name")
+    g = sub.add_parser("schema")
+    g.add_argument("path", nargs="?", default="schema.graphql")
+    g.add_argument("--check", action="store_true")
     a = ap.parse_args(argv)
     if a.cmd in ("show", "digest", "serve") and PROFILE.income <= 0:
         ap.error("set HW_INCOME (annual household income); see criteria.Profile for the other HW_* vars")
@@ -97,6 +117,8 @@ def main(argv=None) -> int:
         for snap in res.snapshots:
             print(json.dumps({"snapshot": snap.url, "links": snap.links, "text": snap.text[:500]}))
         return 0
+    if a.cmd == "schema":
+        return _schema(a.path, a.check)
     eng = db.engine()
     if a.cmd == "migrate":
         db.migrate(eng)

@@ -2,18 +2,28 @@ import { Anchor, Badge, Group, Stack, Table, Text, Tooltip } from '@mantine/core
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 
-import { gql, Q, type Source } from '../api'
+import { request } from '../api'
+import { graphql } from '../gql'
 import { PageHeader } from '../components/PageHeader'
 import { Loading, LoadError } from '../components/State'
 import { ago, duration, num, when } from '../format'
 import { useMotion, useTitle } from '../hooks'
+
+const SourcesDoc = graphql(`
+  query Sources {
+    sources {
+      source title url every_hours health last_ok last_attempt failing_since consecutive_failures next_due
+      last_duration last_error last_events listings eligible possible workers
+    }
+  }
+`)
 
 const HEALTH = { ok: 'green', failing: 'red', never: 'gray' } as const
 
 export function SourcesPage() {
   useTitle('Sources')
   const motion = useMotion()
-  const q = useQuery({ queryKey: ['sources'], queryFn: () => gql<{ sources: Source[] }>(Q.sources).then((d) => d.sources), refetchInterval: 60_000 })
+  const q = useQuery({ queryKey: ['sources'], queryFn: () => request(SourcesDoc).then((d) => d.sources), refetchInterval: 60_000 })
   if (q.error) return <LoadError what="sources" error={q.error} retry={() => q.refetch()} />
   if (q.isLoading) return <Loading rows={12} label="Loading sources…" />
   const rows = [...q.data!].sort((a, b) => (a.health === 'failing' ? 0 : 1) - (b.health === 'failing' ? 0 : 1) || a.source.localeCompare(b.source))

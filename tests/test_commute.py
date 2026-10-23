@@ -57,7 +57,7 @@ def test_refresh_routes_only_eligible_listings_once(pg, monkeypatch):
     assert C.refresh(pg) == 1 and sent == ["1 Main St, Queens, NY"]
     assert C.refresh(pg) == 0  # fresh: not routed again
     (x,) = [x for x in Q.judged(pg) if x.key == "a:1"]
-    assert x.commute == 34 and x.commute_route["lines"] == ["A", "Q32"]
+    assert x.commute == 34 and x.commute_route == C.Route(["A", "Q32"], 7, 1)
     assert all(y.commute is None for y in Q.judged(pg) if y.key != "a:1")
     hits = Q.search_listings(pg, Q.ListingQuery([F.parse_one("commute.le.40", F.LISTING_FIELDS)])).items
     assert [h.key for h in hits] == ["a:1"]

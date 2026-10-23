@@ -1,15 +1,18 @@
-"""Read API over the store, for the UI and the digest. Returns plain dataclasses and dicts.
+"""Read API over the store, for the UI and the digest. Returns plain dataclasses: the read model.
 
 Verdicts are computed here, at read time, by criteria; nothing judged is ever stored. Every listing is
 judged once per store version (a cheap aggregate over `listings`) and kept in memory, so the pages
 filter and sort a few thousand listings in Python without reloading them.
+
+These dataclasses are the API's source of truth: web/schema.py derives its GraphQL types from them, a field's
+trailing comment becoming its description. A field made with `internal()` stays out of the API and the MCP tools.
 """
 
 from __future__ import annotations
 
 import threading
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, fields, replace
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select, text
@@ -21,7 +24,7 @@ from . import filters as F
 from . import tracker as T
 from .criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, listing_verdict, unit_verdict
 from .mapping import listing_from_row
-from .models import Listing
+from .models import Band, Listing
 from .orm import (
     BandRow,
     CommuteRow,
@@ -37,6 +40,7 @@ from .orm import (
 
 VERDICTS = (ELIGIBLE, POSSIBLE, EXCLUDED)
 STATUSES = ("open", "waitlist", "upcoming", "unknown", "closed", "gone")
+HEALTH = ("ok", "failing", "never")
 LISTING_EVENTS = ("new", "reopened", "changed", "closed", "gone")
 EVENT_TYPES = (*LISTING_EVENTS, "page_changed", "watching", "source_failed", "source_recovered")
 SORTS = ("verdict", "changed", "first_seen", "rent", "deadline", "title", "source")  # "-x" flips the default
@@ -46,6 +50,17 @@ _VRANK = {ELIGIBLE: 0, POSSIBLE: 1, EXCLUDED: 2}
 
 def now() -> datetime:
     return datetime.now(UTC)
+
+
+def internal(**kw):
+    """A read-side field (search, sort) that the API and the MCP tools never show."""
+    return field(repr=False, metadata={"internal": True}, **kw)
+
+
+def public(x) -> dict:
+    """A read-model dataclass as a dict, without its internal fields."""
+    d = asdict(x)
+    return {f.name: d[f.name] for f in fields(x) if not f.metadata.get("internal")}
 
 
 def is_baseline(detail: dict | None) -> bool:
@@ -80,18 +95,18 @@ class ListingSummary:
     rent_max: float | None
     ami_min: int | None
     ami_max: int | None
-    unit_sizes: frozenset[str] = field(default_factory=frozenset, repr=False)
-    unit_rents: tuple[float, ...] = field(default=(), repr=False)
-    haystack: str = field(default="", repr=False)  # lowercased text the search box matches
+    unit_sizes: frozenset[str] = internal(default_factory=frozenset)
+    unit_rents: tuple[float, ...] = internal(default=())
+    haystack: str = internal(default="")  # lowercased text the search box matches
     commute: int | None = None  # transit minutes to HW_COMMUTE_TO (eligible listings only)
-    commute_route: dict | None = None  # {"lines", "walk_min", "transfers"}
+    commute_route: C.Route | None = None
     application: str | None = None  # the stage of this listing's tracker row (tracker.stage of its Status)
-    application_group: str | None = None  # your move | their move | done; None for an unknown status
+    application_group: str | None = None  # whose move that stage is; None for an unknown status
     application_since: datetime | None = None  # when the row entered that stage, as first recorded
     application_since_baseline: bool = False  # the stage predates tracking: it began before application_since
     application_notes: str | None = None
     tracker_row: str | None = None  # that row's Property
-    tracker_match: str | None = None  # url | address | name | manual
+    tracker_match: str | None = None  # how the row was matched to this listing
 
 
 def _load(s: Session, *where) -> list[ListingRow]:
@@ -114,7 +129,7 @@ def _summary(r: ListingRow, lst: Listing, p: Profile, commutes: dict | None = No
         url=lst.url,
         address=lst.address,
         borough=lst.borough,
-        status="gone" if r.gone_since else lst.status,
+        status="gone" if r.gone_since else lst.status if lst.status in STATUSES else "unknown",
         kind=lst.kind,
         deadline=lst.deadline,
         senior_only=lst.senior_only,
@@ -150,8 +165,7 @@ def _commute(commutes: dict, lst: Listing) -> dict:
     c = commutes.get(C.origin(lst.address, lst.borough) or "")
     if not (c and c.status == "ok"):
         return {}
-    route = dict(c.route or {}, lines=[C.line_name(x) for x in (c.route or {}).get("lines", [])])
-    return {"commute": c.minutes, "commute_route": route}
+    return {"commute": c.minutes, "commute_route": C.Route.of(c.route)}
 
 
 @dataclass
@@ -159,7 +173,7 @@ class UnitSummary:
     """One unit with its listing's context: the row of the Units page."""
 
     id: int
-    key: str  # the listing's
+    key: str  # the listing's key
     source: str
     title: str
     url: str
@@ -188,7 +202,7 @@ class UnitSummary:
     application_group: str | None = None
     application_since: datetime | None = None
     application_since_baseline: bool = False
-    haystack: str = field(default="", repr=False)
+    haystack: str = internal(default="")
 
 
 def _units(r: ListingRow, lst: Listing, x: ListingSummary, p: Profile) -> list[UnitSummary]:
@@ -547,7 +561,7 @@ class UnitView:
     ami: int | None
     set_aside: str | None
     available: bool | None
-    bands: list[tuple[int, int | None, int | None]]
+    bands: list[Band]
     verdict: str
     reason: str
     chart_year: int | None = None  # HUD chart the ad's printed income caps come from
@@ -566,6 +580,78 @@ class EventView:
     baseline: bool
     title: str | None = None
     verdict: str | None = None
+
+
+@dataclass
+class BriefUnit:
+    size: str | None
+    unit_no: str | None
+    rent: float | None
+    ami: int | None
+    available: bool | None
+    set_aside: str | None
+    bands: list[Band]
+
+
+@dataclass
+class Brief:
+    """One side of a `changed` event: what db._brief keeps of the listing."""
+
+    status: str | None
+    deadline: str | None
+    kind: str | None
+    borough: str | None
+    senior_only: bool | None
+    units: list[BriefUnit]
+
+    @classmethod
+    def of(cls, d: dict) -> Brief:
+        def unit(u: list) -> BriefUnit:
+            u = [*u, *[None] * (7 - len(u))]  # events from before bands were kept have six
+            return BriefUnit(*u[:6], [Band(*b) for b in u[6] or []])
+
+        return cls(d.get("status"), d.get("deadline"), d.get("kind"), d.get("borough"), d.get("senior_only"),
+                   [unit(u) for u in d.get("units") or []])  # fmt: skip
+
+
+@dataclass
+class ListingChange:
+    """What a `changed` event changed."""
+
+    before: Brief
+    after: Brief
+    changes: list[str]  # the differences in words (changes.describe), most decisive first
+    noise: bool  # a status flap to or from "unknown", not news
+
+
+@dataclass
+class PageChange:
+    """What changed on a watched page (`page_changed`)."""
+
+    added: list[str]  # new lines of text
+    removed: list[str]
+    new_links: list[str]
+
+
+@dataclass
+class SourceFailure:
+    """A `source_failed` event."""
+
+    error: str | None
+    fails: int | None  # consecutive failures when it was recorded
+
+
+def event_detail(e: EventView) -> ListingChange | PageChange | SourceFailure | None:
+    """An event's stored detail as its type's dataclass; None for types that keep none."""
+    d = e.detail or {}
+    if e.type == "changed" and "before" in d:
+        return ListingChange(Brief.of(d["before"]), Brief.of(d.get("after") or {}), list(d.get("changes") or []),
+                             bool(d.get("noise")))  # fmt: skip
+    if e.type == "page_changed":
+        return PageChange(list(d.get("added") or []), list(d.get("removed") or []), list(d.get("new_links") or []))
+    if e.type == "source_failed":
+        return SourceFailure(d.get("error"), d.get("fails"))
+    return None
 
 
 @dataclass
@@ -598,7 +684,7 @@ def listing_detail(engine: Engine, key: str, p: Profile = PROFILE) -> ListingDet
                 u.ami,
                 u.set_aside,
                 u.available,
-                [(b.household, b.income_min, b.income_max) for b in u.bands],
+                list(u.bands),
                 *unit_verdict(u, p),
                 u.chart_year,
             )
@@ -741,6 +827,57 @@ def overview(engine: Engine, p: Profile = PROFILE) -> Overview:
     )
 
 
+# --- tracker -------------------------------------------------------------------------------------------
+
+
+@dataclass
+class TrackerRowView:
+    """A tracker sheet row with its stage history and the listings matched to it."""
+
+    row_key: str
+    position: int  # the sheet row number
+    property: str
+    status: str | None  # as written in the sheet
+    stage: str | None  # the stage that status means (tracker.stage)
+    group: str | None  # whose move that stage is
+    stage_since: datetime | None  # when the row entered its stage
+    stage_since_baseline: bool  # the stage predates tracking: it began before stage_since
+    events: list[T.Step]  # stage changes, oldest first
+    notes: str | None
+    source_url: str | None
+    page_url: str | None
+    cells: list[T.Cell]  # every column of the row, as the sheet has them
+    listings: list[ListingSummary]  # empty: unmatched, link one by hand
+
+
+@dataclass
+class TrackerBoard:
+    configured: bool  # HW_TRACKER_SHEET is set
+    synced: datetime | None
+    rows: list[TrackerRowView]  # by stage, then longest in it
+
+
+def tracker_board(engine: Engine, p: Profile = PROFILE) -> TrackerBoard:
+    rows, _ = T.load(engine)
+    steps = T.history(engine)
+    by_row: dict[str, list[ListingSummary]] = {}
+    for x in judged(engine, p):
+        if x.tracker_row:
+            by_row.setdefault(T.row_key(x.tracker_row), []).append(x)
+    synced = max((r.synced for r in rows), default=None)
+    out = []
+    for r in rows:
+        st, hist = T.stage(r.status), steps.get(r.row_key, [])
+        since = T.since(hist, r.status)
+        out.append(TrackerRowView(
+            r.row_key, r.position, r.property, r.status, st, T.group(st), since and since.at,
+            bool(since and since.baseline), hist, r.notes, r.source_url, r.page_url, T.cells(r.cells),
+            by_row.get(r.row_key, []),
+        ))  # fmt: skip
+    out.sort(key=lambda d: (T.rank(d.stage), d.stage_since is None, d.stage_since or synced, d.position))
+    return TrackerBoard(bool(T.SHEET), synced, out)
+
+
 # --- sources -------------------------------------------------------------------------------------------
 
 
@@ -750,7 +887,7 @@ class SourceHealth:
     title: str | None
     url: str | None
     every_hours: float | None
-    health: str  # ok | failing | never
+    health: str  # ok, failing, or never (no run has succeeded yet)
     last_ok: datetime | None
     last_attempt: datetime | None
     failing_since: datetime | None
@@ -833,12 +970,49 @@ def sources(engine: Engine, p: Profile = PROFILE) -> list[SourceHealth]:
 
 
 @dataclass
+class FleetWorker:
+    """A worker process, from its fleet_workers heartbeat."""
+
+    name: str  # the host it runs on
+    queues: list[str]
+    concurrency: int
+    started: datetime
+    last_seen: datetime
+    age: float  # seconds since its last heartbeat
+    doing: list[str]  # sources it is running now
+
+
+@dataclass
+class FleetFailure:
+    """A failed Procrastinate job."""
+
+    id: int
+    queue_name: str
+    task_name: str
+    args: dict  # the task's keyword arguments, as queued
+    attempts: int
+    at: datetime | None
+    error: str | None  # from the job's last run
+
+
+@dataclass
+class FleetHost:
+    """A host that ran sources, from runs.workers."""
+
+    name: str
+    last_run: datetime
+    runs_24h: int
+    fails_24h: int
+    sources: int
+
+
+@dataclass
 class Fleet:
-    available: bool
-    workers: list[dict] = field(default_factory=list)  # fleet_workers: name (host), queues, concurrency, age (s), doing
+    available: bool  # Procrastinate's tables exist
+    workers: list[FleetWorker] = field(default_factory=list)
     queues: dict[str, dict[str, int]] = field(default_factory=dict)  # queue -> status -> count
-    failures: list[dict] = field(default_factory=list)
-    hosts: list[dict] = field(default_factory=list)  # from runs.workers: name, last_run, runs/fails 24h
+    failures: list[FleetFailure] = field(default_factory=list)
+    hosts: list[FleetHost] = field(default_factory=list)
 
 
 JOBS_TABLE = "procrastinate_jobs"  # absent until migrations (or a worker) create Procrastinate's schema
@@ -847,7 +1021,7 @@ JOBS_TABLE = "procrastinate_jobs"  # absent until migrations (or a worker) creat
 def fleet(engine: Engine) -> Fleet:
     with engine.connect() as c:
         hosts = [
-            dict(r._mapping)
+            FleetHost(**r._mapping)
             for r in c.execute(
                 text(
                     "SELECT w AS name, max(started) AS last_run,"
@@ -870,15 +1044,15 @@ def fleet(engine: Engine) -> Fleet:
                 " FROM fleet_workers w ORDER BY w.last_seen DESC, w.name"
             )
         ):
-            workers.append({**r._mapping, "host": r.name, "last_heartbeat": r.last_seen,
-                            "age": (t - r.last_seen).total_seconds(), "doing": r.doing or []})  # fmt: skip
+            workers.append(FleetWorker(r.name, list(r.queues), r.concurrency, r.started, r.last_seen,
+                                       (t - r.last_seen).total_seconds(), r.doing or []))  # fmt: skip
         queues: dict[str, dict[str, int]] = {}
         for q, st, n in c.execute(
             text("SELECT queue_name, status::text, count(*) FROM procrastinate_jobs GROUP BY 1, 2 ORDER BY 1")
         ):
             queues.setdefault(q, {})[st] = n
         failures = [
-            dict(r._mapping)
+            FleetFailure(**r._mapping)
             for r in c.execute(
                 text(
                     "SELECT j.id, j.queue_name, j.task_name, j.args, j.attempts,"

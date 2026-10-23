@@ -2,12 +2,22 @@ import { Alert, Badge, Card, Code, Group, SimpleGrid, Stack, Table, Text, Title,
 import { IconAlertTriangle } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 
-import { gql, Q, type Fleet } from '../api'
+import { request } from '../api'
+import { graphql } from '../gql'
 import { Dot } from '../components/Badges'
 import { PageHeader } from '../components/PageHeader'
 import { Loading, LoadError } from '../components/State'
 import { ago, num, when } from '../format'
 import { useTitle } from '../hooks'
+
+const FleetDoc = graphql(`
+  query Fleet {
+    fleet {
+      available workers { name queues concurrency started last_seen age doing } queues { queue status count }
+      failures { id queue_name task_name args attempts at error } hosts { name last_run runs_24h fails_24h sources }
+    }
+  }
+`)
 
 const QUEUE_STATES = ['todo', 'doing', 'succeeded', 'failed']
 
@@ -18,11 +28,12 @@ const Empty = ({ cols, children }: { cols: number; children: React.ReactNode }) 
 
 export function FleetPage() {
   useTitle('Fleet')
-  const q = useQuery({ queryKey: ['fleet'], queryFn: () => gql<{ fleet: Fleet }>(Q.fleet).then((d) => d.fleet), refetchInterval: 15_000 })
+  const q = useQuery({ queryKey: ['fleet'], queryFn: () => request(FleetDoc).then((d) => d.fleet), refetchInterval: 15_000 })
   if (q.error) return <LoadError what="the fleet" error={q.error} retry={() => q.refetch()} />
   if (q.isLoading) return <Loading rows={10} label="Loading the fleet…" />
   const f = q.data!
-  const queues = Object.entries(f.queues)
+  const queues = new Map<string, Record<string, number>>()
+  for (const c of f.queues) queues.set(c.queue, { ...queues.get(c.queue), [c.status]: c.count })
   return (
     <Stack gap="lg">
       <PageHeader title="Fleet" description={<>Procrastinate workers and job queues on the shared Postgres{f.available ? ` · ${num(f.workers.length)} workers` : ''}</>} />
@@ -70,8 +81,8 @@ export function FleetPage() {
             <Table tabularNums fz="sm" verticalSpacing={6} aria-label="Queues">
               <Table.Thead><Table.Tr><Table.Th>Queue</Table.Th>{QUEUE_STATES.map((s) => <Table.Th key={s} ta="right" tt="capitalize">{s}</Table.Th>)}</Table.Tr></Table.Thead>
               <Table.Tbody>
-                {queues.length === 0 && <Empty cols={5}>No jobs have been queued.</Empty>}
-                {queues.map(([name, st]) => (
+                {queues.size === 0 && <Empty cols={5}>No jobs have been queued.</Empty>}
+                {[...queues].map(([name, st]) => (
                   <Table.Tr key={name}><Table.Td translate="no">{name}</Table.Td>{QUEUE_STATES.map((s) => <Table.Td key={s} ta="right">{num(st[s] ?? 0)}</Table.Td>)}</Table.Tr>
                 ))}
               </Table.Tbody>

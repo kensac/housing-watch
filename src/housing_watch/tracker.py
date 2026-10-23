@@ -115,6 +115,21 @@ def parse(data: dict) -> list[dict]:
     return out
 
 
+@dataclass(frozen=True)
+class Cell:
+    """One column of a sheet row."""
+
+    name: str  # the column header
+    value: str
+    link: str | None = None  # the cell's hyperlink, if it has one
+
+
+def cells(d: dict | None) -> list[Cell]:
+    """A stored row's cells (header -> text, `<header>__link` -> link) as Cells, in sheet order."""
+    d = d or {}
+    return [Cell(k, v or "", d.get(f"{k}__link")) for k, v in d.items() if not k.endswith("__link")]
+
+
 def row_key(prop: str) -> str:
     return " ".join(prop.lower().split())
 
@@ -174,7 +189,11 @@ class Step:
     at: datetime
     stage_from: str | None
     stage_to: str | None
-    baseline: bool = False
+    baseline: bool = False  # already in this stage when tracking began
+
+    @property
+    def group(self) -> str | None:
+        return group(self.stage_to)
 
 
 def history(engine: Engine) -> dict[str, list[Step]]:
@@ -197,13 +216,16 @@ def since(steps: list[Step], status: str | None) -> Step | None:
     return steps[-1] if steps and steps[-1].stage_to == stage(status) else None
 
 
+MATCHES = ("url", "address", "name", "manual")  # how a listing was matched to its row
+
+
 @dataclass(frozen=True)
 class Ref:
     row_key: str
     property: str
     status: str | None  # as written in the sheet
     notes: str | None
-    how: str  # url | address | name | manual
+    how: str  # one of MATCHES
     stage: str | None = None
     since: Step | None = None
 

@@ -1,4 +1,4 @@
-import type { CommuteRoute } from './api'
+import type { Listing } from './api'
 
 // Every number, date and time goes through Intl in the browser's locale; money is always USD.
 
@@ -17,10 +17,10 @@ export const pct = (v: number | null | undefined) => (v == null ? '—' : percen
 export const minutes = (v: number | null | undefined) => (v == null ? '—' : `${integer.format(v)}${NBSP}min`)
 
 /** "34 min · A → F · 6 min walk" */
-export function commute(min: number | null | undefined, route: CommuteRoute | null | undefined): string {
+export function commute(min: number | null | undefined, route: Listing['commute_route'] | undefined): string {
   if (min == null) return '—'
   const parts = [minutes(min)]
-  if (route?.lines?.length) parts.push(route.lines.join(' → '))
+  if (route?.lines.length) parts.push(route.lines.join(' → '))
   if (route?.walk_min) parts.push(`${minutes(route.walk_min)} walk`)
   return parts.join(' · ')
 }

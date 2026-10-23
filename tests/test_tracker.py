@@ -10,16 +10,18 @@ from housing_watch import queries as Q
 from housing_watch import tracker as T
 from housing_watch.orm import TrackerEventRow, TrackerRow
 from housing_watch.web.app import create_app
-from seed import L, Session, add_listing, gql, gql_error, seed
+from seed import L, Session, add_listing, gql, gql_error, nodes, seed
 
 SAME = {"origin": "http://testserver"}
 TRACKER = """{ tracker { configured rows { property status stage group stage_since stage_since_baseline page_url
-  events { at stage_from stage_to } listings { key } } } }"""
-LINK = """mutation($k: String!, $r: String) { linkTracker(listing_key: $k, row_key: $r) { listing_key row_key } }"""
-UNLINK = "mutation($k: String!) { unlinkTracker(listing_key: $k) }"
+  cells { name value link } events { at stage_from stage_to group } listings { key tracker_match } } } }"""
+LINK = """mutation($k: String!, $r: String) {
+  linkTracker(input: { listing_key: $k, row_key: $r }) { listing_key row_key } }"""
+UNLINK = """mutation($k: String!) {
+  unlinkTracker(input: { listing_key: $k }) { listing_key row_key listing { application tracker_match } } }"""
 APPLICATION = "query($k: String!) { listing(key: $k) { summary { application } } }"
 LISTINGS = """query($f: [String!], $sort: String! = "") {
-  listings(f: $f, sort: $sort) { items { key tracker_match application_since } } }"""
+  listings(f: $f, sort: $sort) { edges { node { key tracker_match application_since } } } }"""
 
 
 def application(c, key: str) -> str | None:
@@ -127,6 +129,13 @@ def test_tracker_api_and_manual_links(synced):
     rows = {r["property"]: r for r in t["rows"]}
     assert t["configured"] and [x["key"] for x in rows["ONE LIC (42-10 27th St)"]["listings"]] == ["i:1"]
     assert rows["SVEN"]["listings"] == [] and rows["SVEN"]["page_url"] == "https://svenlic.com/"
+    one = rows["ONE LIC (42-10 27th St)"]
+    assert one["group"] == "your_move" and one["events"][0]["group"] == "your_move"
+    src = {"name": "Apply / Source", "value": "NYS Housing Search", "link": "https://example.org/portal/"}
+    assert {"name": "Borough", "value": "Queens", "link": None} in rows["SVEN"]["cells"] and src in rows["SVEN"][
+        "cells"
+    ]
+    assert one["listings"][0]["tracker_match"] == "address"
     sven = T.row_key("SVEN")
     assert gql_error(gql(c, LINK, k="a:1", r=sven)) == "cross-origin request refused"
     assert gql(c, LINK, SAME, k="a:1", r=sven)["data"]["linkTracker"] == {"listing_key": "a:1", "row_key": sven}
@@ -136,11 +145,12 @@ def test_tracker_api_and_manual_links(synced):
     assert gql(c, LINK, SAME, k="i:1", r=None)["data"]["linkTracker"]["row_key"] is None
     assert application(c, "i:1") is None  # "not this row"
     assert gql_error(gql(c, UNLINK, k="i:1")) == "cross-origin request refused"
-    assert gql(c, UNLINK, SAME, k="i:1")["data"]["unlinkTracker"] is True
+    un = gql(c, UNLINK, SAME, k="i:1")["data"]["unlinkTracker"]
+    assert un["row_key"] == T.row_key("ONE LIC (42-10 27th St)") and un["listing"]["tracker_match"] == "address"
     assert application(c, "i:1") == "To Apply"  # automatic again
     assert gql_error(gql(c, UNLINK, SAME, k="i:1")) == "No manual link for that listing"
     lst = gql(c, LISTINGS, f=["application.in.Applied"])["data"]["listings"]
-    assert [x["key"] for x in lst["items"]] == ["a:1"] and lst["items"][0]["tracker_match"] == "manual"
+    assert [x["key"] for x in nodes(lst)] == ["a:1"] and nodes(lst)[0]["tracker_match"] == "manual"
 
 
 def test_sync_is_off_unconfigured(pg, monkeypatch):
@@ -283,12 +293,12 @@ def test_stage_order_group_filter_and_api(sheet):
 
     c = TestClient(create_app(pg))
     lst = gql(c, LISTINGS, sort="application", f=["application_group.in.their move"])["data"]["listings"]
-    assert [x["key"] for x in lst["items"]] == ["t:3"] and lst["items"][0]["application_since"]
-    units = gql(c, '{ units(sort: "application") { items { application_group } } }')["data"]["units"]
-    assert units["items"][0]["application_group"] == T.YOU
+    assert [x["key"] for x in nodes(lst)] == ["t:3"] and nodes(lst)[0]["application_since"]
+    units = gql(c, '{ units(sort: "application") { edges { node { application_group } } } }')["data"]["units"]
+    assert nodes(units)[0]["application_group"] == "your_move"
     rows = gql(c, TRACKER)["data"]["tracker"]["rows"]
     assert [r["property"] for r in rows] == ["20 Oak Ave", "50 Spruce St", "30 Pine Rd", "10 Elm St", "40 Cedar Pl"]
     elm = rows[3]
-    assert (elm["status"], elm["stage"], elm["group"]) == ("Rejected", "Closed", T.DONE)
+    assert (elm["status"], elm["stage"], elm["group"]) == ("Rejected", "Closed", "done")
     assert [(e["stage_from"], e["stage_to"]) for e in elm["events"]] == [(None, "Closed")]
     assert elm["stage_since"] == elm["events"][0]["at"] and elm["stage_since_baseline"] is False

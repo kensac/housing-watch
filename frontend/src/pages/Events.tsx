@@ -3,12 +3,23 @@ import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
-import { gql, Q, type Event, type EventsResponse } from '../api'
+import { request, type Event } from '../api'
+import { graphql } from '../gql'
 import { EventBadge, VerdictBadge } from '../components/Badges'
 import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { ago, num, when } from '../format'
 import { useListState } from '../hooks'
+
+const EventsDoc = graphql(`
+  query Events($f: [String!], $after: String) {
+    events(f: $f, after: $after) {
+      edges { node { ...EventFields } }
+      page_info { has_next_page end_cursor }
+      total filters { ...ChipFields } problems
+    }
+  }
+`)
 
 const CELLS: Cells<Event> = {
   verdict: { label: 'Verdict', cell: (e) => <VerdictBadge v={e.verdict} /> },
@@ -38,14 +49,14 @@ export function EventsPage() {
   const st = ctx.state
   const q = useInfiniteQuery({
     queryKey: ['events', st.f],
-    queryFn: ({ pageParam }) => gql<{ events: EventsResponse }>(Q.events, { f: st.f, before: pageParam }).then((d) => d.events),
-    initialPageParam: null as number | null,
-    getNextPageParam: (last) => last.next_before,
+    queryFn: ({ pageParam }) => request(EventsDoc, { f: st.f, after: pageParam }).then((d) => d.events),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => (last.page_info.has_next_page ? last.page_info.end_cursor : null),
     placeholderData: keepPreviousData,
     enabled: ctx.ready,
   })
   const first = q.data?.pages[0]
-  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data])
+  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.edges.map((e) => e.node)) ?? [], [q.data])
   return (
     <ListPage page="events" search={false} chips={first?.filters ?? []} problems={first?.problems ?? []}
       error={q.isError && !q.data ? q.error : undefined} retry={() => q.refetch()}

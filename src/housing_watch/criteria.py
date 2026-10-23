@@ -17,7 +17,7 @@ from .models import Listing, Unit
 @dataclass(frozen=True)
 class Profile:
     household: int = int(os.environ.get("HW_HOUSEHOLD", "1"))
-    income: int = int(os.environ.get("HW_INCOME", "0"))  # required; __main__ refuses to run without it
+    income: int = int(os.environ.get("HW_INCOME", "0"))  # annual household income; required to run
     sizes: frozenset[str] = frozenset(os.environ.get("HW_SIZES", "studio,1br,2br,3br").split(","))
     excluded_boroughs: frozenset[str] = frozenset(b for b in os.environ.get("HW_EXCLUDED_BOROUGHS", "").split(",") if b)
     max_rent: float | None = None

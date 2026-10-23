@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -34,6 +35,20 @@ NY = ZoneInfo("America/New_York")
 DEPART = (8, 30)  # weekday, New York time
 STALE = timedelta(days=60)  # timetables change; re-route after this
 BATCH = 100  # routes per refresh
+
+
+@dataclass
+class Route:
+    """How a commute goes, as summarize() saw it."""
+
+    lines: list[str] = field(default_factory=list)  # transit lines in riding order, e.g. ["A", "Q32"]
+    walk_min: int | None = None  # minutes on foot, all legs together
+    transfers: int | None = None
+
+    @classmethod
+    def of(cls, d: dict | None) -> Route:
+        d = d or {}
+        return cls([line_name(x) for x in d.get("lines") or []], d.get("walk_min"), d.get("transfers"))
 
 
 def origin(address: str | None, borough: str | None) -> str | None:

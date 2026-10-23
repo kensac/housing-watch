@@ -3,7 +3,7 @@ import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
-import { gql, Q, type Listing, type ListResponse, type ViewState } from '../api'
+import { ListingsDoc, request, type Listing, type ViewState } from '../api'
 import { ApplicationBadge, SizeBadge, StatusBadge, VerdictBadge } from '../components/Badges'
 import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, Summary, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
@@ -40,9 +40,9 @@ const lead = (x: Listing, to: string | null) => (
 function useListings(st: ViewState, enabled: boolean) {
   return useInfiniteQuery({
     queryKey: ['listings', st.f, st.q, st.sort],
-    queryFn: ({ pageParam }) => gql<{ listings: ListResponse<Listing> }>(Q.listings, { f: st.f, q: st.q, sort: st.sort, offset: pageParam }).then((d) => d.listings),
-    initialPageParam: 0,
-    getNextPageParam: (last) => last.next_offset,
+    queryFn: ({ pageParam }) => request(ListingsDoc, { f: st.f, q: st.q, sort: st.sort, after: pageParam }).then((d) => d.listings),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => (last.page_info.has_next_page ? last.page_info.end_cursor : null),
     placeholderData: keepPreviousData,
     enabled,
   })
@@ -52,7 +52,7 @@ export function ListingsPage() {
   const ctx = useListState('listings')
   const q = useListings(ctx.state, ctx.ready)
   const first = q.data?.pages[0]
-  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data])
+  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.edges.map((e) => e.node)) ?? [], [q.data])
   return (
     <ListPage page="listings" chips={first?.filters ?? []} problems={first?.problems ?? []}
       error={q.isError && !q.data ? q.error : undefined} retry={() => q.refetch()}

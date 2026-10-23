@@ -3,12 +3,23 @@ import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
-import { gql, Q, type ListResponse, type Unit } from '../api'
+import { request, type Unit } from '../api'
+import { graphql } from '../gql'
 import { ApplicationBadge, SizeBadge, StatusBadge, VerdictBadge } from '../components/Badges'
 import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, Summary, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { ago, date, minutes, money, pct, when } from '../format'
 import { useListState } from '../hooks'
+
+const UnitsDoc = graphql(`
+  query Units($f: [String!], $q: String! = "", $sort: String! = "", $after: String) {
+    units(f: $f, q: $q, sort: $sort, after: $after) {
+      edges { node { ...UnitFields } }
+      page_info { has_next_page end_cursor }
+      total verdict_counts { eligible possible excluded } filters { ...ChipFields } problems hidden_gone
+    }
+  }
+`)
 
 const CELLS: Cells<Unit> = {
   verdict: { label: 'Verdict', sort: 'verdict', cell: (u) => <VerdictBadge v={u.verdict} why={u.reason} /> },
@@ -47,14 +58,14 @@ export function UnitsPage() {
   const st = ctx.state
   const q = useInfiniteQuery({
     queryKey: ['units', st.f, st.q, st.sort],
-    queryFn: ({ pageParam }) => gql<{ units: ListResponse<Unit> }>(Q.units, { f: st.f, q: st.q, sort: st.sort, offset: pageParam }).then((d) => d.units),
-    initialPageParam: 0,
-    getNextPageParam: (last) => last.next_offset,
+    queryFn: ({ pageParam }) => request(UnitsDoc, { f: st.f, q: st.q, sort: st.sort, after: pageParam }).then((d) => d.units),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => (last.page_info.has_next_page ? last.page_info.end_cursor : null),
     placeholderData: keepPreviousData,
     enabled: ctx.ready,
   })
   const first = q.data?.pages[0]
-  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data])
+  const rows = useMemo(() => q.data?.pages.flatMap((p) => p.edges.map((e) => e.node)) ?? [], [q.data])
   return (
     <ListPage page="units" chips={first?.filters ?? []} problems={first?.problems ?? []}
       error={q.isError && !q.data ? q.error : undefined} retry={() => q.refetch()}

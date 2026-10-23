@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "codegen": "graphql-codegen --config codegen.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
@@ -18,11 +19,14 @@
     "@tabler/icons-react": "3.49.0",
     "@tanstack/react-query": "5.104.5",
     "dayjs": "1.11.23",
+    "graphql": "17.0.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-router-dom": "7.18.4"
   },
   "devDependencies": {
+    "@graphql-codegen/cli": "7.4.5",
+    "@graphql-codegen/client-preset": "6.2.2",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

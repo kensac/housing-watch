@@ -65,7 +65,7 @@ class Field:
     name: str  # as it appears in the URL
     label: str
     group: str
-    type: str  # text | number | time | bool
+    type: str  # text, number, time or bool: which operators apply
     scope: str  # listing | unit | band | event | computed
     column: Any = None  # SQL column or expression; None for computed fields
     choices: tuple[str, ...] = ()  # fixed values (computed enums)
