@@ -7,7 +7,8 @@ import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import type { Page } from './api'
 import classes from './App.module.css'
 import { num } from './format'
-import { stateUrl, useMeta, useViews } from './hooks'
+import { stateUrl, viewState } from './filters'
+import { useMeta, useViews } from './hooks'
 import { EventsPage } from './pages/Events'
 import { FleetPage } from './pages/Fleet'
 import { ListingsPage } from './pages/Listings'
@@ -36,15 +37,15 @@ function Nav({ onNavigate }: { onNavigate: () => void }) {
       {PAGES.map((p) => {
         const mine = views.filter((v) => v.page === p.page)
         const here = p.to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(p.to)
-        const active = here && !mine.some((v) => String(v.id) === viewId)
+        const active = here && !mine.some((v) => v.id === viewId)
         return (
           <NavLink key={p.to} label={p.label} leftSection={p.icon} component={Link} to={p.page ? `${p.to}?view=none` : p.to}
             classNames={{ root: classes.link, section: classes.icon }}
             active={active} aria-current={active ? 'page' : undefined} onClick={onNavigate} opened={mine.length > 0} childrenOffset={26}>
             {mine.length > 0 && mine.map((v) => {
-              const on = here && String(v.id) === viewId
+              const on = here && v.id === viewId
               return (
-                <NavLink key={v.id} label={v.name} component={Link} to={stateUrl(v.page, v.state, meta, v.id)} onClick={onNavigate}
+                <NavLink key={v.id} label={v.name} component={Link} to={stateUrl(viewState(v), meta, v.id)} onClick={onNavigate}
                   classNames={{ root: `${classes.link} ${classes.sub}` }} active={on} aria-current={on ? 'page' : undefined}
                   rightSection={v.count != null && <span className={classes.count} aria-label={`${num(v.count)} matching`}>{num(v.count)}</span>} />
               )

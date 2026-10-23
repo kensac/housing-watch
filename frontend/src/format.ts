@@ -1,4 +1,4 @@
-import type { Listing } from './api'
+import type { EventType, Listing, Status } from './api'
 
 // Every number, date and time goes through Intl in the browser's locale; money is always USD.
 
@@ -71,10 +71,10 @@ export function duration(s: number | null | undefined): string {
 }
 
 export const VERDICT_COLOR = { eligible: 'green', possible: 'yellow', excluded: 'gray' } as const
-export const STATUS_COLOR: Record<string, string> = {
+export const STATUS_COLOR: Record<Status, string> = {
   open: 'green', waitlist: 'blue', upcoming: 'cyan', unknown: 'yellow', closed: 'gray', gone: 'red',
 }
-export const EVENT_COLOR: Record<string, string> = {
+export const EVENT_COLOR: Record<EventType, string> = {
   new: 'green', reopened: 'teal', changed: 'blue', closed: 'gray', gone: 'red', page_changed: 'violet',
   watching: 'gray', source_failed: 'red', source_recovered: 'green',
 }

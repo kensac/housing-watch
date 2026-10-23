@@ -1,39 +1,81 @@
 import { Button, Checkbox, Group, Loader, NumberInput, ScrollArea, SegmentedControl, Select, Stack, Text, TextInput } from '@mantine/core'
-import { DateInput } from '@mantine/dates'
+import { DateInput, DateTimePicker } from '@mantine/dates'
 import { useQuery } from '@tanstack/react-query'
+import dayjs from 'dayjs'
 import { useMemo, useState } from 'react'
 
-import { request, type Chip, type Field, type Page } from '../api'
+import { request, type Field, type FilterOp, type Page } from '../api'
+import { pageFilter, type Json } from '../filters'
 import { graphql } from '../gql'
 import { num } from '../format'
 import { useMeta } from '../hooks'
 
 const ValuesDoc = graphql(`
-  query Values($page: Page!, $field: String!, $f: [String!], $q: String! = "") {
-    values(page: $page, field: $field, f: $f, q: $q) { enum counts { value count } }
+  query Values($field: FilterFieldName!, $filter: PageFilterInput!, $q: String! = "") {
+    values(field: $field, filter: $filter, q: $q) { enum counts { value label count } }
   }
 `)
 
-const NO_VALUE = new Set(['empty', 'notempty'])
-const escape = (v: string) => v.replace(/,/g, '\\,')
+/** One condition: operator `op` of `field`, holding `value` (the filter object's JSON for that operator). */
+export interface Condition { field: Field; op: FilterOp; value: Json }
 
-function filterString(field: string, op: string, values: string[]): string {
-  return NO_VALUE.has(op) ? `${field}.${op}` : `${field}.${op}.${values.map(escape).join(',')}`
-}
+// the editor offers `empty` as two choices: empty: true and empty: false
+type UiOp = FilterOp | 'not_empty'
+const UNIT_LABEL = { minutes: 'minutes', hours: 'hours', days: 'days' }
+const isUnit = (u: string): u is keyof typeof UNIT_LABEL => u in UNIT_LABEL
+const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x)
+const text = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '')
 
-function defaultOp(f: Field, isEnum: boolean): string {
+function defaultOp(f: Field, isEnum: boolean): UiOp {
   if (f.type === 'number') return 'le'
   if (f.type === 'time') return 'last'
   if (f.type === 'bool') return 'is'
-  return isEnum ? 'in' : 'contains'
+  return f.type === 'enum' || isEnum ? 'in' : 'contains'
+}
+
+/** The editor's inputs for a condition's value. */
+function toVals(op: UiOp, value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((x) => typeof x === 'string')
+  if (typeof value === 'boolean') return [value ? 'yes' : 'no']
+  if (op === 'since' || op === 'until') return typeof value === 'string' ? [dayjs(value).format('YYYY-MM-DD HH:mm:ss')] : []
+  if (isRecord(value)) {
+    if ('min' in value) return [text(value.min), text(value.max)]
+    if ('from' in value) return [text(value.from), text(value.to)]
+    if ('amount' in value) return [text(value.amount), text(value.unit)]
+  }
+  return value === undefined || value === null ? [] : [text(value)]
+}
+
+/** The condition the inputs make, or null while one is missing. */
+function toCondition(field: Field, op: UiOp, vals: string[]): Condition | null {
+  const at = (i: number) => vals[i] ?? ''
+  const n = (i: number) => (at(i).trim() === '' ? NaN : Number(at(i)))
+  if (op === 'empty' || op === 'not_empty') return { field, op: 'empty', value: op === 'empty' }
+  if (op === 'in' || op === 'not_in') return vals.length ? { field, op, value: vals } : null
+  if (op === 'contains' || op === 'not_contains') return at(0).trim() ? { field, op, value: at(0) } : null
+  if (op === 'is') return { field, op, value: at(0) !== 'no' }
+  if (op === 'last') {
+    const unit = at(1) || 'days'
+    return Number.isInteger(n(0)) && n(0) >= 1 && isUnit(unit) ? { field, op, value: { amount: n(0), unit } } : null
+  }
+  if (op === 'since' || op === 'until') return at(0) ? { field, op, value: dayjs(at(0)).format() } : null
+  if (op === 'after' || op === 'before') return at(0) ? { field, op, value: at(0) } : null
+  if (op === 'between' && field.type === 'time') return at(0) && at(1) ? { field, op, value: { from: at(0), to: at(1) } } : null
+  if (op === 'between') return Number.isFinite(n(0)) && Number.isFinite(n(1)) ? { field, op, value: { min: n(0), max: n(1) } } : null
+  return Number.isFinite(n(0)) ? { field, op, value: n(0) } : null
+}
+
+const MISSING: Partial<Record<UiOp, string>> = {
+  in: 'Check at least one value.', not_in: 'Check at least one value.', between: 'Enter both ends of the range.',
+  last: 'Enter a whole number of 1 or more.',
 }
 
 interface Props {
   page: Page
-  current?: Chip // editing this filter; otherwise adding one
-  others: string[] // the other filters, for value counts
+  current?: { field: Field; op: FilterOp; value: unknown } // editing this condition; otherwise adding one
+  others: unknown // the filter without it, for value counts
   q: string
-  onApply: (f: string) => void
+  onApply: (c: Condition) => void
   onRemove?: () => void
 }
 
@@ -41,20 +83,26 @@ interface Props {
 export function FilterEditor({ page, current, others, q, onApply, onRemove }: Props) {
   const meta = useMeta().data!
   const fields = meta.pages[page].fields
-  const opLabel: Record<string, string> = useMemo(() => Object.fromEntries(meta.ops.map((o) => [o.op, o.label])), [meta.ops])
-  const [name, setName] = useState<string | null>(current?.field ?? null)
+  const opLabel = useMemo(() => {
+    const m = new Map<UiOp, string>(meta.ops.map((o) => [o.op, o.label]))
+    return m.set('not_empty', 'is not empty')
+  }, [meta.ops])
+  const startOp: UiOp | null = current ? (current.op === 'empty' && current.value === false ? 'not_empty' : current.op) : null
+  const [name, setName] = useState<string | null>(current?.field.name ?? null)
   const field = fields.find((f) => f.name === name)
   const values = useQuery({
     queryKey: ['values', page, name, others, q],
-    queryFn: () => request(ValuesDoc, { page, field: name!, f: others, q }).then((d) => d.values),
-    enabled: Boolean(field && field.type === 'text'),
+    queryFn: () => (field
+      ? request(ValuesDoc, { field: field.name, filter: pageFilter(page, others, meta), q }).then((d) => d.values)
+      : Promise.reject(new Error('Pick a field first'))),
+    enabled: Boolean(field && (field.type === 'text' || field.type === 'enum')),
   })
-  const isEnum = Boolean(values.data?.enum)
-  const [op, setOp] = useState<string | null>(current?.op ?? null)
-  const [rawVals, setVals] = useState<string[]>(current?.values ?? [])
+  const isEnum = Boolean(values.data?.enum) || field?.type === 'enum'
+  const [op, setOp] = useState<UiOp | null>(startOp)
+  const [vals, setVals] = useState<string[]>(current ? toVals(startOp ?? current.op, current.value) : [])
   const [tried, setTried] = useState(false) // show what is missing only after an attempt to apply
-  const vals = field?.type === 'bool' && !rawVals.length ? ['yes'] : rawVals
   const effOp = op ?? (field && (field.type !== 'text' || values.data) ? defaultOp(field, isEnum) : null)
+  const cond = field && effOp ? toCondition(field, effOp, vals) : null
 
   const groups = useMemo(() => {
     const by = new Map<string, { value: string; label: string }[]>()
@@ -62,24 +110,22 @@ export function FilterEditor({ page, current, others, q, onApply, onRemove }: Pr
     return [...by].map(([group, items]) => ({ group, items }))
   }, [fields])
 
+  const ops = (field?.ops ?? []).flatMap((o): UiOp[] => (o === 'empty' ? ['empty', 'not_empty'] : [o]))
+    .filter((o) => isEnum || field?.type !== 'text' || (o !== 'in' && o !== 'not_in'))
   const pick = (n: string | null) => { setName(n); setOp(null); setVals([]); setTried(false) }
-  const need = !effOp || NO_VALUE.has(effOp) ? 0 : effOp === 'between' ? 2 : effOp === 'in' || effOp === 'nin' ? -1 : 1
-  const hasValue = need === 0 || (need === -1 ? vals.length > 0 : vals.slice(0, need).every((v) => v !== '' && v != null) && vals.length >= need)
   const fieldError = tried && !field ? 'Pick a field to filter on.' : null
-  const valueError = tried && field && effOp && !hasValue
-    ? need === -1 ? 'Check at least one value.' : need === 2 ? 'Enter both ends of the range.' : 'Enter a value.'
-    : null
+  const valueError = tried && field && effOp && !cond ? MISSING[effOp] ?? 'Enter a value.' : null
 
   return (
     <form noValidate onSubmit={(e) => {
       e.preventDefault()
       setTried(true)
-      if (field && effOp && hasValue) onApply(filterString(field.name, effOp, need === 0 ? [] : vals))
+      if (cond) onApply(cond)
     }}>
       <Stack gap="sm" w={{ base: 'calc(100vw - 64px)', xs: 320 }} maw={320}>
         <Select label="Field" placeholder="Pick a field…" data={groups} value={name} onChange={pick} searchable
           error={fieldError} comboboxProps={{ withinPortal: false }} data-autofocus={current ? undefined : true} />
-        {field && field.type === 'text' && values.isLoading && (
+        {field && (field.type === 'text' || field.type === 'enum') && values.isLoading && (
           <Group gap="xs" role="status"><Loader size="xs" /><Text size="sm" c="dimmed">Loading values…</Text></Group>
         )}
         {field && field.type === 'text' && values.error && (
@@ -87,9 +133,9 @@ export function FilterEditor({ page, current, others, q, onApply, onRemove }: Pr
         )}
         {field && effOp && (
           <>
-            <Select label="Condition" data={field.ops.filter((o) => isEnum || field.type !== 'text' || !['in', 'nin'].includes(o) || field.choices.length)
-              .map((o) => ({ value: o, label: opLabel[o] ?? o }))} value={effOp}
-              onChange={(o) => { setOp(o); setVals([]) }} allowDeselect={false} comboboxProps={{ withinPortal: false }} />
+            <Select label="Condition" data={ops.map((o) => ({ value: o, label: opLabel.get(o) ?? o }))} value={effOp}
+              onChange={(o) => { const next = ops.find((x) => x === o); if (next) { setOp(next); setVals([]) } }}
+              allowDeselect={false} comboboxProps={{ withinPortal: false }} />
             <ValueInput field={field} op={effOp} vals={vals} setVals={setVals} counts={values.data?.counts} error={valueError} />
           </>
         )}
@@ -103,26 +149,28 @@ export function FilterEditor({ page, current, others, q, onApply, onRemove }: Pr
 }
 
 function ValueInput({ field, op, vals, setVals, counts, error }: {
-  field: Field; op: string; vals: string[]; setVals: (v: string[]) => void
-  counts?: { value: string | null; count: number }[]; error: string | null
+  field: Field; op: UiOp; vals: string[]; setVals: (v: string[]) => void
+  counts?: { value: string | null; label: string; count: number }[]; error: string | null
 }) {
   const at = (i: number) => vals[i] ?? ''
   const put = (i: number, v: string) => { const n = [...vals]; n[i] = v; setVals(n) }
-  if (NO_VALUE.has(op)) return null
+  if (op === 'empty' || op === 'not_empty') return null
   if (field.type === 'bool') {
     return <SegmentedControl aria-label={field.label} data={[{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]}
-      value={at(0)} onChange={(v) => setVals([v])} />
+      value={at(0) || 'yes'} onChange={(v) => setVals([v])} />
   }
-  if (field.type === 'text' && (op === 'in' || op === 'nin')) {
-    const opts = counts ?? field.choices.map((c) => ({ value: c, count: 0 }))
+  if (op === 'in' || op === 'not_in') {
+    // an empty value can't be picked here: "is empty" asks for it
+    const opts = counts?.flatMap((c) => (c.value === null ? [] : [{ value: c.value, label: c.label, count: c.count }]))
+      ?? field.choices.map((c) => ({ value: c.name, label: c.label, count: 0 }))
     return (
       <Checkbox.Group label="Values" value={vals} onChange={setVals} error={error}>
         <ScrollArea.Autosize mah={260} mt={6}>
           <Stack gap={6}>
             {opts.length === 0 && <Text size="sm" c="dimmed">No values under the other filters.</Text>}
             {opts.map((o) => (
-              <Checkbox key={o.value ?? ''} value={o.value ?? ''} label={
-                <Group gap={6} wrap="nowrap"><Text size="sm">{o.value || '(empty)'}</Text>
+              <Checkbox key={o.value} value={o.value} label={
+                <Group gap={6} wrap="nowrap"><Text size="sm">{o.label}</Text>
                   {counts && <Text size="xs" c="dimmed">{num(o.count)}</Text>}</Group>} />
             ))}
           </Stack>
@@ -130,7 +178,7 @@ function ValueInput({ field, op, vals, setVals, counts, error }: {
       </Checkbox.Group>
     )
   }
-  if (field.type === 'text') {
+  if (field.type === 'text' || field.type === 'enum') {
     return <TextInput label="Text" name="filter-text" autoComplete="off" placeholder="Text to match…" value={at(0)} error={error}
       onChange={(e) => setVals([e.currentTarget.value])} data-autofocus />
   }
@@ -142,16 +190,19 @@ function ValueInput({ field, op, vals, setVals, counts, error }: {
     return op === 'between' ? <Group grow align="flex-start">{box(0, 'From')}{box(1, 'To')}</Group> : box(0, 'Value')
   }
   if (op === 'last') {
-    const m = /^(\d*)([mhd]?)$/.exec(at(0)) ?? ['', '', 'd']
-    const n = m[1] ?? '', unit = m[2] || 'd'
+    const unit = at(1) || 'days'
     return (
       <Group grow align="flex-start">
-        <NumberInput label="Amount" name="filter-amount" autoComplete="off" min={1} value={n} error={error}
-          onChange={(v) => setVals([`${v}${unit}`])} />
-        <Select label="Unit" data={[{ value: 'h', label: 'hours' }, { value: 'd', label: 'days' }, { value: 'm', label: 'minutes' }]}
-          value={unit} onChange={(u) => setVals([`${n}${u ?? 'd'}`])} allowDeselect={false} comboboxProps={{ withinPortal: false }} />
+        <NumberInput label="Amount" name="filter-amount" autoComplete="off" min={1} allowDecimal={false} value={at(0)} error={error}
+          onChange={(v) => setVals([String(v), unit])} />
+        <Select label="Unit" data={Object.entries(UNIT_LABEL).map(([value, label]) => ({ value, label }))}
+          value={unit} onChange={(u) => setVals([at(0), u ?? 'days'])} allowDeselect={false} comboboxProps={{ withinPortal: false }} />
       </Group>
     )
+  }
+  if (op === 'since' || op === 'until') {
+    return <DateTimePicker label="Date and time" value={at(0) || null} onChange={(v) => setVals(v ? [v] : [])} valueFormat="MMM D, YYYY h:mm A"
+      placeholder="Pick a date and time…" error={error} popoverProps={{ withinPortal: false }} />
   }
   const date = (i: number, label: string) => (
     <DateInput key={i} label={label} value={at(i) || null} onChange={(v) => put(i, v ?? '')} valueFormat="MMM D, YYYY"

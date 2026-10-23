@@ -3,12 +3,13 @@ import { IconAlertTriangle } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 
-import { request } from '../api'
+import { BOROUGH, request, SIZE, type Status, type Verdict } from '../api'
 import { graphql } from '../gql'
 import { EventBadge, StatusBadge, VerdictBadge } from '../components/Badges'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { PageHeader } from '../components/PageHeader'
 import { Loading, LoadError } from '../components/State'
+import { filterUrl } from '../filters'
 import { ago, money, num, range, when } from '../format'
 import { rowClick, useMeta, useTitle } from '../hooks'
 import classes from './Overview.module.css'
@@ -48,11 +49,11 @@ export function OverviewPage() {
   const m = meta.data
   const p = m.profile
   const statuses = m.statuses.filter((s) => s !== 'gone')
-  const count = (v: string, s: string) => o.matrix.find((c) => c.verdict === v && c.status === s)?.count ?? 0
+  const count = (v: Verdict, s: Status) => o.matrix.find((c) => c.verdict === v && c.status === s)?.count ?? 0
   return (
     <Stack gap="lg">
       <PageHeader title="Overview" description={<>
-        Your profile: {p.household} person · {money(p.income)} · {p.sizes.join(', ')}{p.excluded_boroughs.length ? ` · not ${p.excluded_boroughs.join(', ')}` : ''}
+        Your profile: {p.household} person · {money(p.income)} · {p.sizes.map((z) => SIZE[z]).join(', ')}{p.excluded_boroughs.length ? ` · not ${p.excluded_boroughs.map((b) => BOROUGH[b]).join(', ')}` : ''}
         {' · '}{num(o.total)} listings from {num(o.n_sources)} sources
       </>} />
       {o.failing.length > 0 && (
@@ -64,7 +65,7 @@ export function OverviewPage() {
       )}
       <div className={classes.stats}>
         <Stat label="Eligible & open" value={o.eligible_open} hint={`${num(o.eligible_live)} incl. waitlist / upcoming`}
-          to="/listings?f=verdict.in.eligible&f=status.in.open" />
+          to={filterUrl('listings', { verdict: { in: ['eligible'] }, status: { in: ['open'] } })} />
         <Stat label="New in 24h" value={o.new_24h} hint={`${num(o.new_7d)} in 7 days${o.baseline_24h ? ` · ${num(o.baseline_24h)} first-run` : ''}`} />
         <Stat label="Changed in 24h" value={o.changed_24h} hint={`${num(o.changed_7d)} in 7 days`} />
         <Stat label="Digest pending" value={o.pending} hint={`last sent ${ago(o.last_digest)}`} />
@@ -83,7 +84,7 @@ export function OverviewPage() {
                     <Table.Tr key={x.key} onClick={rowClick(() => setParams({ open: x.key }))} style={{ cursor: 'pointer' }}>
                       <Table.Td>
                         <Anchor component={Link} to={openSearch(x.key)} c="inherit" size="sm" fw={500} lineClamp={1}>{x.title}</Anchor>
-                        <Text size="xs" c="dimmed">{x.borough ?? '—'} · <span translate="no">{x.source}</span></Text>
+                        <Text size="xs" c="dimmed">{x.borough ? BOROUGH[x.borough] : '—'} · <span translate="no">{x.source}</span></Text>
                       </Table.Td>
                       <Table.Td ta="right" style={{ whiteSpace: 'nowrap' }}>{range(x.rent_min, x.rent_max, money)}</Table.Td>
                       <Table.Td><StatusBadge s={x.status} /></Table.Td>
@@ -96,7 +97,7 @@ export function OverviewPage() {
           ) : (
             <Text size="sm" c="dimmed">
               Nothing you qualify for is open right now. New matches show up here and in the next digest;{' '}
-              <Anchor component={Link} to="/listings?f=verdict.in.eligible" size="sm">see every eligible listing</Anchor>.
+              <Anchor component={Link} to={filterUrl('listings', { verdict: { in: ['eligible'] } })} size="sm">see every eligible listing</Anchor>.
             </Text>
           )}
         </Card>
@@ -142,7 +143,7 @@ export function OverviewPage() {
                     <Table.Td><VerdictBadge v={v} /></Table.Td>
                     {statuses.map((s) => (
                       <Table.Td key={s} ta="right">
-                        <Anchor component={Link} to={`/listings?f=verdict.in.${v}&f=status.in.${s}`} size="sm"
+                        <Anchor component={Link} to={filterUrl('listings', { verdict: { in: [v] }, status: { in: [s] } })} size="sm"
                           aria-label={`${num(count(v, s))} ${v} ${s} listings`}>{num(count(v, s))}</Anchor>
                       </Table.Td>
                     ))}

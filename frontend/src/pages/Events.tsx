@@ -3,25 +3,26 @@ import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
-import { request, type Event } from '../api'
+import { request, type Event, type EventColumn } from '../api'
 import { graphql } from '../gql'
 import { EventBadge, VerdictBadge } from '../components/Badges'
 import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
+import { hasFilter } from '../filters'
 import { ago, num, when } from '../format'
 import { useListState } from '../hooks'
 
 const EventsDoc = graphql(`
-  query Events($f: [String!], $after: String) {
-    events(f: $f, after: $after) {
+  query Events($filter: EventFilterInput, $after: String) {
+    events(filter: $filter, after: $after) {
       edges { node { ...EventFields } }
       page_info { has_next_page end_cursor }
-      total filters { ...ChipFields } problems
+      total filters { ...ChipFields }
     }
   }
 `)
 
-const CELLS: Cells<Event> = {
+const CELLS: Cells<Event, EventColumn> = {
   verdict: { label: 'Verdict', cell: (e) => <VerdictBadge v={e.verdict} /> },
   source: { label: 'Source', cell: (e) => <span translate="no">{e.source}</span> },
   mailed: { label: 'Mailed', cell: (e) => (e.notified ? <span title={when(e.notified)}>{ago(e.notified)}</span> : '—') },
@@ -46,23 +47,23 @@ const lead = (e: Event, to: string | null) => {
 
 export function EventsPage() {
   const ctx = useListState('events')
-  const st = ctx.state
+  const st = ctx.state?.page === 'events' ? ctx.state : null
   const q = useInfiniteQuery({
-    queryKey: ['events', st.f],
-    queryFn: ({ pageParam }) => request(EventsDoc, { f: st.f, after: pageParam }).then((d) => d.events),
+    queryKey: ['events', st?.filter],
+    queryFn: ({ pageParam }) => request(EventsDoc, { filter: st?.filter, after: pageParam }).then((d) => d.events),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => (last.page_info.has_next_page ? last.page_info.end_cursor : null),
     placeholderData: keepPreviousData,
-    enabled: ctx.ready,
+    enabled: ctx.ready && st !== null,
   })
   const first = q.data?.pages[0]
   const rows = useMemo(() => q.data?.pages.flatMap((p) => p.edges.map((e) => e.node)) ?? [], [q.data])
   return (
-    <ListPage page="events" search={false} chips={first?.filters ?? []} problems={first?.problems ?? []}
+    <ListPage page="events" search={false} chips={first?.filters ?? []}
       error={q.isError && !q.data ? q.error : undefined} retry={() => q.refetch()}
       summary={first && `${num(first.total)} events, newest first`}>
       {({ state, set, base, open }) => {
-        const cols = state.columns.filter((c) => c in CELLS)
+        const cols = state.page === 'events' ? state.columns : []
         return (
           <>
             <ListTable label="Events" minWidth={800} stale={q.isPlaceholderData}>
@@ -76,7 +77,7 @@ export function EventsPage() {
                 <ListRows page="events" rows={rows} cols={cols.join(',')} base={base} cells={CELLS} rowKey={rowKey} openKey={openKey} lead={lead} />
                 <MoreRow cols={cols.length + 3} more={Boolean(q.hasNextPage)} loading={q.isFetching} failed={q.isFetchNextPageError}
                   onMore={() => q.fetchNextPage()} total={first?.total ?? 0} noun="events"
-                  onClear={state.f.length ? () => set({ f: [] }) : undefined} clearLabel="Clear Filters" />
+                  onClear={hasFilter(state) ? () => set({ filter: {} }) : undefined} clearLabel="Clear Filters" />
               </Table.Tbody>
             </ListTable>
             <ListingDrawer k={open} onClose={() => set({ open: null })} />

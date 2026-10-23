@@ -15,13 +15,13 @@ from seed import L, Session, add_listing, gql, gql_error, nodes, seed
 SAME = {"origin": "http://testserver"}
 TRACKER = """{ tracker { configured rows { property status stage group stage_since stage_since_baseline page_url
   cells { name value link } events { at stage_from stage_to group } listings { key tracker_match } } } }"""
-LINK = """mutation($k: String!, $r: String) {
+LINK = """mutation($k: ID!, $r: ID) {
   linkTracker(input: { listing_key: $k, row_key: $r }) { listing_key row_key } }"""
-UNLINK = """mutation($k: String!) {
+UNLINK = """mutation($k: ID!) {
   unlinkTracker(input: { listing_key: $k }) { listing_key row_key listing { application tracker_match } } }"""
-APPLICATION = "query($k: String!) { listing(key: $k) { summary { application } } }"
-LISTINGS = """query($f: [String!], $sort: String! = "") {
-  listings(f: $f, sort: $sort) { edges { node { key tracker_match application_since } } } }"""
+APPLICATION = "query($k: ID!) { listing(key: $k) { summary { application } } }"
+LISTINGS = """query($filter: ListingFilterInput, $sort: [ListingSortInput!]) {
+  listings(filter: $filter, sort: $sort) { edges { node { key tracker_match application_since } } } }"""
 
 
 def application(c, key: str) -> str | None:
@@ -115,11 +115,17 @@ def synced(pg, monkeypatch, tmp_path):
 def test_sync_and_read(synced):
     (x,) = [x for x in Q.judged(synced) if x.key == "i:1"]
     assert (x.application, x.tracker_match, x.tracker_row) == ("To Apply", "address", "ONE LIC (42-10 27th St)")
-    hits = Q.search_listings(synced, Q.ListingQuery([F.parse_one("application.in.To Apply", F.LISTING_FIELDS)])).items
+    hits = Q.search_listings(
+        synced, Q.ListingQuery(F.from_tree({"application": {"in": ["To Apply"]}}, F.LISTING_FIELDS))
+    ).items
     assert [h.key for h in hits] == ["i:1"]
-    none = Q.search_listings(synced, Q.ListingQuery([F.parse_one("application.empty", F.LISTING_FIELDS)])).items
+    none = Q.search_listings(
+        synced, Q.ListingQuery(F.from_tree({"application": {"empty": True}}, F.LISTING_FIELDS))
+    ).items
     assert "i:1" not in {h.key for h in none} and "a:1" in {h.key for h in none}
-    units = Q.search_units(synced, Q.ListingQuery([F.parse_one("application.notempty", F.LISTING_FIELDS)])).items
+    units = Q.search_units(
+        synced, Q.ListingQuery(F.from_tree({"application": {"empty": False}}, F.LISTING_FIELDS))
+    ).items
     assert {u.key for u in units} == {"i:1"}
 
 
@@ -149,7 +155,7 @@ def test_tracker_api_and_manual_links(synced):
     assert un["row_key"] == T.row_key("ONE LIC (42-10 27th St)") and un["listing"]["tracker_match"] == "address"
     assert application(c, "i:1") == "To Apply"  # automatic again
     assert gql_error(gql(c, UNLINK, SAME, k="i:1")) == "No manual link for that listing"
-    lst = gql(c, LISTINGS, f=["application.in.Applied"])["data"]["listings"]
+    lst = gql(c, LISTINGS, filter={"application": {"in": ["Applied"]}})["data"]["listings"]
     assert [x["key"] for x in nodes(lst)] == ["a:1"] and nodes(lst)[0]["tracker_match"] == "manual"
 
 
@@ -274,27 +280,30 @@ def test_stage_order_group_filter_and_api(sheet):
     with pg.begin() as c:  # Spruce has been Applied for longer than Pine
         c.execute(update(TrackerEventRow).where(TrackerEventRow.row_key == "50 spruce st")
                   .values(at=datetime(2026, 10, 1, tzinfo=UTC)))  # fmt: skip
-    got = Q.search_listings(pg, Q.ListingQuery(sort="application")).items
+    got = Q.search_listings(pg, Q.ListingQuery(sort=(Q.Sort("application"),))).items
     assert [(x.key, x.application, x.application_group) for x in got] == [
         ("t:2", "Action Needed", T.YOU), ("t:3", "Applied", T.THEM), ("t:1", "Closed", T.DONE),
         ("t:5", "Waiting on landlord", None), ("t:4", None, None),
     ]  # fmt: skip
     assert got[0].application_since and got[0].application_since_baseline is False
-    assert Q.search_listings(pg, Q.ListingQuery(sort="-application")).items[0].key == "t:4"
-    units = Q.search_units(pg, Q.ListingQuery(sort="application")).items
+    assert Q.search_listings(pg, Q.ListingQuery(sort=(Q.Sort("application", "desc"),))).items[0].key == "t:4"
+    units = Q.search_units(pg, Q.ListingQuery(sort=(Q.Sort("application"),))).items
     assert [u.key for u in units] == ["t:2", "t:3", "t:1", "t:5", "t:4"] and units[0].application_group == T.YOU
-    mine = F.parse_one("application_group.in.your move,done", F.LISTING_FIELDS)
-    assert {x.key for x in Q.search_listings(pg, Q.ListingQuery([mine])).items} == {"t:1", "t:2"}
+    mine = F.from_tree({"application_group": {"in": ["your move", "done"]}}, F.LISTING_FIELDS)
+    assert {x.key for x in Q.search_listings(pg, Q.ListingQuery(mine)).items} == {"t:1", "t:2"}
     with pytest.raises(F.FilterError):
-        F.parse_one("application_group.in.mine", F.LISTING_FIELDS)
+        F.from_tree({"application_group": {"in": ["mine"]}}, F.LISTING_FIELDS)
     counts = Q.value_counts(pg, "listings", F.LISTING_FIELDS["application"], [])
     assert [v for v, _ in counts][:9] == list(T.STAGES) and dict(counts)["Applied"] == 1
     assert {v for v, _ in counts[9:]} == {"Waiting on landlord", None}  # unknown statuses after the stages
 
     c = TestClient(create_app(pg))
-    lst = gql(c, LISTINGS, sort="application", f=["application_group.in.their move"])["data"]["listings"]
+    theirs = {"application_group": {"in": ["their_move"]}}
+    lst = gql(c, LISTINGS, sort=[{"field": "application"}], filter=theirs)["data"]["listings"]
     assert [x["key"] for x in nodes(lst)] == ["t:3"] and nodes(lst)[0]["application_since"]
-    units = gql(c, '{ units(sort: "application") { edges { node { application_group } } } }')["data"]["units"]
+    units = gql(c, "{ units(sort: [{ field: application }]) { edges { node { application_group } } } }")["data"][
+        "units"
+    ]
     assert nodes(units)[0]["application_group"] == "your_move"
     rows = gql(c, TRACKER)["data"]["tracker"]["rows"]
     assert [r["property"] for r in rows] == ["20 Oak Ave", "50 Spruce St", "30 Pine Rd", "10 Elm St", "40 Cedar Pl"]

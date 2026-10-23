@@ -3,6 +3,7 @@ import { IconAlertTriangle } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 
 import { request } from '../api'
+import type { JobStatus } from '../gql/graphql'
 import { graphql } from '../gql'
 import { Dot } from '../components/Badges'
 import { PageHeader } from '../components/PageHeader'
@@ -14,12 +15,12 @@ const FleetDoc = graphql(`
   query Fleet {
     fleet {
       available workers { name queues concurrency started last_seen age doing } queues { queue status count }
-      failures { id queue_name task_name args attempts at error } hosts { name last_run runs_24h fails_24h sources }
+      failures { id queue_name task_name args { source key run_id } attempts at error } hosts { name last_run runs_24h fails_24h sources }
     }
   }
 `)
 
-const QUEUE_STATES = ['todo', 'doing', 'succeeded', 'failed']
+const QUEUE_STATES: JobStatus[] = ['todo', 'doing', 'succeeded', 'failed']
 
 /** A table body's single "nothing here" row. */
 const Empty = ({ cols, children }: { cols: number; children: React.ReactNode }) => (
@@ -32,7 +33,7 @@ export function FleetPage() {
   if (q.error) return <LoadError what="the fleet" error={q.error} retry={() => q.refetch()} />
   if (q.isLoading) return <Loading rows={10} label="Loading the fleet…" />
   const f = q.data!
-  const queues = new Map<string, Record<string, number>>()
+  const queues = new Map<string, Partial<Record<JobStatus, number>>>()
   for (const c of f.queues) queues.set(c.queue, { ...queues.get(c.queue), [c.status]: c.count })
   return (
     <Stack gap="lg">
@@ -116,7 +117,7 @@ export function FleetPage() {
               <Stack key={j.id} gap={6}>
                 <Group gap="xs">
                   <Badge color="red" translate="no">{j.task_name}</Badge>
-                  <Text size="sm" translate="no">{String(j.args?.source ?? '')}</Text>
+                  <Text size="sm" translate="no">{[j.args.source, j.args.key].filter(Boolean).join(' · ')}</Text>
                   <Text size="xs" c="dimmed">{j.queue_name} · {num(j.attempts)} attempts · <span title={when(j.at)}>{ago(j.at)}</span></Text>
                 </Group>
                 {j.error && <Code block translate="no" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{j.error}</Code>}

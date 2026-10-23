@@ -26,6 +26,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from .models import Borough, EventType, Kind, PublishedStatus, Size
+
 TS = DateTime(timezone=True)
 
 
@@ -43,9 +45,10 @@ class ListingRow(Base):
     title: Mapped[str | None] = mapped_column(Text)
     url: Mapped[str | None] = mapped_column(Text)
     address: Mapped[str | None] = mapped_column(Text)
-    borough: Mapped[str | None] = mapped_column(Text, index=True)
-    status: Mapped[str] = mapped_column(Text, index=True)  # open | closed | waitlist | upcoming
-    kind: Mapped[str] = mapped_column(Text)  # re-rental | lottery | waitlist | homeownership
+    # info["values"]: the column's closed value set, so filters.py offers it as an enum
+    borough: Mapped[str | None] = mapped_column(Text, index=True, info={"values": Borough})
+    status: Mapped[str] = mapped_column(Text, index=True, info={"values": PublishedStatus})
+    kind: Mapped[str] = mapped_column(Text, info={"values": Kind})
     deadline: Mapped[str | None] = mapped_column(Text)
     senior_only: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str | None] = mapped_column(Text)
@@ -64,7 +67,7 @@ class UnitRow(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     listing_key: Mapped[str] = mapped_column(ForeignKey("listings.key", ondelete="CASCADE"), index=True)
     pos: Mapped[int] = mapped_column(Integer)
-    size: Mapped[str] = mapped_column(Text)  # studio | 1br | 2br | ... | unknown
+    size: Mapped[str] = mapped_column(Text, info={"values": Size})
     rent: Mapped[float | None] = mapped_column(Float)
     ami: Mapped[int | None] = mapped_column(Integer)
     unit_no: Mapped[str | None] = mapped_column(Text)
@@ -110,7 +113,7 @@ class EventRow(Base):
     at: Mapped[datetime] = mapped_column(TS, server_default=func.now(), index=True)
     source: Mapped[str] = mapped_column(Text, index=True)
     key: Mapped[str | None] = mapped_column(Text, index=True)  # listing/snapshot key, None for source events
-    type: Mapped[str] = mapped_column(Text)
+    type: Mapped[str] = mapped_column(Text, info={"values": EventType})
     summary: Mapped[str | None] = mapped_column(Text)
     detail: Mapped[dict | None] = mapped_column(JSONB)  # e.g. {"before": ..., "after": ...} for changed
     notified: Mapped[datetime | None] = mapped_column(TS)  # set once a digest included it
@@ -182,7 +185,9 @@ class SavedViewRow(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     page: Mapped[str] = mapped_column(Text)  # listings | units | events
     name: Mapped[str] = mapped_column(Text)
-    query: Mapped[dict] = mapped_column(JSONB)  # {"filters": [{"field", "op", "values"}], "q", "sort", "columns"}
+    query: Mapped[dict] = mapped_column(
+        JSONB
+    )  # views.State.to_json(): {"filter": <filter tree>, "q", "sort", "columns"}
     position: Mapped[int] = mapped_column(Integer, default=0)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     created: Mapped[datetime] = mapped_column(TS, server_default=func.now())

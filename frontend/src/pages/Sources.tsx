@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 
 import { request } from '../api'
+import { filterUrl } from '../filters'
 import { graphql } from '../gql'
 import { PageHeader } from '../components/PageHeader'
 import { Loading, LoadError } from '../components/State'
@@ -63,7 +64,7 @@ export function SourcesPage() {
                 <Table.Td ta="right" title={when(s.last_ok)}>{ago(s.last_ok)}</Table.Td>
                 <Table.Td ta="right" title={when(s.next_due)}>{s.next_due ? ago(s.next_due) : '—'}</Table.Td>
                 <Table.Td ta="right">{duration(s.last_duration)}</Table.Td>
-                <Table.Td ta="right"><Anchor component={Link} to={`/listings?f=source.in.${encodeURIComponent(s.source)}`} size="sm"
+                <Table.Td ta="right"><Anchor component={Link} to={filterUrl('listings', { source: { in: [s.source] } })} size="sm"
                   aria-label={`${num(s.listings)} listings from ${s.source}`}>{num(s.listings)}</Anchor></Table.Td>
                 <Table.Td ta="right">{s.eligible ? num(s.eligible) : '—'}</Table.Td>
                 <Table.Td ta="right">{s.possible ? num(s.possible) : '—'}</Table.Td>

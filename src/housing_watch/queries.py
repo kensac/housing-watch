@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, fields, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from typing import Any, Literal
 
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
@@ -22,9 +24,9 @@ from sqlalchemy.orm import Session, selectinload
 from . import commute as C
 from . import filters as F
 from . import tracker as T
-from .criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, listing_verdict, unit_verdict
+from .criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, Verdict, listing_verdict, unit_verdict
 from .mapping import listing_from_row
-from .models import Band, Listing
+from .models import Band, Borough, EventType, Key, Kind, Listing, PublishedStatus, Serial, Size, values
 from .orm import (
     BandRow,
     CommuteRow,
@@ -38,13 +40,14 @@ from .orm import (
     UnitRow,
 )
 
-VERDICTS = (ELIGIBLE, POSSIBLE, EXCLUDED)
-STATUSES = ("open", "waitlist", "upcoming", "unknown", "closed", "gone")
-HEALTH = ("ok", "failing", "never")
-LISTING_EVENTS = ("new", "reopened", "changed", "closed", "gone")
-EVENT_TYPES = (*LISTING_EVENTS, "page_changed", "watching", "source_failed", "source_recovered")
-SORTS = ("verdict", "changed", "first_seen", "rent", "deadline", "title", "source")  # "-x" flips the default
-_NEWEST_FIRST = {"changed", "first_seen"}
+type Status = Literal["open", "waitlist", "upcoming", "unknown", "closed", "gone"]  # PublishedStatus, or gone
+type Health = Literal["ok", "failing", "never"]
+type JobStatus = Literal["todo", "doing", "succeeded", "failed", "cancelled", "aborting", "aborted"]  # Procrastinate's
+VERDICTS = values(Verdict)
+STATUSES = values(Status)
+HEALTH = values(Health)
+EVENT_TYPES = values(EventType)
+LISTING_EVENTS = EVENT_TYPES[:5]
 _VRANK = {ELIGIBLE: 0, POSSIBLE: 1, EXCLUDED: 2}
 
 
@@ -71,26 +74,34 @@ def is_baseline(detail: dict | None) -> bool:
 # --- listings ------------------------------------------------------------------------------------------
 
 
+def day(s: str | None) -> date | None:
+    """A stored ISO date (adapters write YYYY-MM-DD, some APIs a full timestamp) as a date; None if it is not one."""
+    try:
+        return date.fromisoformat(s[:10]) if s else None
+    except ValueError:
+        return None
+
+
 @dataclass
 class ListingSummary:
-    key: str
+    key: Key
     source: str
     title: str
     url: str
     address: str | None
-    borough: str | None
-    status: str  # as published, or "gone" once the source stopped listing it
-    kind: str
-    deadline: str | None
+    borough: Borough | None
+    status: Status  # as published, or "gone" once the source stopped listing it
+    kind: Kind
+    deadline: date | None
     senior_only: bool
     first_seen: datetime
     last_changed: datetime
     gone_since: datetime | None
-    verdict: str
+    verdict: Verdict
     reason: str
     units: int
     eligible_units: int
-    sizes: list[str]
+    sizes: list[Size]
     rent_min: float | None
     rent_max: float | None
     ami_min: int | None
@@ -101,12 +112,12 @@ class ListingSummary:
     commute: int | None = None  # transit minutes to HW_COMMUTE_TO (eligible listings only)
     commute_route: C.Route | None = None
     application: str | None = None  # the stage of this listing's tracker row (tracker.stage of its Status)
-    application_group: str | None = None  # whose move that stage is; None for an unknown status
+    application_group: T.StageGroup | None = None  # whose move that stage is; None for an unknown status
     application_since: datetime | None = None  # when the row entered that stage, as first recorded
     application_since_baseline: bool = False  # the stage predates tracking: it began before application_since
     application_notes: str | None = None
     tracker_row: str | None = None  # that row's Property
-    tracker_match: str | None = None  # how the row was matched to this listing
+    tracker_match: T.Match | None = None  # how the row was matched to this listing
 
 
 def _load(s: Session, *where) -> list[ListingRow]:
@@ -131,7 +142,7 @@ def _summary(r: ListingRow, lst: Listing, p: Profile, commutes: dict | None = No
         borough=lst.borough,
         status="gone" if r.gone_since else lst.status if lst.status in STATUSES else "unknown",
         kind=lst.kind,
-        deadline=lst.deadline,
+        deadline=day(lst.deadline),
         senior_only=lst.senior_only,
         first_seen=r.first_seen,
         last_changed=r.last_changed,
@@ -172,21 +183,21 @@ def _commute(commutes: dict, lst: Listing) -> dict:
 class UnitSummary:
     """One unit with its listing's context: the row of the Units page."""
 
-    id: int
-    key: str  # the listing's key
+    id: Serial
+    key: Key  # the listing's key
     source: str
     title: str
     url: str
     address: str | None
-    borough: str | None
-    status: str
-    kind: str
-    deadline: str | None
+    borough: Borough | None
+    status: Status
+    kind: Kind
+    deadline: date | None
     first_seen: datetime
     last_changed: datetime
     gone_since: datetime | None
-    listing_verdict: str
-    size: str
+    listing_verdict: Verdict
+    size: Size
     unit_no: str | None
     rent: float | None
     ami: int | None
@@ -195,11 +206,11 @@ class UnitSummary:
     chart_year: int | None
     income_min: int | None  # the band for the profile's household size
     income_max: int | None
-    verdict: str  # this unit's, after the listing-level rules (closed, borough, senior, ...)
+    verdict: Verdict  # this unit's, after the listing-level rules (closed, borough, senior, ...)
     reason: str
     commute: int | None = None
     application: str | None = None
-    application_group: str | None = None
+    application_group: T.StageGroup | None = None
     application_since: datetime | None = None
     application_since_baseline: bool = False
     haystack: str = internal(default="")
@@ -284,11 +295,37 @@ COMPUTED = {  # read-time values behind filters.COMPUTED
 }
 
 
+type Direction = Literal["asc", "desc"]
+
+
+@dataclass(frozen=True)
+class SortSpec:
+    label: str
+    key: Callable[[Any], Any]
+    natural: Direction = "asc"  # the direction a sort starts in: newest first for times
+
+
+@dataclass(frozen=True)
+class Sort:
+    field: str  # a key of LISTING_SORTS or UNIT_SORTS
+    direction: Direction = "asc"
+
+
+def order[T](rows: list[T], sorts: tuple[Sort, ...], specs: dict[str, SortSpec]) -> list[T]:
+    """Sorted by each Sort in turn: the first decides, the later ones break its ties (Python's sort is stable)."""
+    for s in reversed(sorts):
+        rows.sort(key=specs[s.field].key, reverse=s.direction == "desc")
+    return rows
+
+
+DEFAULT_SORT = (Sort("verdict"),)
+
+
 @dataclass
 class ListingQuery:
     filters: list[F.Cond] = field(default_factory=list)
     q: str = ""  # quick search over title, address, borough and notes
-    sort: str = "verdict"
+    sort: tuple[Sort, ...] = DEFAULT_SORT
     offset: int = 0  # the list scrolls: each batch starts where the last one ended
     limit: int = 200
 
@@ -299,6 +336,11 @@ class ListingPage:
     total: int
     next_offset: int | None  # None once the last batch is out
     verdict_counts: dict[str, int]  # over everything matching the other filters, for the verdict tabs
+
+
+def _name(f: F.Field) -> str:
+    """A computed field's name, also when the events page reaches it through `listing`."""
+    return f.name.removeprefix("listing.")
 
 
 def hides_gone(conds: list[F.Cond]) -> bool:
@@ -323,7 +365,7 @@ def filter_listings(
         x
         for x in allx
         if not (hide and x.gone_since)
-        and all(F.match(c, COMPUTED[c.field.name](x)) for c in comp)
+        and all(F.match(c, COMPUTED[_name(c.field)](x)) for c in comp)
         and all(w in x.haystack for w in words)
     ]
 
@@ -334,19 +376,18 @@ def _by_stage(x: ListingSummary | UnitSummary) -> tuple:
     return (T.rank(x.application), since, x.title.lower())
 
 
-def _sort_key(sort: str):
-    return {
-        "verdict": lambda x: (_VRANK[x.verdict], -x.last_changed.timestamp()),
-        "changed": lambda x: x.last_changed,
-        "first_seen": lambda x: x.first_seen,
-        "rent": lambda x: (x.rent_min is None, x.rent_min or 0),
-        "commute": lambda x: (x.commute is None, x.commute or 0),
-        "application": _by_stage,
-        "deadline": lambda x: (x.deadline is None, x.deadline or ""),
-        "title": lambda x: x.title.lower(),
-        "source": lambda x: (x.source, x.title.lower()),
-        "borough": lambda x: (x.borough or "~", x.title.lower()),
-    }.get(sort, lambda x: (_VRANK[x.verdict], -x.last_changed.timestamp()))
+LISTING_SORTS = {
+    "verdict": SortSpec("Verdict", lambda x: (_VRANK[x.verdict], -x.last_changed.timestamp())),
+    "changed": SortSpec("Last changed", lambda x: x.last_changed, "desc"),
+    "first_seen": SortSpec("First seen", lambda x: x.first_seen, "desc"),
+    "rent": SortSpec("Lowest rent that fits", lambda x: (x.rent_min is None, x.rent_min or 0)),
+    "commute": SortSpec("Commute", lambda x: (x.commute is None, x.commute or 0)),
+    "application": SortSpec("Application stage", _by_stage),
+    "deadline": SortSpec("Deadline", lambda x: (x.deadline is None, x.deadline or date.min)),
+    "title": SortSpec("Title", lambda x: x.title.lower()),
+    "source": SortSpec("Source", lambda x: (x.source, x.title.lower())),
+    "borough": SortSpec("Borough", lambda x: (x.borough or "~", x.title.lower())),
+}
 
 
 def _ranges_over(rows: list[ListingSummary], units: list[UnitSummary]) -> list[ListingSummary]:
@@ -372,8 +413,7 @@ def search_listings(engine: Engine, f: ListingQuery, p: Profile = PROFILE) -> Li
     unit_conds = [c for c in f.filters if c.field.scope in ("unit", "band")]
     if unit_conds:  # ranges (and the rent sort) over the units the filters picked, of those that fit
         rows = _ranges_over(rows, filter_units(engine, unit_conds, p=p, hide_gone=False))
-    name = f.sort.lstrip("-")
-    rows.sort(key=_sort_key(name), reverse=(name in _NEWEST_FIRST) != f.sort.startswith("-"))
+    order(rows, f.sort, LISTING_SORTS)
     start, end = max(0, f.offset), max(0, f.offset) + max(1, min(f.limit, 1000))
     return ListingPage(rows[start:end], len(rows), end if end < len(rows) else None, counts)
 
@@ -410,27 +450,27 @@ def filter_units(
         u
         for u in allu
         if not (hide and u.gone_since)
-        and all(F.match(c, UNIT_COMPUTED[c.field.name](u, by_key[u.key])) for c in comp)
+        and all(F.match(c, UNIT_COMPUTED[_name(c.field)](u, by_key[u.key])) for c in comp)
         and all(w in u.haystack for w in words)
     ]
 
 
-_SIZE_ORDER = {z: i for i, z in enumerate(["studio", "sro", "1br", "2br", "3br", "4br", "5br", "unknown"])}
+_SIZE_ORDER = {z: i for i, z in enumerate(values(Size))}
 UNIT_SORTS = {
-    "verdict": lambda u: (_VRANK[u.verdict], u.rent is None, u.rent or 0),
-    "rent": lambda u: (u.rent is None, u.rent or 0),
-    "ami": lambda u: (u.ami is None, u.ami or 0),
-    "commute": lambda u: (u.commute is None, u.commute or 0),
-    "application": _by_stage,
-    "size": lambda u: (_SIZE_ORDER.get(u.size, 99), u.rent or 0),
-    "income_min": lambda u: (u.income_min is None, u.income_min or 0),
-    "income_max": lambda u: (u.income_max is None, u.income_max or 0),
-    "changed": lambda u: u.last_changed,
-    "first_seen": lambda u: u.first_seen,
-    "deadline": lambda u: (u.deadline is None, u.deadline or ""),
-    "title": lambda u: (u.title.lower(), u.unit_no or ""),
-    "borough": lambda u: (u.borough or "~", u.title.lower()),
-    "source": lambda u: (u.source, u.title.lower()),
+    "verdict": SortSpec("Verdict", lambda u: (_VRANK[u.verdict], u.rent is None, u.rent or 0)),
+    "rent": SortSpec("Rent", lambda u: (u.rent is None, u.rent or 0)),
+    "commute": SortSpec("Commute", lambda u: (u.commute is None, u.commute or 0)),
+    "application": SortSpec("Application stage", _by_stage),
+    "ami": SortSpec("AMI", lambda u: (u.ami is None, u.ami or 0)),
+    "size": SortSpec("Size", lambda u: (_SIZE_ORDER.get(u.size, 99), u.rent or 0)),
+    "income_min": SortSpec("Income min", lambda u: (u.income_min is None, u.income_min or 0)),
+    "income_max": SortSpec("Income max", lambda u: (u.income_max is None, u.income_max or 0)),
+    "changed": SortSpec("Last changed", lambda u: u.last_changed, "desc"),
+    "first_seen": SortSpec("First seen", lambda u: u.first_seen, "desc"),
+    "deadline": SortSpec("Deadline", lambda u: (u.deadline is None, u.deadline or date.min)),
+    "title": SortSpec("Building", lambda u: (u.title.lower(), u.unit_no or "")),
+    "borough": SortSpec("Borough", lambda u: (u.borough or "~", u.title.lower())),
+    "source": SortSpec("Source", lambda u: (u.source, u.title.lower())),
 }
 
 
@@ -449,10 +489,7 @@ def search_units(engine: Engine, f: ListingQuery, p: Profile = PROFILE) -> UnitP
     for u in base:
         counts[u.verdict] += 1
     rows = [u for u in base if all(F.match(c, u.verdict) for c in verdict)]
-    name = f.sort.lstrip("-")
-    rows.sort(
-        key=UNIT_SORTS.get(name, UNIT_SORTS["verdict"]), reverse=(name in _NEWEST_FIRST) != f.sort.startswith("-")
-    )
+    order(rows, f.sort, UNIT_SORTS)
     start, end = max(0, f.offset), max(0, f.offset) + max(1, min(f.limit, 1000))
     return UnitPage(rows[start:end], len(rows), end if end < len(rows) else None, counts)
 
@@ -473,7 +510,7 @@ def is_enum(engine: Engine, fld: F.Field, p: Profile = PROFILE) -> bool:
     if hit and time.monotonic() - hit[0] < 300:
         return hit[1] <= ENUM_MAX
     if fld.scope == "computed":
-        n = len({COMPUTED[fld.name](x) for x in judged(engine, p)})
+        n = len({COMPUTED[_name(fld)](x) for x in judged(engine, p)})
     else:
         with Session(engine) as s:
             n = s.scalar(select(func.count(fld.column.distinct())))
@@ -485,7 +522,7 @@ def _values_by_key(s: Session, fld: F.Field, keys: list[str], p: Profile, engine
     """(listing key, value) pairs for one listing/unit/band/computed field over the given listings."""
     if fld.scope == "computed":
         by = {x.key: x for x in judged(engine, p)}
-        return [(k, COMPUTED[fld.name](by[k])) for k in keys if k in by]
+        return [(k, COMPUTED[_name(fld)](by[k])) for k in keys if k in by]
     u, b, ls = UnitRow.__table__, BandRow.__table__, ListingRow.__table__
     if fld.scope == "listing":
         q = select(ls.c.key, fld.column).where(ls.c.key.in_(keys))
@@ -536,7 +573,7 @@ def _unit_value_counts(engine: Engine, fld: F.Field, others: list[F.Cond], q: st
     units = filter_units(engine, others, q, p, hide)
     if fld.scope == "computed":
         by_key = {x.key: x for x in judged(engine, p)}
-        vals = [(u.id, UNIT_COMPUTED[fld.name](u, by_key[u.key])) for u in units]
+        vals = [(u.id, UNIT_COMPUTED[_name(fld)](u, by_key[u.key])) for u in units]
     else:
         ids = [u.id for u in units]
         u, b, ls = UnitRow.__table__, BandRow.__table__, ListingRow.__table__
@@ -555,36 +592,36 @@ def _unit_value_counts(engine: Engine, fld: F.Field, others: list[F.Cond], q: st
 
 @dataclass
 class UnitView:
-    size: str
+    size: Size
     unit_no: str | None
     rent: float | None
     ami: int | None
     set_aside: str | None
     available: bool | None
     bands: list[Band]
-    verdict: str
+    verdict: Verdict
     reason: str
     chart_year: int | None = None  # HUD chart the ad's printed income caps come from
 
 
 @dataclass
 class EventView:
-    id: int
+    id: Serial
     at: datetime
     source: str
-    key: str | None
-    type: str
+    key: Key | None
+    type: EventType
     summary: str | None
-    detail: dict | None
-    notified: datetime | None
-    baseline: bool
+    detail: dict | None = internal()  # stored as recorded; the API reads it typed through event_detail()
+    notified: datetime | None = None
+    baseline: bool = False
     title: str | None = None
-    verdict: str | None = None
+    verdict: Verdict | None = None
 
 
 @dataclass
 class BriefUnit:
-    size: str | None
+    size: Size | None
     unit_no: str | None
     rent: float | None
     ami: int | None
@@ -597,10 +634,10 @@ class BriefUnit:
 class Brief:
     """One side of a `changed` event: what db._brief keeps of the listing."""
 
-    status: str | None
-    deadline: str | None
-    kind: str | None
-    borough: str | None
+    status: PublishedStatus | None
+    deadline: date | None
+    kind: Kind | None
+    borough: Borough | None
     senior_only: bool | None
     units: list[BriefUnit]
 
@@ -608,10 +645,16 @@ class Brief:
     def of(cls, d: dict) -> Brief:
         def unit(u: list) -> BriefUnit:
             u = [*u, *[None] * (7 - len(u))]  # events from before bands were kept have six
-            return BriefUnit(*u[:6], [Band(*b) for b in u[6] or []])
+            return BriefUnit(known(u[0], Size), *u[1:6], [Band(*b) for b in u[6] or []])
 
-        return cls(d.get("status"), d.get("deadline"), d.get("kind"), d.get("borough"), d.get("senior_only"),
+        return cls(known(d.get("status"), PublishedStatus), day(d.get("deadline")), known(d.get("kind"), Kind),
+                   known(d.get("borough"), Borough), d.get("senior_only"),
                    [unit(u) for u in d.get("units") or []])  # fmt: skip
+
+
+def known(v, alias):
+    """A value recorded before the value sets were checked: kept when it is one of `alias`'s, else None."""
+    return v if v in values(alias) else None
 
 
 @dataclass
@@ -760,8 +803,15 @@ def load_listings(s: Session, keys) -> dict[str, Listing]:
 
 
 @dataclass
+class MatrixCell:
+    verdict: Verdict
+    status: PublishedStatus
+    count: int
+
+
+@dataclass
 class Overview:
-    matrix: dict[str, dict[str, int]]  # verdict -> status -> count (listed only, gone excluded)
+    matrix: list[MatrixCell]  # listed listings by verdict and status (gone left out)
     eligible_open: int
     eligible_live: int  # eligible and open, waitlist or upcoming
     new_24h: int
@@ -780,10 +830,11 @@ class Overview:
 
 def overview(engine: Engine, p: Profile = PROFILE) -> Overview:
     allx = judged(engine, p)
-    matrix = {v: {st: 0 for st in STATUSES[:-1]} for v in VERDICTS}
+    counts = {(v, st): 0 for v in VERDICTS for st in values(PublishedStatus)}
     for x in allx:
         if x.status != "gone":
-            matrix[x.verdict][x.status] = matrix[x.verdict].get(x.status, 0) + 1
+            counts[x.verdict, x.status] += 1
+    matrix = [MatrixCell(v, st, n) for (v, st), n in counts.items()]
     t = now()
     d1, d7 = t - timedelta(hours=24), t - timedelta(days=7)
     base = func.coalesce(EventRow.detail["baseline"].astext, "false") == "true"
@@ -834,12 +885,12 @@ def overview(engine: Engine, p: Profile = PROFILE) -> Overview:
 class TrackerRowView:
     """A tracker sheet row with its stage history and the listings matched to it."""
 
-    row_key: str
+    row_key: Key
     position: int  # the sheet row number
     property: str
     status: str | None  # as written in the sheet
     stage: str | None  # the stage that status means (tracker.stage)
-    group: str | None  # whose move that stage is
+    group: T.StageGroup | None  # whose move that stage is
     stage_since: datetime | None  # when the row entered its stage
     stage_since_baseline: bool  # the stage predates tracking: it began before stage_since
     events: list[T.Step]  # stage changes, oldest first
@@ -887,7 +938,7 @@ class SourceHealth:
     title: str | None
     url: str | None
     every_hours: float | None
-    health: str  # ok, failing, or never (no run has succeeded yet)
+    health: Health  # ok, failing, or never (no run has succeeded yet)
     last_ok: datetime | None
     last_attempt: datetime | None
     failing_since: datetime | None
@@ -983,13 +1034,29 @@ class FleetWorker:
 
 
 @dataclass
+class JobArgs:
+    """A task's keyword arguments, as queued: every parameter a task in tasks.py takes (each takes some of them)."""
+
+    source: str | None = None
+    key: str | None = None  # the chunk's key
+    run_id: int | None = None
+    timestamp: int | None = None  # the periodic tick that deferred it, as a Unix time
+    scheduled: bool | None = None
+
+    @classmethod
+    def of(cls, d: dict | None) -> JobArgs:
+        names = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in (d or {}).items() if k in names})
+
+
+@dataclass
 class FleetFailure:
     """A failed Procrastinate job."""
 
-    id: int
+    id: Serial
     queue_name: str
     task_name: str
-    args: dict  # the task's keyword arguments, as queued
+    args: JobArgs
     attempts: int
     at: datetime | None
     error: str | None  # from the job's last run
@@ -1007,10 +1074,17 @@ class FleetHost:
 
 
 @dataclass
+class QueueCount:
+    queue: str
+    status: JobStatus
+    count: int
+
+
+@dataclass
 class Fleet:
     available: bool  # Procrastinate's tables exist
     workers: list[FleetWorker] = field(default_factory=list)
-    queues: dict[str, dict[str, int]] = field(default_factory=dict)  # queue -> status -> count
+    queues: list[QueueCount] = field(default_factory=list)  # jobs by queue and status
     failures: list[FleetFailure] = field(default_factory=list)
     hosts: list[FleetHost] = field(default_factory=list)
 
@@ -1046,13 +1120,14 @@ def fleet(engine: Engine) -> Fleet:
         ):
             workers.append(FleetWorker(r.name, list(r.queues), r.concurrency, r.started, r.last_seen,
                                        (t - r.last_seen).total_seconds(), r.doing or []))  # fmt: skip
-        queues: dict[str, dict[str, int]] = {}
-        for q, st, n in c.execute(
-            text("SELECT queue_name, status::text, count(*) FROM procrastinate_jobs GROUP BY 1, 2 ORDER BY 1")
-        ):
-            queues.setdefault(q, {})[st] = n
+        queues = [
+            QueueCount(q, st, n)
+            for q, st, n in c.execute(
+                text("SELECT queue_name, status::text, count(*) FROM procrastinate_jobs GROUP BY 1, 2 ORDER BY 1, 2")
+            )
+        ]
         failures = [
-            FleetFailure(**r._mapping)
+            FleetFailure(**{**r._mapping, "args": JobArgs.of(r.args)})
             for r in c.execute(
                 text(
                     "SELECT j.id, j.queue_name, j.task_name, j.args, j.attempts,"

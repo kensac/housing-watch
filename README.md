@@ -81,9 +81,12 @@ The web UI is `frontend/` (React + Mantine). `cd frontend && npm ci && npm run b
 `src/housing_watch/web/dist/` for `serve`; `npm run dev` serves it with hot reload and proxies `/graphql`
 and `/api` to `HW_API` (a running `serve`). The UI's API is GraphQL at `/graphql` (Strawberry,
 `web/schema.py`; GraphiQL on GET), plus one REST route for the filled application PDF,
-`/api/listing/application`. Its types are derived from the read-model dataclasses in `queries.py`, and
-the SDL is committed as `schema.graphql`; the UI's types are generated from it. After changing a
-dataclass or the schema:
+`/api/listing/application`. Its types are derived from the read-model dataclasses in `queries.py` (closed
+value sets are `Literal` aliases, so enums), filter inputs from the field registry in `filters.py`, and the
+SDL is committed as `schema.graphql`; the UI's types are generated from it. A filter is an object with a key
+per field holding its operators, e.g.
+`listings(filter: { verdict: { in: [eligible] }, units: { rent: { le: 3000 }, size: { in: [studio, _1br] } } },
+sort: [{ field: rent }])`. After changing a dataclass, a column or the schema:
 
 ```bash
 python -m housing_watch schema           # rewrite schema.graphql (CI fails when it is stale)

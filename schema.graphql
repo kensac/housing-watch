@@ -1,3 +1,5 @@
+directive @oneOf on INPUT_OBJECT
+
 type ApplicationPdf {
   n: Int!
   url: String!
@@ -16,18 +18,88 @@ type Applications {
   ready: Boolean!
 }
 
+"""Conditions on one income band."""
+type BandFilter {
+  """Household size."""
+  household: NumberFilter
+
+  """Income min."""
+  income_min: NumberFilter
+
+  """Income max."""
+  income_max: NumberFilter
+}
+
+"""Conditions on one income band."""
+input BandFilterInput {
+  """Household size."""
+  household: NumberFilterInput = null
+
+  """Income min."""
+  income_min: NumberFilterInput = null
+
+  """Income max."""
+  income_max: NumberFilterInput = null
+}
+
+type BoolFilter {
+  """Yes or no."""
+  is: Boolean
+
+  """true: has no value; false: has one."""
+  empty: Boolean
+}
+
+input BoolFilterInput {
+  """Yes or no."""
+  is: Boolean = null
+
+  """true: has no value; false: has one."""
+  empty: Boolean = null
+}
+
+enum Borough {
+  Manhattan
+  Brooklyn
+  Queens
+  Bronx
+  Staten_Island
+}
+
+type BoroughFilter {
+  """Any of these values."""
+  in: [Borough!]
+
+  """None of these values (an empty field matches)."""
+  not_in: [Borough!]
+
+  """true: has no value; false: has one."""
+  empty: Boolean
+}
+
+input BoroughFilterInput {
+  """Any of these values."""
+  in: [Borough!] = null
+
+  """None of these values (an empty field matches)."""
+  not_in: [Borough!] = null
+
+  """true: has no value; false: has one."""
+  empty: Boolean = null
+}
+
 """One side of a `changed` event: what db._brief keeps of the listing."""
 type Brief {
-  status: String
-  deadline: String
-  kind: String
-  borough: String
+  status: PublishedStatus
+  deadline: Date
+  kind: Kind
+  borough: Borough
   senior_only: Boolean
   units: [BriefUnit!]!
 }
 
 type BriefUnit {
-  size: String
+  size: Size
   unit_no: String
   rent: Float
   ami: Int
@@ -37,29 +109,21 @@ type BriefUnit {
 }
 
 input ChangeViewInput {
-  id: Int!
+  id: ID!
   name: String = null
+
+  """For the view's own page."""
   state: ViewStateInput = null
   is_default: Boolean = null
-
-  """-1 or 1: one place up or down."""
-  move: Int = null
+  move: ViewMove = null
 }
 
 """
-A filter of the request that parsed, as a chip; `i` is its index in `f`.
+One condition of the request's filter, in words: the operator `op` of field `field`.
 """
 type Chip {
-  i: Int!
-  f: String!
-  label: String!
-  field: String!
+  field: FilterFieldName!
   op: FilterOp!
-  values: [String!]!
-}
-
-type Choice {
-  key: String!
   label: String!
 }
 
@@ -74,21 +138,36 @@ type CommuteRoute {
 }
 
 input CreateViewInput {
-  page: Page!
   name: String!
+
+  """Its page is the view's page."""
+  state: ViewStateInput!
   is_default: Boolean! = false
-  state: ViewStateInput = null
+}
+
+"""Date (isoformat)"""
+scalar Date
+
+type DateRange {
+  from: Date!
+  to: Date!
+}
+
+"""Whole New York days, both included."""
+input DateRangeInput {
+  from: Date!
+  to: Date!
 }
 
 """Date with time (isoformat)"""
 scalar DateTime
 
 type DeleteViewPayload {
-  id: Int!
+  id: ID!
 }
 
 type DetailUnit {
-  size: String!
+  size: Size!
   unit_no: String
   rent: Float
   ami: Int
@@ -108,11 +187,37 @@ type Digest {
   events: Int!
 }
 
+type Duration {
+  amount: Int!
+  unit: DurationUnit!
+}
+
+input DurationInput {
+  """1 or more."""
+  amount: Int!
+  unit: DurationUnit!
+}
+
+enum DurationUnit {
+  minutes
+  hours
+  days
+}
+
+"""A value an enum field can take."""
+type EnumChoice {
+  """As the filter takes it: the value's GraphQL enum name."""
+  name: String!
+
+  """As the data has it."""
+  label: String!
+}
+
 type Event {
-  id: Int!
+  id: ID!
   at: DateTime!
   source: String!
-  key: String
+  key: ID
   type: EventType!
   summary: String
   notified: DateTime
@@ -123,16 +228,27 @@ type Event {
   listing: Listing
 }
 
+"""A column of the events page."""
+enum EventColumn {
+  verdict
+  source
+  mailed
+}
+
+type EventColumnChoice {
+  column: EventColumn!
+  label: String!
+}
+
 type EventConnection {
   edges: [EventEdge!]!
   page_info: PageInfo!
 
   """Everything matching, across pages."""
   total: Int!
-  filters: [Chip!]!
 
-  """Why each filter that did not parse was ignored."""
-  problems: [String!]!
+  """The filter's conditions, in words."""
+  filters: [Chip!]!
 }
 
 union EventDetail = ListingChange | PageChange | SourceFailure
@@ -140,6 +256,58 @@ union EventDetail = ListingChange | PageChange | SourceFailure
 type EventEdge {
   cursor: String!
   node: Event!
+}
+
+"""Which events to show. Every condition must hold."""
+type EventFilter {
+  """Time."""
+  at: TimeFilter
+
+  """Source."""
+  source: TextFilter
+
+  """Type."""
+  type: EventTypeFilter
+
+  """Summary."""
+  summary: TextFilter
+
+  """Mailed."""
+  notified: TimeFilter
+
+  """First run."""
+  first_run: BoolFilter
+
+  """
+  Conditions on the event's listing, as it reads now; events with no listing never match.
+  """
+  listing: ListingFilter
+}
+
+"""Which events to show. Every condition must hold."""
+input EventFilterInput {
+  """Time."""
+  at: TimeFilterInput = null
+
+  """Source."""
+  source: TextFilterInput = null
+
+  """Type."""
+  type: EventTypeFilterInput = null
+
+  """Summary."""
+  summary: TextFilterInput = null
+
+  """Mailed."""
+  notified: TimeFilterInput = null
+
+  """First run."""
+  first_run: BoolFilterInput = null
+
+  """
+  Conditions on the event's listing, as it reads now; events with no listing never match.
+  """
+  listing: ListingFilterInput = null
 }
 
 enum EventType {
@@ -154,65 +322,182 @@ enum EventType {
   source_recovered
 }
 
+type EventTypeFilter {
+  """Any of these values."""
+  in: [EventType!]
+
+  """None of these values (an empty field matches)."""
+  not_in: [EventType!]
+
+  """true: has no value; false: has one."""
+  empty: Boolean
+}
+
+input EventTypeFilterInput {
+  """Any of these values."""
+  in: [EventType!] = null
+
+  """None of these values (an empty field matches)."""
+  not_in: [EventType!] = null
+
+  """true: has no value; false: has one."""
+  empty: Boolean = null
+}
+
+type EventsPageMeta {
+  fields: [FilterField!]!
+  columns: [EventColumnChoice!]!
+  default_columns: [EventColumn!]!
+}
+
+"""What the Events page shows (newest first, no search)."""
+type EventsViewState {
+  filter: EventFilter!
+  columns: [EventColumn!]!
+}
+
+input EventsViewStateInput {
+  filter: EventFilterInput = null
+
+  """null or []: the default."""
+  columns: [EventColumn!] = null
+}
+
+"""Which operators a field takes."""
 enum FieldType {
   text
+  enum
   number
   time
   bool
 }
 
 type FilterField {
-  """As it appears in the URL"""
-  name: String!
+  """Its path in the filter tree, dot-joined ("units.rent")"""
+  name: FilterFieldName!
   label: String!
   group: String!
 
-  """Text, number, time or bool: which operators apply"""
+  """Which operators apply"""
   type: FieldType!
-
-  """Fixed values (computed enums)"""
-  choices: [String!]!
   money: Boolean!
   ops: [FilterOp!]!
+  choices: [EnumChoice!]!
+  path: [String!]!
 }
 
+"""
+A filterable field, by its path in the filter object (`units.rent` is `units_rent`).
+"""
+enum FilterFieldName {
+  source
+  title
+  address
+  borough
+  status
+  kind
+  deadline
+  senior_only
+  notes
+  first_seen
+  last_seen
+  last_changed
+  gone_since
+  units_size
+  units_rent
+  units_ami
+  units_unit_no
+  units_set_aside
+  units_available
+  units_chart_year
+  units_bands_household
+  units_bands_income_min
+  units_bands_income_max
+  verdict
+  reason
+  eligible_units
+  unit_count
+  commute
+  application
+  application_group
+  application_notes
+  at
+  type
+  summary
+  notified
+  first_run
+  listing_source
+  listing_title
+  listing_address
+  listing_borough
+  listing_status
+  listing_kind
+  listing_deadline
+  listing_senior_only
+  listing_notes
+  listing_first_seen
+  listing_last_seen
+  listing_last_changed
+  listing_gone_since
+  listing_units_size
+  listing_units_rent
+  listing_units_ami
+  listing_units_unit_no
+  listing_units_set_aside
+  listing_units_available
+  listing_units_chart_year
+  listing_units_bands_household
+  listing_units_bands_income_min
+  listing_units_bands_income_max
+  listing_verdict
+  listing_reason
+  listing_eligible_units
+  listing_unit_count
+  listing_commute
+  listing_application
+  listing_application_group
+  listing_application_notes
+}
+
+"""An operator: a key of a field's filter object."""
 enum FilterOp {
   in
-  nin
+  not_in
   contains
-  ncontains
+  not_contains
   empty
-  notempty
-  between
-  after
-  before
-  last
-  is
   eq
   ne
   lt
   le
   gt
   ge
+  between
+  after
+  before
+  since
+  until
+  last
+  is
 }
 
 type Fleet {
   """Procrastinate's tables exist"""
   available: Boolean!
   workers: [FleetWorker!]!
+
+  """Jobs by queue and status"""
+  queues: [QueueCount!]!
   failures: [FleetFailure!]!
   hosts: [FleetHost!]!
-  queues: [QueueCount!]!
 }
 
 """A failed Procrastinate job."""
 type FleetFailure {
-  id: Int!
+  id: ID!
   queue_name: String!
   task_name: String!
-
-  """The task's keyword arguments, as queued"""
-  args: JSON!
+  args: JobArgs!
   attempts: Int!
   at: DateTime
 
@@ -245,6 +530,7 @@ type FleetWorker {
   doing: [String!]!
 }
 
+"""Ok, failing, or never (no run has succeeded yet)."""
 enum Health {
   ok
   failing
@@ -259,30 +545,80 @@ type IncomeBand {
 }
 
 """
-The `JSON` scalar type represents JSON values as specified by [ECMA-404](https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf).
+A task's keyword arguments, as queued: every parameter a task in tasks.py takes (each takes some of them).
 """
-scalar JSON @specifiedBy(url: "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf")
+type JobArgs {
+  source: String
+
+  """The chunk's key"""
+  key: String
+  run_id: Int
+
+  """The periodic tick that deferred it, as a Unix time"""
+  timestamp: Int
+  scheduled: Boolean
+}
+
+"""A Procrastinate job's status."""
+enum JobStatus {
+  todo
+  doing
+  succeeded
+  failed
+  cancelled
+  aborting
+  aborted
+}
+
+enum Kind {
+  re_rental
+  lottery
+  waitlist
+  homeownership
+}
+
+type KindFilter {
+  """Any of these values."""
+  in: [Kind!]
+
+  """None of these values (an empty field matches)."""
+  not_in: [Kind!]
+
+  """true: has no value; false: has one."""
+  empty: Boolean
+}
+
+input KindFilterInput {
+  """Any of these values."""
+  in: [Kind!] = null
+
+  """None of these values (an empty field matches)."""
+  not_in: [Kind!] = null
+
+  """true: has no value; false: has one."""
+  empty: Boolean = null
+}
 
 input LinkTrackerInput {
-  listing_key: String!
+  listing_key: ID!
 
   """null: the listing is in no row."""
-  row_key: String = null
+  row_key: ID = null
 }
 
 """A listing, summarized and judged for the profile."""
 type Listing {
-  key: String!
+  key: ID!
   source: String!
   title: String!
   url: String!
   address: String
-  borough: String
+  borough: Borough
 
   """As published, or "gone" once the source stopped listing it"""
   status: Status!
-  kind: String!
-  deadline: String
+  kind: Kind!
+  deadline: Date
   senior_only: Boolean!
   first_seen: DateTime!
   last_changed: DateTime!
@@ -291,7 +627,7 @@ type Listing {
   reason: String!
   units: Int!
   eligible_units: Int!
-  sizes: [String!]!
+  sizes: [Size!]!
   rent_min: Float
   rent_max: Float
   ami_min: Int
@@ -333,16 +669,37 @@ type ListingChange {
   noise: Boolean!
 }
 
+"""A column of the listings page."""
+enum ListingColumn {
+  verdict
+  sizes
+  rent
+  ami
+  status
+  deadline
+  borough
+  commute
+  application
+  kind
+  source
+  first_seen
+  changed
+}
+
+type ListingColumnChoice {
+  column: ListingColumn!
+  label: String!
+}
+
 type ListingConnection {
   edges: [ListingEdge!]!
   page_info: PageInfo!
 
   """Everything matching, across pages."""
   total: Int!
-  filters: [Chip!]!
 
-  """Why each filter that did not parse was ignored."""
-  problems: [String!]!
+  """The filter's conditions, in words."""
+  filters: [Chip!]!
 
   """Counts by verdict, ignoring a verdict filter."""
   verdict_counts: VerdictCounts!
@@ -367,9 +724,213 @@ type ListingEdge {
   node: Listing!
 }
 
+"""Which listings (or units) to show. Every condition must hold."""
+type ListingFilter {
+  """Source."""
+  source: TextFilter
+
+  """Title."""
+  title: TextFilter
+
+  """Address."""
+  address: TextFilter
+
+  """Borough."""
+  borough: BoroughFilter
+
+  """Status."""
+  status: PublishedStatusFilter
+
+  """Kind."""
+  kind: KindFilter
+
+  """Deadline."""
+  deadline: TextFilter
+
+  """Senior only."""
+  senior_only: BoolFilter
+
+  """Notes."""
+  notes: TextFilter
+
+  """First seen."""
+  first_seen: TimeFilter
+
+  """Last seen."""
+  last_seen: TimeFilter
+
+  """Last changed."""
+  last_changed: TimeFilter
+
+  """Removed."""
+  gone_since: TimeFilter
+
+  """Verdict (Verdict)."""
+  verdict: VerdictFilter
+
+  """Verdict reason (Verdict)."""
+  reason: TextFilter
+
+  """Eligible units (Verdict)."""
+  eligible_units: NumberFilter
+
+  """Units (Verdict)."""
+  unit_count: NumberFilter
+
+  """Commute (min) (Commute)."""
+  commute: NumberFilter
+
+  """Application stage (Tracker)."""
+  application: TextFilter
+
+  """Whose move (Tracker)."""
+  application_group: StageGroupFilter
+
+  """Tracker notes (Tracker)."""
+  application_notes: TextFilter
+
+  """
+  A listing matches when one of its units meets every condition here together.
+  """
+  units: UnitFilter
+}
+
+"""Which listings (or units) to show. Every condition must hold."""
+input ListingFilterInput {
+  """Source."""
+  source: TextFilterInput = null
+
+  """Title."""
+  title: TextFilterInput = null
+
+  """Address."""
+  address: TextFilterInput = null
+
+  """Borough."""
+  borough: BoroughFilterInput = null
+
+  """Status."""
+  status: PublishedStatusFilterInput = null
+
+  """Kind."""
+  kind: KindFilterInput = null
+
+  """Deadline."""
+  deadline: TextFilterInput = null
+
+  """Senior only."""
+  senior_only: BoolFilterInput = null
+
+  """Notes."""
+  notes: TextFilterInput = null
+
+  """First seen."""
+  first_seen: TimeFilterInput = null
+
+  """Last seen."""
+  last_seen: TimeFilterInput = null
+
+  """Last changed."""
+  last_changed: TimeFilterInput = null
+
+  """Removed."""
+  gone_since: TimeFilterInput = null
+
+  """Verdict (Verdict)."""
+  verdict: VerdictFilterInput = null
+
+  """Verdict reason (Verdict)."""
+  reason: TextFilterInput = null
+
+  """Eligible units (Verdict)."""
+  eligible_units: NumberFilterInput = null
+
+  """Units (Verdict)."""
+  unit_count: NumberFilterInput = null
+
+  """Commute (min) (Commute)."""
+  commute: NumberFilterInput = null
+
+  """Application stage (Tracker)."""
+  application: TextFilterInput = null
+
+  """Whose move (Tracker)."""
+  application_group: StageGroupFilterInput = null
+
+  """Tracker notes (Tracker)."""
+  application_notes: TextFilterInput = null
+
+  """
+  A listing matches when one of its units meets every condition here together.
+  """
+  units: UnitFilterInput = null
+}
+
+type ListingSort {
+  field: ListingSortField!
+  direction: SortDirection!
+}
+
+type ListingSortChoice {
+  field: ListingSortField!
+  label: String!
+
+  """The direction a sort on it starts in."""
+  natural: SortDirection!
+}
+
+enum ListingSortField {
+  verdict
+  changed
+  first_seen
+  rent
+  commute
+  application
+  deadline
+  title
+  source
+  borough
+}
+
+input ListingSortInput {
+  field: ListingSortField!
+
+  """null: the field's natural one."""
+  direction: SortDirection = null
+}
+
+type ListingsPageMeta {
+  fields: [FilterField!]!
+  columns: [ListingColumnChoice!]!
+  default_columns: [ListingColumn!]!
+  sorts: [ListingSortChoice!]!
+  default_sort: [ListingSort!]!
+}
+
+"""
+What the Listings page shows: the part of its URL a saved view captures.
+"""
+type ListingsViewState {
+  filter: ListingFilter!
+  q: String!
+  sort: [ListingSort!]!
+  columns: [ListingColumn!]!
+}
+
+input ListingsViewStateInput {
+  filter: ListingFilterInput = null
+  q: String! = ""
+
+  """null or []: the default."""
+  sort: [ListingSortInput!] = null
+
+  """null or []: the default."""
+  columns: [ListingColumn!] = null
+}
+
 type MatrixCell {
   verdict: Verdict!
-  status: Status!
+  status: PublishedStatus!
   count: Int!
 }
 
@@ -402,12 +963,77 @@ type Mutation {
   unlinkTracker(input: UnlinkTrackerInput!): TrackerLinkPayload!
 }
 
+type NumberFilter {
+  """Equal to."""
+  eq: Float
+
+  """Not equal to (an empty field matches)."""
+  ne: Float
+
+  """Less than."""
+  lt: Float
+
+  """At most."""
+  le: Float
+
+  """More than."""
+  gt: Float
+
+  """At least."""
+  ge: Float
+
+  """Within this range, both ends included."""
+  between: NumberRange
+
+  """true: has no value; false: has one."""
+  empty: Boolean
+}
+
+input NumberFilterInput {
+  """Equal to."""
+  eq: Float = null
+
+  """Not equal to (an empty field matches)."""
+  ne: Float = null
+
+  """Less than."""
+  lt: Float = null
+
+  """At most."""
+  le: Float = null
+
+  """More than."""
+  gt: Float = null
+
+  """At least."""
+  ge: Float = null
+
+  """Within this range, both ends included."""
+  between: NumberRangeInput = null
+
+  """true: has no value; false: has one."""
+  empty: Boolean = null
+}
+
+type NumberRange {
+  min: Float!
+  max: Float!
+}
+
+"""Both ends included; `min` above `max` is read the other way round."""
+input NumberRangeInput {
+  min: Float!
+  max: Float!
+}
+
 type OpLabel {
   op: FilterOp!
   label: String!
 }
 
 type Overview {
+  """Listed listings by verdict and status (gone left out)"""
+  matrix: [MatrixCell!]!
   eligible_open: Int!
 
   """Eligible and open, waitlist or upcoming"""
@@ -424,7 +1050,6 @@ type Overview {
   recent: [Event!]!
   total: Int!
   n_sources: Int!
-  matrix: [MatrixCell!]!
   digest: Digest
 }
 
@@ -443,6 +1068,13 @@ type PageChange {
   new_links: [String!]!
 }
 
+"""A page's filter: set exactly one, the page it is for."""
+input PageFilterInput @oneOf {
+  listings: ListingFilterInput
+  units: ListingFilterInput
+  events: EventFilterInput
+}
+
 type PageInfo {
   has_next_page: Boolean!
   has_previous_page: Boolean!
@@ -450,18 +1082,10 @@ type PageInfo {
   end_cursor: String
 }
 
-type PageMeta {
-  fields: [FilterField!]!
-  columns: [Choice!]!
-  default_columns: [String!]!
-  default_sort: String!
-  sorts: [Choice!]!
-}
-
 type Pages {
-  listings: PageMeta!
-  units: PageMeta!
-  events: PageMeta!
+  listings: ListingsPageMeta!
+  units: UnitsPageMeta!
+  events: EventsPageMeta!
 }
 
 type Profile {
@@ -470,8 +1094,38 @@ type Profile {
   """Annual household income; required to run"""
   income: Int!
   max_rent: Float
-  sizes: [String!]!
-  excluded_boroughs: [String!]!
+  sizes: [Size!]!
+  excluded_boroughs: [Borough!]!
+}
+
+enum PublishedStatus {
+  open
+  waitlist
+  upcoming
+  unknown
+  closed
+}
+
+type PublishedStatusFilter {
+  """Any of these values."""
+  in: [PublishedStatus!]
+
+  """None of these values (an empty field matches)."""
+  not_in: [PublishedStatus!]
+
+  """true: has no value; false: has one."""
+  empty: Boolean
+}
+
+input PublishedStatusFilterInput {
+  """Any of these values."""
+  in: [PublishedStatus!] = null
+
+  """None of these values (an empty field matches)."""
+  not_in: [PublishedStatus!] = null
+
+  """true: has no value; false: has one."""
+  empty: Boolean = null
 }
 
 type Query {
@@ -479,33 +1133,33 @@ type Query {
   meta: Meta!
 
   """
-  Listings matching the filters and search, one per building or opportunity. Filters (`f`) are `field.op.values` strings; `meta.pages` lists the fields and operators.
+  Listings matching the filter and search, one per building or opportunity. `filter` has a field per filterable field, each holding its operators; `meta.pages` describes them.
   """
-  listings(f: [String!] = null, q: String! = "", sort: String! = "", first: Int! = 200, after: String = null): ListingConnection!
+  listings(filter: ListingFilterInput = null, q: String! = "", sort: [ListingSortInput!] = null, first: Int! = 200, after: String = null): ListingConnection!
 
   """
-  Every unit or rent tier of the matching listings; unit filters hold on its own unit. Filters (`f`) are `field.op.values` strings; `meta.pages` lists the fields and operators.
+  Every unit or rent tier of the matching listings; unit conditions hold on its own unit. `filter` has a field per filterable field, each holding its operators; `meta.pages` describes them.
   """
-  units(f: [String!] = null, q: String! = "", sort: String! = "", first: Int! = 200, after: String = null): UnitConnection!
+  units(filter: ListingFilterInput = null, q: String! = "", sort: [UnitSortInput!] = null, first: Int! = 200, after: String = null): UnitConnection!
 
   """One listing with every unit, its notes and its history."""
-  listing(key: String!): ListingDetail!
+  listing(key: ID!): ListingDetail!
 
   """
   Each linked application PDF, fetched to see whether it is a form we can fill.
   """
-  listingApplications(key: String!): Applications!
+  listingApplications(key: ID!): Applications!
 
   """
-  Distinct values of a field with counts under the other filters (send them without the one being
+  Distinct values of a field with counts under a page's filter (send it without the condition being
   edited); `enum` says whether the field has few enough values to pick from.
   """
-  values(page: Page!, field: String!, f: [String!] = null, q: String! = ""): Values!
+  values(field: FilterFieldName!, filter: PageFilterInput!, q: String! = ""): Values!
 
   """
-  What happened, newest first. Listing filters apply through the event's listing.
+  What happened, newest first. Listing conditions (`listing`) apply through the event's listing.
   """
-  events(f: [String!] = null, first: Int! = 200, after: String = null): EventConnection!
+  events(filter: EventFilterInput = null, first: Int! = 200, after: String = null): EventConnection!
 
   """
   Counts by verdict and status, eligible listings open now, recent events and failing sources.
@@ -531,8 +1185,47 @@ type Query {
 
 type QueueCount {
   queue: String!
-  status: String!
+  status: JobStatus!
   count: Int!
+}
+
+enum Size {
+  studio
+  sro
+  _1br
+  _2br
+  _3br
+  _4br
+  _5br
+  _6br
+  unknown
+}
+
+type SizeFilter {
+  """Any of these values."""
+  in: [Size!]
+
+  """None of these values (an empty field matches)."""
+  not_in: [Size!]
+
+  """true: has no value; false: has one."""
+  empty: Boolean
+}
+
+input SizeFilterInput {
+  """Any of these values."""
+  in: [Size!] = null
+
+  """None of these values (an empty field matches)."""
+  not_in: [Size!] = null
+
+  """true: has no value; false: has one."""
+  empty: Boolean = null
+}
+
+enum SortDirection {
+  asc
+  desc
 }
 
 type Source {
@@ -571,11 +1264,32 @@ type SourceFailure {
   fails: Int
 }
 
-"""Whose move an application stage is."""
 enum StageGroup {
   your_move
   their_move
   done
+}
+
+type StageGroupFilter {
+  """Any of these values."""
+  in: [StageGroup!]
+
+  """None of these values (an empty field matches)."""
+  not_in: [StageGroup!]
+
+  """true: has no value; false: has one."""
+  empty: Boolean
+}
+
+input StageGroupFilterInput {
+  """Any of these values."""
+  in: [StageGroup!] = null
+
+  """None of these values (an empty field matches)."""
+  not_in: [StageGroup!] = null
+
+  """true: has no value; false: has one."""
+  empty: Boolean = null
 }
 
 """
@@ -601,6 +1315,88 @@ enum Status {
   gone
 }
 
+type TextFilter {
+  """Any of these values."""
+  in: [String!]
+
+  """None of these values (an empty field matches)."""
+  not_in: [String!]
+
+  """Contains this text, ignoring case."""
+  contains: String
+
+  """Does not contain this text (an empty field matches)."""
+  not_contains: String
+
+  """true: has no value; false: has one."""
+  empty: Boolean
+}
+
+input TextFilterInput {
+  """Any of these values."""
+  in: [String!] = null
+
+  """None of these values (an empty field matches)."""
+  not_in: [String!] = null
+
+  """Contains this text, ignoring case."""
+  contains: String = null
+
+  """Does not contain this text (an empty field matches)."""
+  not_contains: String = null
+
+  """true: has no value; false: has one."""
+  empty: Boolean = null
+}
+
+"""Days and instants in New York time."""
+type TimeFilter {
+  """After this New York day."""
+  after: Date
+
+  """Before this New York day."""
+  before: Date
+
+  """Within this range, both ends included."""
+  between: DateRange
+
+  """At or after this instant."""
+  since: DateTime
+
+  """Before this instant."""
+  until: DateTime
+
+  """Within this long before now."""
+  last: Duration
+
+  """true: has no value; false: has one."""
+  empty: Boolean
+}
+
+"""Days and instants in New York time."""
+input TimeFilterInput {
+  """After this New York day."""
+  after: Date = null
+
+  """Before this New York day."""
+  before: Date = null
+
+  """Within this range, both ends included."""
+  between: DateRangeInput = null
+
+  """At or after this instant."""
+  since: DateTime = null
+
+  """Before this instant."""
+  until: DateTime = null
+
+  """Within this long before now."""
+  last: DurationInput = null
+
+  """true: has no value; false: has one."""
+  empty: Boolean = null
+}
+
 type Tracker {
   """HW_TRACKER_SHEET is set"""
   configured: Boolean!
@@ -621,8 +1417,8 @@ type TrackerCell {
 }
 
 type TrackerLinkPayload {
-  listing_key: String!
-  row_key: String
+  listing_key: ID!
+  row_key: ID
 
   """The listing as it reads after the change."""
   listing: Listing
@@ -640,7 +1436,7 @@ enum TrackerMatch {
 A tracker sheet row with its stage history and the listings matched to it.
 """
 type TrackerRow {
-  row_key: String!
+  row_key: ID!
 
   """The sheet row number"""
   position: Int!
@@ -676,23 +1472,23 @@ type TrackerRow {
 
 """One unit with its listing's context: the row of the Units page."""
 type Unit {
-  id: Int!
+  id: ID!
 
   """The listing's key"""
-  key: String!
+  key: ID!
   source: String!
   title: String!
   url: String!
   address: String
-  borough: String
+  borough: Borough
   status: Status!
-  kind: String!
-  deadline: String
+  kind: Kind!
+  deadline: Date
   first_seen: DateTime!
   last_changed: DateTime!
   gone_since: DateTime
   listing_verdict: Verdict!
-  size: String!
+  size: Size!
   unit_no: String
   rent: Float
   ami: Int
@@ -716,16 +1512,37 @@ type Unit {
   application_since_baseline: Boolean!
 }
 
+"""A column of the units page."""
+enum UnitColumn {
+  verdict
+  size
+  unit_no
+  rent
+  ami
+  income
+  commute
+  application
+  status
+  borough
+  deadline
+  source
+  changed
+}
+
+type UnitColumnChoice {
+  column: UnitColumn!
+  label: String!
+}
+
 type UnitConnection {
   edges: [UnitEdge!]!
   page_info: PageInfo!
 
   """Everything matching, across pages."""
   total: Int!
-  filters: [Chip!]!
 
-  """Why each filter that did not parse was ignored."""
-  problems: [String!]!
+  """The filter's conditions, in words."""
+  filters: [Chip!]!
 
   """Counts by verdict, ignoring a verdict filter."""
   verdict_counts: VerdictCounts!
@@ -739,12 +1556,138 @@ type UnitEdge {
   node: Unit!
 }
 
+"""Conditions on one unit. Every condition must hold."""
+type UnitFilter {
+  """Unit size."""
+  size: SizeFilter
+
+  """Rent."""
+  rent: NumberFilter
+
+  """AMI %."""
+  ami: NumberFilter
+
+  """Unit #."""
+  unit_no: TextFilter
+
+  """Set-aside."""
+  set_aside: TextFilter
+
+  """Available."""
+  available: BoolFilter
+
+  """HUD chart year."""
+  chart_year: NumberFilter
+
+  """
+  The unit matches when one of its income bands meets every condition here together.
+  """
+  bands: BandFilter
+}
+
+"""Conditions on one unit. Every condition must hold."""
+input UnitFilterInput {
+  """Unit size."""
+  size: SizeFilterInput = null
+
+  """Rent."""
+  rent: NumberFilterInput = null
+
+  """AMI %."""
+  ami: NumberFilterInput = null
+
+  """Unit #."""
+  unit_no: TextFilterInput = null
+
+  """Set-aside."""
+  set_aside: TextFilterInput = null
+
+  """Available."""
+  available: BoolFilterInput = null
+
+  """HUD chart year."""
+  chart_year: NumberFilterInput = null
+
+  """
+  The unit matches when one of its income bands meets every condition here together.
+  """
+  bands: BandFilterInput = null
+}
+
+type UnitSort {
+  field: UnitSortField!
+  direction: SortDirection!
+}
+
+type UnitSortChoice {
+  field: UnitSortField!
+  label: String!
+
+  """The direction a sort on it starts in."""
+  natural: SortDirection!
+}
+
+enum UnitSortField {
+  verdict
+  rent
+  commute
+  application
+  ami
+  size
+  income_min
+  income_max
+  changed
+  first_seen
+  deadline
+  title
+  borough
+  source
+}
+
+input UnitSortInput {
+  field: UnitSortField!
+
+  """null: the field's natural one."""
+  direction: SortDirection = null
+}
+
+type UnitsPageMeta {
+  fields: [FilterField!]!
+  columns: [UnitColumnChoice!]!
+  default_columns: [UnitColumn!]!
+  sorts: [UnitSortChoice!]!
+  default_sort: [UnitSort!]!
+}
+
+"""What the Units page shows."""
+type UnitsViewState {
+  filter: ListingFilter!
+  q: String!
+  sort: [UnitSort!]!
+  columns: [UnitColumn!]!
+}
+
+input UnitsViewStateInput {
+  filter: ListingFilterInput = null
+  q: String! = ""
+
+  """null or []: the default."""
+  sort: [UnitSortInput!] = null
+
+  """null or []: the default."""
+  columns: [UnitColumn!] = null
+}
+
 input UnlinkTrackerInput {
-  listing_key: String!
+  listing_key: ID!
 }
 
 type ValueCount {
+  """As the filter takes it (an enum field's GraphQL name); null: empty."""
   value: String
+
+  """As the data has it."""
+  label: String!
   count: Int!
 }
 
@@ -754,7 +1697,6 @@ type Values {
   counts: [ValueCount!]!
 }
 
-"""How a listing or unit fits the profile, judged at read time."""
 enum Verdict {
   eligible
   possible
@@ -767,38 +1709,64 @@ type VerdictCounts {
   excluded: Int!
 }
 
+type VerdictFilter {
+  """Any of these values."""
+  in: [Verdict!]
+
+  """None of these values (an empty field matches)."""
+  not_in: [Verdict!]
+
+  """true: has no value; false: has one."""
+  empty: Boolean
+}
+
+input VerdictFilterInput {
+  """Any of these values."""
+  in: [Verdict!] = null
+
+  """None of these values (an empty field matches)."""
+  not_in: [Verdict!] = null
+
+  """true: has no value; false: has one."""
+  empty: Boolean = null
+}
+
 """A saved view: a named filter, search, sort and columns."""
 type View {
-  id: Int!
+  id: ID!
   page: Page!
   name: String!
   position: Int!
   is_default: Boolean!
-  state: ViewState!
+
+  """What of the saved state no longer applies, and was dropped"""
   warnings: [String!]!
   updated: DateTime
+
+  """What it matches now"""
   count: Int
+  state: ViewState!
 }
 
 input ViewIdInput {
-  id: Int!
+  id: ID!
+}
+
+"""One place up or down the page's views."""
+enum ViewMove {
+  up
+  down
 }
 
 type ViewPayload {
   view: View!
 }
 
-"""What a list page shows: the part of its URL a saved view captures."""
-type ViewState {
-  q: String!
-  sort: String!
-  columns: [String!]!
-  f: [String!]!
-}
+union ViewState = ListingsViewState | UnitsViewState | EventsViewState
 
-input ViewStateInput {
-  f: [String!] = null
-  q: String = null
-  sort: String = null
-  columns: [String!] = null
+"""A page's state: set exactly one, the page it is for."""
+input ViewStateInput @oneOf {
+  listings: ListingsViewStateInput
+  units: UnitsViewStateInput
+  events: EventsViewStateInput
 }

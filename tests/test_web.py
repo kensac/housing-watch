@@ -15,24 +15,31 @@ from seed import L, add_listing, event, gql, gql_code, gql_error, nodes, seed, s
 SAME = {"origin": "http://testserver"}
 FX = Path(__file__).parent / "fixtures" / "applications"
 SDL = Path(__file__).parent.parent / "schema.graphql"
-LISTINGS = """query($f: [String!], $q: String! = "", $sort: String! = "", $after: String, $first: Int! = 200) {
-  listings(f: $f, q: $q, sort: $sort, after: $after, first: $first) {
-    edges { cursor node { key title verdict status sizes tracker_match application_since } }
+LISTINGS = """query($filter: ListingFilterInput, $q: String! = "", $sort: [ListingSortInput!], $after: String,
+                   $first: Int! = 200) {
+  listings(filter: $filter, q: $q, sort: $sort, after: $after, first: $first) {
+    edges { cursor node { key title verdict status sizes tracker_match application_since deadline } }
     page_info { has_next_page has_previous_page start_cursor end_cursor } total
-    filters { i label op } problems hidden_gone verdict_counts { eligible }
+    filters { field op label } hidden_gone verdict_counts { eligible }
   }
 }"""
-EVENTS = """query($f: [String!], $after: String) {
-  events(f: $f, after: $after) { edges { node { key type } } page_info { has_next_page end_cursor } total problems }
+EVENTS = """query($filter: EventFilterInput, $after: String) {
+  events(filter: $filter, after: $after) { edges { node { key type } } page_info { has_next_page end_cursor } total }
 }"""
-VIEW = "id page name position is_default warnings count state { f q sort columns }"
+# the pages' sort and column enums differ, so a selection of both needs aliases (GraphQL's field merging rule)
+STATE = """state { __typename
+  ... on ListingsViewState { q filter { borough { in } verdict { in } units { rent { le } } } sort { field direction }
+                             columns }
+  ... on UnitsViewState { q filter { units { rent { le } } } unit_sort: sort { field direction } unit_columns: columns }
+  ... on EventsViewState { filter { type { in } listing { verdict { in } } } event_columns: columns } }"""
+VIEW = f"id page name position is_default warnings count {STATE}"
 VIEWS = f"{{ views {{ {VIEW} }} }}"
-CREATE = f"""mutation($page: Page!, $name: String!, $is_default: Boolean! = false, $state: ViewStateInput) {{
-  createView(input: {{ page: $page, name: $name, is_default: $is_default, state: $state }}) {{ view {{ {VIEW} }} }}
+CREATE = f"""mutation($name: String!, $is_default: Boolean! = false, $state: ViewStateInput! = {{ listings: {{}} }}) {{
+  createView(input: {{ name: $name, is_default: $is_default, state: $state }}) {{ view {{ {VIEW} }} }}
 }}"""
-CHANGE = """mutation($id: Int!, $name: String, $state: ViewStateInput, $move: Int) {
-  changeView(input: { id: $id, name: $name, state: $state, move: $move }) { view { name position state { f } } } }"""
-DELETE = "mutation($id: Int!) { deleteView(input: { id: $id }) { id } }"
+CHANGE = f"""mutation($id: ID!, $name: String, $state: ViewStateInput, $move: ViewMove) {{
+  changeView(input: {{ id: $id, name: $name, state: $state, move: $move }}) {{ view {{ name position {STATE} }} }} }}"""
+DELETE = "mutation($id: ID!) { deleteView(input: { id: $id }) { id } }"
 
 
 @pytest.fixture
@@ -54,19 +61,28 @@ def test_committed_sdl_matches_the_code():
 
 
 def test_meta(client):
-    q = """{ meta { ops { op label } verdicts statuses profile { household sizes }
-      pages { listings { fields { name type money choices ops } } units { sorts { key label } }
-              events { fields { name } } } } }"""
+    q = """{ meta { ops { op label } verdicts statuses profile { household sizes excluded_boroughs }
+      pages { listings { fields { name path type money choices { name label } ops } default_sort { field direction }
+                         columns { column label } default_columns }
+              units { sorts { field label natural } } events { fields { name path } default_columns } } } }"""
     m = gql(client, q)["data"]["meta"]
     fields = {f["name"]: f for f in m["pages"]["listings"]["fields"]}
-    assert fields["units.rent"]["type"] == "number" and fields["units.rent"]["money"]
-    assert (
-        fields["verdict"]["choices"] == ["eligible", "possible", "excluded"] and "between" in fields["units.ami"]["ops"]
-    )
-    assert "listing.borough" in {f["name"] for f in m["pages"]["events"]["fields"]}
-    assert {"key": "rent", "label": "Rent"} in m["pages"]["units"]["sorts"]
+    assert fields["units_rent"]["type"] == "number" and fields["units_rent"]["money"]
+    assert fields["units_rent"]["path"] == ["units", "rent"] and "between" in fields["units_ami"]["ops"]
+    assert [c["name"] for c in fields["verdict"]["choices"]] == ["eligible", "possible", "excluded"]
+    assert {"name": "Staten_Island", "label": "Staten Island"} in fields["borough"]["choices"]
+    assert fields["borough"]["type"] == "enum" and fields["borough"]["ops"] == ["in", "not_in", "empty"]
+    assert fields["units_bands_household"]["path"] == ["units", "bands", "household"]
+    events = {f["name"]: f["path"] for f in m["pages"]["events"]["fields"]}
+    assert events["listing_borough"] == ["listing", "borough"] and events["listing_verdict"] == ["listing", "verdict"]
+    assert {"field": "rent", "label": "Rent", "natural": "asc"} in m["pages"]["units"]["sorts"]
+    assert {"field": "changed", "label": "Last changed", "natural": "desc"} in m["pages"]["units"]["sorts"]
+    assert m["pages"]["listings"]["default_sort"] == [{"field": "verdict", "direction": "asc"}]
+    assert {"column": "rent", "label": "Rent"} in m["pages"]["listings"]["columns"]
+    assert m["pages"]["events"]["default_columns"] == ["verdict", "source", "mailed"]
     assert {"op": "le", "label": "≤"} in m["ops"] and m["verdicts"] == ["eligible", "possible", "excluded"]
-    assert m["profile"] == {"household": 1, "sizes": ["1br", "studio"]} and "gone" in m["statuses"]
+    assert m["profile"] == {"household": 1, "sizes": ["_1br", "studio"], "excluded_boroughs": ["Bronx"]}
+    assert "gone" in m["statuses"]
 
 
 def test_listings(client):
@@ -74,20 +90,35 @@ def test_listings(client):
     assert titles(r)[0] == "a 1" and "b 3" not in titles(r)  # gone hidden
     x = nodes(r)[0]
     assert x["verdict"] == "eligible" and x["status"] == "open" and x["sizes"] == ["studio"]
-    f = ["verdict.in.excluded", "borough.in.Bronx", "units.size.in.studio", "units.rent.le.5000"]
-    r = listings(client, f=[*f, "last_changed.last.7d"], sort="-rent", q="a")
-    assert titles(r) == ["a 2"] and r["filters"][1] == {"i": 1, "label": "Borough is Bronx", "op": "in"}
+    f = {"verdict": {"in": ["excluded"]}, "borough": {"in": ["Bronx"]},
+         "units": {"size": {"in": ["studio"]}, "rent": {"le": 5000}},
+         "last_changed": {"last": {"amount": 7, "unit": "days"}}}  # fmt: skip
+    r = listings(client, filter=f, sort=[{"field": "rent", "direction": "desc"}], q="a")
+    assert titles(r) == ["a 2"] and {"field": "borough", "op": "in", "label": "Borough is Bronx"} in r["filters"]
+    assert {"field": "units_rent", "op": "le", "label": "Rent ≤ $5,000"} in r["filters"] and len(r["filters"]) == 5
+    sizes = listings(client, filter={"units": {"size": {"in": ["_1br", "studio"]}}})
+    assert set(titles(sizes)) == {"a 1", "a 2", "b 2"}  # enum names stand for the data's values ("1br")
+    by_title = listings(client, sort=[{"field": "source", "direction": "desc"}, {"field": "title"}])
+    assert titles(by_title)[0].startswith("b ")
 
 
-def test_bad_filter_is_a_problem_not_an_error(client):
-    res = gql(client, LISTINGS, f=["units.rent.le.junk"])
-    assert "errors" not in res and res["data"]["listings"]["problems"] == ["Rent: “junk” is not a number"]
-    assert "Unknown filter field" in listings(client, f=["nope.in.x"])["problems"][0]
-    assert gql(client, EVENTS, f=["nope.in.x"])["data"]["events"]["problems"]
+def test_bad_filters_are_refused(client):
+    for f, msg in [({"units": {"rent": {"le": "junk"}}}, "Float cannot represent"),
+                   ({"nope": {"in": ["x"]}}, "nope"), ({"borough": {"in": ["Jersey City"]}}, "Borough"),
+                   ({"borough": {"le": 3}}, "le")]:  # fmt: skip
+        res = gql(client, LISTINGS, filter=f)
+        assert msg in gql_error(res) and gql_code(res) == "BAD_USER_INPUT" and res.get("data") is None
+    for f, msg in [({"borough": {"in": []}}, "expected one or more"), ({"notes": {"contains": " "}}, "some text"),
+                   ({"first_seen": {"last": {"amount": 0, "unit": "days"}}}, "whole number")]:  # fmt: skip
+        res = gql(client, LISTINGS, filter=f)  # well-typed, but meaningless: the resolver refuses it
+        assert msg in gql_error(res) and gql_code(res) == "BAD_USER_INPUT"
+    assert gql_code(gql(client, EVENTS, filter={"listing": {"nope": {}}})) == "BAD_USER_INPUT"
+    bad_sort = gql(client, LISTINGS, sort=[{"field": "ami"}])  # a Units sort
+    assert gql_code(bad_sort) == "BAD_USER_INPUT"
 
 
 def test_listing_detail(client):
-    q = """query($key: String!) { listing(key: $key) {
+    q = """query($key: ID!) { listing(key: $key) {
       summary { title } notes units { bands { household income_min income_max } verdict } events { type } pdfs } }"""
     d = gql(client, q, key="a:1")["data"]["listing"]
     assert d["summary"]["title"] == "a 1" and d["notes"] == "Apply by mail"
@@ -98,23 +129,30 @@ def test_listing_detail(client):
 
 
 def test_values(client):
-    q = """query($page: Page!, $field: String!, $f: [String!]) {
-      values(page: $page, field: $field, f: $f) { enum counts { value count } } }"""
-    v = gql(client, q, page="listings", field="borough", f=["verdict.in.eligible"])["data"]["values"]
+    q = """query($field: FilterFieldName!, $filter: PageFilterInput!) {
+      values(field: $field, filter: $filter) { enum counts { value label count } } }"""
+    v = gql(client, q, field="borough", filter={"listings": {"verdict": {"in": ["eligible"]}}})["data"]["values"]
     assert v["enum"] and {c["value"] for c in v["counts"] if c["count"]} == {"Queens"}
-    assert not gql(client, q, page="listings", field="units.rent")["data"]["values"]["enum"]
-    ev = gql(client, q, page="events", field="type")["data"]["values"]
+    assert {"value": "Staten_Island", "label": "Staten Island", "count": 0} in v["counts"]  # enum names to send back
+    sizes = gql(client, q, field="units_size", filter={"units": {}})["data"]["values"]["counts"]
+    assert {"value": "studio", "label": "studio", "count": 3} in sizes
+    assert not gql(client, q, field="units_rent", filter={"listings": {}})["data"]["values"]["enum"]
+    ev = gql(client, q, field="type", filter={"events": {}})["data"]["values"]
     assert "source_failed" in {c["value"] for c in ev["counts"]}
-    res = gql(client, q, page="listings", field="x")
-    assert gql_error(res) == "Unknown field" and gql_code(res) == "NOT_FOUND"
-    assert gql_code(gql(client, q, page="nope", field="x")) == "BAD_USER_INPUT"  # not a Page
+    assert gql(client, q, field="notes", filter={"listings": {}})["data"]["values"]["counts"][0]["value"] is None
+    res = gql(client, q, field="type", filter={"listings": {}})  # an events field
+    assert "listings has no field type" in gql_error(res) and gql_code(res) == "BAD_USER_INPUT"
+    assert gql_code(gql(client, q, field="x", filter={"listings": {}})) == "BAD_USER_INPUT"  # not a field
+    both = gql(client, q, field="borough", filter={"listings": {}, "units": {}})  # @oneOf: exactly one page
+    assert gql_code(both) == "BAD_USER_INPUT"
 
 
 def test_events_overview_sources(client):
     e = gql(client, EVENTS)["data"]["events"]
     assert e["total"] == 6 and nodes(e)[0]["type"] == "source_failed" and not e["page_info"]["has_next_page"]
-    e = gql(client, EVENTS, f=["listing.borough.in.Queens", "verdict.in.eligible"])["data"]["events"]
-    assert e["problems"] == [] and [x["key"] for x in nodes(e)] == ["b:3", "a:1"]  # removed listings included
+    f = {"listing": {"borough": {"in": ["Queens"]}, "verdict": {"in": ["eligible"]}}}
+    e = gql(client, EVENTS, filter=f)["data"]["events"]
+    assert [x["key"] for x in nodes(e)] == ["b:3", "a:1"]  # removed listings included
     q = "{ overview { eligible_open failing eligible_now { title } matrix { verdict status count }"
     q += " digest { events } } }"
     o = gql(client, q)["data"]["overview"]
@@ -181,11 +219,11 @@ def test_connections_page_with_cursors(pg):
             add_listing(s, L("bulk", f"{i:03}", "Queens"))
             event(s, f"bulk:{i:03}", "new")
     c = TestClient(create_app(pg))
-    first = listings(c, sort="title")
+    first = listings(c, sort=[{"field": "title"}])
     pi = first["page_info"]
     assert first["total"] == 250 and len(first["edges"]) == 200 and pi["has_next_page"] and not pi["has_previous_page"]
     assert pi["end_cursor"] == first["edges"][-1]["cursor"] and pi["start_cursor"] == first["edges"][0]["cursor"]
-    rest = listings(c, sort="title", after=pi["end_cursor"])
+    rest = listings(c, sort=[{"field": "title"}], after=pi["end_cursor"])
     assert (
         len(rest["edges"]) == 50 and not rest["page_info"]["has_next_page"] and rest["page_info"]["has_previous_page"]
     )
@@ -233,57 +271,71 @@ def test_abuse_limits_keep_introspection(client):
 def test_fleet(pg, monkeypatch):
     seed(pg)
     seed_jobs(pg)
-    q = "{ fleet { available queues { queue status count } hosts { name } workers { name age } failures { args } } }"
+    q = """{ fleet { available queues { queue status count } hosts { name } workers { name age }
+      failures { id args { source key run_id timestamp } } } }"""
     f = gql(TestClient(create_app(pg)), q)["data"]["fleet"]
     assert f["available"] and {"queue": "sources", "status": "failed", "count": 1} in f["queues"] and f["hosts"]
-    assert f["failures"] == [{"args": {"source": "b"}}]
+    assert f["failures"] == [{"id": "2", "args": {"source": "b", "key": None, "run_id": None, "timestamp": None}}]
     monkeypatch.setattr(queries, "JOBS_TABLE", "procrastinate_missing")
     assert gql(TestClient(create_app(pg)), q)["data"]["fleet"]["available"] is False
 
 
 def test_saved_views(client):
     assert gql(client, VIEWS)["data"]["views"] == []  # nothing seeded
-    state = {"f": ["borough.in.Queens"], "sort": "-rent"}
-    res = gql(client, CREATE, SAME, page="listings", name="Queens", is_default=True, state=state)
+    state = {"listings": {"filter": {"borough": {"in": ["Queens"]}}, "sort": [{"field": "rent", "direction": "desc"}]}}
+    res = gql(client, CREATE, SAME, name="Queens", is_default=True, state=state)
     v = res["data"]["createView"]["view"]
-    assert v["state"] == {"f": ["borough.in.Queens"], "q": "", "sort": "-rent", "columns": v["state"]["columns"]}
+    assert v["state"] == {"__typename": "ListingsViewState", "q": "", "columns": v["state"]["columns"],
+                          "filter": {"borough": {"in": ["Queens"]}, "verdict": None, "units": None},
+                          "sort": [{"field": "rent", "direction": "desc"}]}  # fmt: skip
     assert v["is_default"] and v["page"] == "listings" and gql(client, VIEWS)["data"]["views"][0]["count"] == 1
     vid = v["id"]
-    p = gql(client, CHANGE, SAME, id=vid, state={"f": ["verdict.in.eligible"]}, name="Renamed")["data"]["changeView"]
-    assert p["view"]["name"] == "Renamed" and p["view"]["state"]["f"] == ["verdict.in.eligible"]
-    dup = gql(client, "mutation($id: Int!) { duplicateView(input: { id: $id }) { view { name } } }", SAME, id=vid)
+    st = {"listings": {"filter": {"verdict": {"in": ["eligible"]}}, "columns": ["rent", "verdict"]}}
+    p = gql(client, CHANGE, SAME, id=vid, state=st, name="Renamed")["data"]["changeView"]
+    assert p["view"]["name"] == "Renamed" and p["view"]["state"]["filter"]["verdict"] == {"in": ["eligible"]}
+    assert p["view"]["state"]["sort"] == [{"field": "verdict", "direction": "asc"}]  # none given: the default
+    assert p["view"]["state"]["columns"] == ["rent", "verdict"]
+    dup = gql(client, "mutation($id: ID!) { duplicateView(input: { id: $id }) { view { name } } }", SAME, id=vid)
     assert dup["data"]["duplicateView"]["view"]["name"] == "Renamed (copy)"
-    assert gql(client, CHANGE, SAME, id=vid, move=1)["data"]["changeView"]["view"]["position"] == 1
-    bad = gql(client, CREATE, SAME, page="listings", name="x", state={"f": ["nope.in.x"]})
-    assert "Unknown filter field" in gql_error(bad) and bad["data"] is None and gql_code(bad) == "BAD_USER_INPUT"
-    assert gql_code(gql(client, CREATE, SAME, page="listings", name="")) == "BAD_USER_INPUT"
-    assert gql_code(gql(client, CREATE, SAME, page="nope", name="x")) == "BAD_USER_INPUT"
+    assert gql(client, CHANGE, SAME, id=vid, move="down")["data"]["changeView"]["view"]["position"] == 1
+    bad = gql(client, CREATE, SAME, name="x", state={"listings": {"filter": {"borough": {"in": []}}}})
+    assert "expected one or more" in gql_error(bad) and bad["data"] is None and gql_code(bad) == "BAD_USER_INPUT"
+    assert gql_code(gql(client, CREATE, SAME, name="")) == "BAD_USER_INPUT"
+    assert gql_code(gql(client, CREATE, SAME, name="x", state={"nope": {}})) == "BAD_USER_INPUT"
+    other_page = gql(client, CHANGE, SAME, id=vid, state={"events": {}})
+    assert "belongs to one page" in gql_error(other_page)
+    ev = gql(
+        client, CREATE, SAME, name="E", state={"events": {"filter": {"listing": {"verdict": {"in": ["eligible"]}}}}}
+    )
+    assert ev["data"]["createView"]["view"]["state"]["filter"]["listing"] == {"verdict": {"in": ["eligible"]}}
     assert gql(client, DELETE, SAME, id=vid)["data"]["deleteView"] == {"id": vid}
     gone = gql(client, DELETE, SAME, id=vid)
     assert gql_error(gone) == "No such view" and gql_code(gone) == "NOT_FOUND"
     assert gql_error(gql(client, CHANGE, SAME, id=vid, name="x")) == "No such view"
+    assert gql_code(gql(client, DELETE, SAME, id="abc")) == "NOT_FOUND"
 
 
 def test_view_writes_need_same_origin(client):
     refused = "cross-origin request refused"
-    res = gql(client, CREATE, page="listings", name="X")
+    res = gql(client, CREATE, name="X")
     assert gql_error(res) == refused and gql_code(res) == "FORBIDDEN"
-    assert gql_error(gql(client, CREATE, {"origin": "http://evil.example"}, page="listings", name="X")) == refused
+    assert gql_error(gql(client, CREATE, {"origin": "http://evil.example"}, name="X")) == refused
     cross = {**SAME, "sec-fetch-site": "cross-site"}
-    assert gql_error(gql(client, CREATE, cross, page="listings", name="X")) == refused
+    assert gql_error(gql(client, CREATE, cross, name="X")) == refused
     assert gql(client, VIEWS)["data"]["views"] == []  # nothing was written
-    ok = gql(client, CREATE, {"referer": "http://testserver/listings"}, page="listings", name="X")
+    ok = gql(client, CREATE, {"referer": "http://testserver/listings"}, name="X")
     assert ok["data"]["createView"]["view"]["name"] == "X"
     assert gql_code(gql(client, "mutation { deleteView(input: { id: 1 }) { id } }")) == "FORBIDDEN"
 
 
 def test_stale_view_warns(client, pg):
-    vid = gql(client, CREATE, SAME, page="listings", name="Old")["data"]["createView"]["view"]["id"]
+    vid = gql(client, CREATE, SAME, name="Old")["data"]["createView"]["view"]["id"]
     with Session(pg) as s, s.begin():
-        s.execute(update(SavedViewRow).where(SavedViewRow.id == vid).values(
-            query={"filters": [{"field": "pets_ok", "op": "is", "values": ["yes"]}]}))  # fmt: skip
+        s.execute(update(SavedViewRow).where(SavedViewRow.id == int(vid)).values(
+            query={"version": 2, "filter": {"pets_ok": {"is": True}}}))  # fmt: skip
     (v,) = gql(client, VIEWS)["data"]["views"]
-    assert "Unknown filter field “pets_ok”" in v["warnings"][0] and v["state"]["f"] == []
+    assert "Unknown filter field “pets_ok”" in v["warnings"][0]
+    assert v["state"]["filter"] == {"borough": None, "verdict": None, "units": None}
 
 
 def test_application_prefill(pg, monkeypatch, tmp_path):
@@ -327,13 +379,16 @@ def test_spa(pg, tmp_path):
 
 
 def test_units_api(client):
-    q = """query($f: [String!], $sort: String!) { units(f: $f, sort: $sort) {
-      edges { node { unit_no income_min verdict listing_verdict } } total verdict_counts { eligible } } }"""
-    r = gql(client, q, f=["borough.in.Queens"], sort="rent")["data"]["units"]
+    q = """query($filter: ListingFilterInput, $sort: [UnitSortInput!]) { units(filter: $filter, sort: $sort) {
+      edges { node { unit_no income_min verdict listing_verdict size } } total verdict_counts { eligible } } }"""
+    r = gql(client, q, filter={"borough": {"in": ["Queens"]}}, sort=[{"field": "rent"}])["data"]["units"]
     assert r["total"] == 1 and nodes(r)[0]["unit_no"] == "4B" and nodes(r)[0]["income_min"] == 82557
     assert r["verdict_counts"]["eligible"] == 1 and nodes(r)[0]["verdict"] == "eligible"
-    v = gql(client, CREATE, SAME, page="units", name="Cheap", state={"f": ["units.rent.le.2500"]})["data"]
+    assert nodes(r)[0]["size"] == "studio" and gql_code(gql(client, q, sort=[{"field": "nope"}])) == "BAD_USER_INPUT"
+    st = {"units": {"filter": {"units": {"rent": {"le": 2500}}}, "sort": [{"field": "ami"}]}}
+    v = gql(client, CREATE, SAME, name="Cheap", state=st)["data"]
     assert v["createView"]["view"]["page"] == "units"
+    assert v["createView"]["view"]["state"]["unit_sort"] == [{"field": "ami", "direction": "asc"}]
     assert gql(client, VIEWS)["data"]["views"][0]["count"] == 3  # a:1, a:2 and closed b:2
 
 
@@ -366,3 +421,12 @@ def test_schema_check_fails_when_stale(tmp_path):
     stale.write_text("type Query { old: Int }\n")
     assert main(["schema", "--check", str(stale)]) == 1
     assert main(["schema", str(stale)]) == 0 and main(["schema", "--check", str(stale)]) == 0
+
+
+def test_enum_values_serialize_as_names(pg):
+    with Session(pg) as s, s.begin():
+        add_listing(s, L("s", "1", "Staten Island", kind="re-rental", units=[], deadline="2026-11-01"))
+    c = TestClient(create_app(pg))
+    (x,) = nodes(gql(c, '{ listings(filter: { borough: { in: [Staten_Island] } }) { edges { node { borough kind '
+                        "deadline } } } }")["data"]["listings"])  # fmt: skip
+    assert x == {"borough": "Staten_Island", "kind": "re_rental", "deadline": "2026-11-01"}

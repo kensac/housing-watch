@@ -22,7 +22,7 @@ function LinkListing({ row }: { row: TrackerRow }) {
   const refresh = useTrackerRefresh()
   const found = useQuery({
     queryKey: ['link-search', q],
-    queryFn: () => request(ListingsDoc, { q, first: 20, f: ['gone_since.empty'] }).then((d) => d.listings),
+    queryFn: () => request(ListingsDoc, { q, first: 20, filter: { gone_since: { empty: true } } }).then((d) => d.listings),
     enabled: q.trim().length >= 2,
   })
   const link = async (key: string | null) => {
@@ -32,7 +32,7 @@ function LinkListing({ row }: { row: TrackerRow }) {
       await refresh()
       notifications.show({ message: `Linked to “${row.property}”` })
     } catch (e) {
-      notifications.show({ color: 'red', title: 'Couldn’t link the listing', message: String((e as Error).message ?? e) })
+      notifications.show({ color: 'red', title: 'Couldn’t link the listing', message: e instanceof Error ? e.message : String(e) })
     }
   }
   return (

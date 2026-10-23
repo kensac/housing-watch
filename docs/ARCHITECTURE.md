@@ -122,16 +122,24 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   back from it to what it was, with nothing else changed. `db.py` stores both in the event's detail.
 - `mcp_server.py` exposes `queries.py` over MCP (streamable HTTP, a thread of `serve` on `HW_MCP_PORT`),
   read-only, with FastMCP's OIDC proxy for sign-in (clients register themselves; the upstream decides who).
+  Every tool's parameters and result are typed (`mcp_models.py`), so its JSON Schema lists the filter fields,
+  operators and enum values; enums there are the data's own strings ("1br"), not GraphQL names.
   Its `graphql` tool runs a query in-process against the web schema (with the same DataLoaders and limits)
   and refuses mutations.
 - `digest.py` builds the email from `queries.py`: `send(engine, dry_run)` and `urgent(engine)` (an open,
   eligible listing has a pending new/reopened/changed event). Events with `detail.baseline = true` come from
   a source's first run; they collapse into one summary line and only their eligible listings are listed.
 - `filters.py` is the generic filter layer: fields are read off the listings/units/bands (and events)
-  columns in `orm.py`, so a new column is filterable with no other change; a filter is
-  `?f=<field>.<op>.<values>` (e.g. `units.rent.le.3000`), parsed into a typed AST and turned into SQL.
-  Unit conditions must hold on one unit, band conditions on one band of it; verdict fields are applied in
-  Python after the SQL prefilter.
+  columns in `orm.py`, so a new column is filterable with no other change (a column with
+  `info={"values": <Literal alias>}` is an enum field). A filter is a JSON tree with a key per field holding
+  its operators, all of which must hold: `{"borough": {"in": ["Queens"]}, "units": {"rent": {"le": 3000},
+  "bands": {"household": {"eq": 1}}}}`; events nest the listing's fields under `listing`. The tree becomes
+  typed conditions (`Cond`), then SQL. The same tree is the GraphQL input (`web/filter_types.py` derives
+  `ListingFilterInput`/`EventFilterInput` and their output twins from the registry), the MCP tools' parameter
+  (`mcp_models.py` derives pydantic models from it) and what a saved view stores. Unit conditions must hold
+  on one unit, band conditions on one band of it; verdict fields are applied in Python after the SQL
+  prefilter. Sorts are registries too (`queries.LISTING_SORTS`, `UNIT_SORTS`: label, key, natural direction),
+  applied in order so later fields break ties.
 - `web/app.py` serves GraphQL at `/graphql` (Strawberry; the schema is `web/schema.py`, snake_case fields,
   GraphiQL on GET) over `queries.py`, `views.py` and `tracker.py`, plus one REST route,
   `/api/listing/application`, for the filled application PDF (a binary download).
@@ -139,16 +147,24 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
     type (nested dataclasses, optionals, lists; a field's trailing comment is its description), so a field
     added to a dataclass is in the API with no other change. Fields made with `queries.internal()`
     (`haystack`, `unit_sizes`, `unit_rents`) stay out. The DTOs, not the tables, are the source because
-    verdicts, commutes and tracker stages are computed at read time. Domain string constants become enums
-    (Verdict, Status, EventType, Page, StageGroup, TrackerMatch, FilterOp, FieldType, Health; a value that
-    is not a GraphQL name, "your move", is `your_move`). An event's detail is the `EventDetail` union
-    (ListingChange, PageChange, SourceFailure). JSON remains only for a failed job's `args`, a task's own
-    kwargs. Only envelopes (connections, inputs, payloads, meta) are declared in `schema.py`.
+    verdicts, commutes and tracker stages are computed at read time. Closed value sets are `type X =
+    Literal[...]` aliases in the domain (Borough, Size, Kind, PublishedStatus, Status, Verdict, EventType,
+    StageGroup, Match, Health, JobStatus, Page), and derive() makes each one GraphQL enum; a value that is not
+    a GraphQL name gets one ("your move" is `your_move`, "1br" is `_1br`, "Staten Island" is
+    `Staten_Island`). The `Key`/`Serial` aliases are `ID`; a deadline is a `Date`. Open text stays String:
+    titles, addresses, notes, set-asides, sources (history keeps retired ones), application stages (unknown
+    sheet statuses are kept as written), queue and task names. An event's detail is the `EventDetail` union
+    (ListingChange, PageChange, SourceFailure); a failed job's `args` is `JobArgs`, every parameter a task
+    takes. Only envelopes (connections, inputs, payloads, meta) are declared in `schema.py`; filter, sort and
+    column types in `web/filter_types.py`.
   - `schema.graphql` is the committed SDL (`python -m housing_watch schema`); a test and CI fail when it
     is stale.
   - Lists are Relay connections (`edges { cursor node }`, `page_info`, `first` ≤ 500, opaque `after`
-    cursors: a position for listings and units, an event id for events), carrying `total`, `filters`,
-    `problems`, and for listings and units `verdict_counts` and `hidden_gone`.
+    cursors: a position for listings and units, an event id for events), carrying `total`, `filters` (each
+    condition in words, by field and operator), and for listings and units `verdict_counts` and
+    `hidden_gone`. A filter that is well-typed but meaningless (an empty `in`, blank `contains`) is refused
+    with BAD_USER_INPUT. `values` and the views mutations take a page's input as a `@oneOf` object; a saved
+    view's state comes back as the `ViewState` union of the three pages' states.
   - Errors carry `extensions.code`: NOT_FOUND, BAD_USER_INPUT (also every document or variable error),
     FORBIDDEN (a cross-origin mutation), INTERNAL (a bug, the only kind logged).
   - Depth (10), token (2000) and alias (15) limits; introspection stays on. Resolvers are async and run
@@ -158,15 +174,17 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   `web/dist/`, which the same app serves for every other path. Its documents are written with GraphQL Code
   Generator's `graphql()` (client preset, from `schema.graphql`, into the committed `src/gql/`), so each is a
   TypedDocumentNode sent by `api.ts`'s `request()`; shared shapes are fragments (`ListingFields`, ...).
-  List state (filters, search, sort, columns,
-  saved view, open listing) lives in the app's URL, and filters cross the API as `f: [String!]` in the
-  filters.py grammar (one that does not parse comes back in `problems`); lists scroll in batches of 200. Three list
+  List state (filter, search, sort, columns,
+  saved view, open listing) lives in the app's URL (`filter` as the JSON object, `sort=rent.desc,title.asc`,
+  `cols`); `filters.ts` checks what it reads against the page's fields from `meta` before typing it as the
+  generated input, and a link whose filter does not check out opens unfiltered with a notice. A typecheck
+  fails if the saved-view fragments miss a field of a filter type. Lists scroll in batches of 200. Three list
   pages: Listings (a row per listing; its rent and AMI ranges cover the units that fit and match the unit
   filters), Units (a row per unit, so rent sorts exactly; unit and band filters hold on that unit) and
   Events. It is served by the hetzner worker container (`python -m housing_watch serve` = migrate +
   worker + web, the web started only when `HW_WEB_PORT` is set) on the tailnet only. The tables it
-  writes are `saved_views` (`views.py`: a filter AST + sort + columns per page, re-validated against the
-  field registry on load) and manual tracker links, through mutations that refuse anything not same-origin.
+  writes are `saved_views` (`views.py`: version 2 JSON, the filter tree + sort pairs + columns per page,
+  re-validated against the registries on load; alembic 0010 converted version 1's `field.op.values` strings) and manual tracker links, through mutations that refuse anything not same-origin.
   Nothing is seeded.
 - `commute.py` routes eligible, listed listings to `HW_COMMUTE_TO` by transit (Google Routes API, weekday
   8:30 AM), each origin address once per destination (again after 60 days), into `commutes`; a periodic

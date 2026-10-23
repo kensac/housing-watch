@@ -17,6 +17,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Literal
 from urllib.parse import quote
 
 from sqlalchemy import delete, func, select
@@ -24,6 +25,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from . import fetch
+from .models import values
 from .orm import TrackerEventRow, TrackerLinkRow, TrackerRow
 from .parse import addr_keys, name_key, units, url_key
 
@@ -37,8 +39,8 @@ FIELDS = "sheets(data(rowData(values(formattedValue,hyperlink,textFormatRuns(for
 
 # --- application stages -----------------------------------------------------------------------------------
 
-YOU, THEM, DONE = "your move", "their move", "done"
-GROUPS = (YOU, THEM, DONE)
+type StageGroup = Literal["your move", "their move", "done"]  # whose move an application stage is
+GROUPS = YOU, THEM, DONE = values(StageGroup)
 # The sheet's Status dropdown, in order, with whose move it is. A blank Status means not pursuing (yet).
 STAGES = {
     "To Apply": YOU, "Ready to Send": YOU, "Action Needed": YOU,
@@ -62,7 +64,7 @@ def stage(status: str | None) -> str | None:
     return _BY_LOWER[s.lower()] if s.lower() in _BY_LOWER else LEGACY.get(s.lower(), s)
 
 
-def group(st: str | None) -> str | None:
+def group(st: str | None) -> StageGroup | None:
     return STAGES.get(st or "")
 
 
@@ -192,7 +194,7 @@ class Step:
     baseline: bool = False  # already in this stage when tracking began
 
     @property
-    def group(self) -> str | None:
+    def group(self) -> StageGroup | None:
         return group(self.stage_to)
 
 
@@ -216,7 +218,8 @@ def since(steps: list[Step], status: str | None) -> Step | None:
     return steps[-1] if steps and steps[-1].stage_to == stage(status) else None
 
 
-MATCHES = ("url", "address", "name", "manual")  # how a listing was matched to its row
+type Match = Literal["url", "address", "name", "manual"]  # how a listing was matched to its tracker row
+MATCHES = values(Match)
 
 
 @dataclass(frozen=True)
@@ -225,12 +228,12 @@ class Ref:
     property: str
     status: str | None  # as written in the sheet
     notes: str | None
-    how: str  # one of MATCHES
+    how: Match
     stage: str | None = None
     since: Step | None = None
 
     @property
-    def group(self) -> str | None:
+    def group(self) -> StageGroup | None:
         return group(self.stage)
 
 

@@ -9,33 +9,43 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from typing import Literal
 
 from . import ami
-from .models import Listing, Unit
+from .models import Borough, Listing, Size, Unit, values
+
+type Verdict = Literal["eligible", "possible", "excluded"]
+ELIGIBLE, POSSIBLE, EXCLUDED = values(Verdict)
+
+
+def env_set(name: str, alias, default: str = "") -> frozenset:
+    """A comma-separated env var as a set of `alias`'s values; an unknown value stops the program."""
+    got = {v.strip() for v in os.environ.get(name, default).split(",") if v.strip()}
+    if bad := got - set(values(alias)):
+        raise SystemExit(f"{name}: {', '.join(sorted(bad))} not one of {', '.join(values(alias))}")
+    return frozenset(got)
 
 
 @dataclass(frozen=True)
 class Profile:
     household: int = int(os.environ.get("HW_HOUSEHOLD", "1"))
     income: int = int(os.environ.get("HW_INCOME", "0"))  # annual household income; required to run
-    sizes: frozenset[str] = frozenset(os.environ.get("HW_SIZES", "studio,1br,2br,3br").split(","))
-    excluded_boroughs: frozenset[str] = frozenset(b for b in os.environ.get("HW_EXCLUDED_BOROUGHS", "").split(",") if b)
+    sizes: frozenset[Size] = env_set("HW_SIZES", Size, "studio,1br,2br,3br")
+    excluded_boroughs: frozenset[Borough] = env_set("HW_EXCLUDED_BOROUGHS", Borough)
     max_rent: float | None = None
 
 
 PROFILE = Profile()
 
-ELIGIBLE, POSSIBLE, EXCLUDED = "eligible", "possible", "excluded"
-
 
 @dataclass
-class Verdict:
-    verdict: str
+class Judgement:
+    verdict: Verdict
     reason: str
-    units: list[tuple[Unit, str, str]] = field(default_factory=list)  # (unit, verdict, reason)
+    units: list[tuple[Unit, Verdict, str]] = field(default_factory=list)  # (unit, verdict, reason)
 
 
-def unit_verdict(u: Unit, p: Profile = PROFILE) -> tuple[str, str]:
+def unit_verdict(u: Unit, p: Profile = PROFILE) -> tuple[Verdict, str]:
     if u.available is False:
         return EXCLUDED, "unit marked rented/closed"
     if u.set_aside:
@@ -76,29 +86,29 @@ def unit_verdict(u: Unit, p: Profile = PROFILE) -> tuple[str, str]:
     return ELIGIBLE, f"${lo:,}-${hi:,} for {p.household}"
 
 
-def listing_verdict(lst: Listing, p: Profile = PROFILE) -> Verdict:
+def listing_verdict(lst: Listing, p: Profile = PROFILE) -> Judgement:
     if lst.status == "closed":
-        return Verdict(EXCLUDED, "closed")
+        return Judgement(EXCLUDED, "closed")
     if lst.borough in p.excluded_boroughs:
-        return Verdict(EXCLUDED, f"in {lst.borough}")
+        return Judgement(EXCLUDED, f"in {lst.borough}")
     if lst.senior_only:
-        return Verdict(EXCLUDED, "senior only")
+        return Judgement(EXCLUDED, "senior only")
     if lst.kind == "homeownership":
-        return Verdict(EXCLUDED, "homeownership, not a rental")
+        return Judgement(EXCLUDED, "homeownership, not a rental")
     if not lst.units:
         if lst.status in ("upcoming", "unknown"):
-            return Verdict(EXCLUDED, "upcoming, details not published yet" if lst.status == "upcoming"
+            return Judgement(EXCLUDED, "upcoming, details not published yet" if lst.status == "upcoming"
                            else "not offered for application (the source shows no status)")  # fmt: skip
-        return Verdict(POSSIBLE, "no unit details published")
+        return Judgement(POSSIBLE, "no unit details published")
     judged = [(u, *unit_verdict(u, p)) for u in lst.units]
     if lst.status == "unknown":
-        return Verdict(EXCLUDED, "not offered for application (the source shows no status)", judged)
+        return Judgement(EXCLUDED, "not offered for application (the source shows no status)", judged)
     if any(v == ELIGIBLE for _, v, _ in judged):
         if lst.borough is None and p.excluded_boroughs:
-            return Verdict(POSSIBLE, "eligible unit(s), borough unknown", judged)
-        return Verdict(ELIGIBLE, "eligible unit(s)", judged)
+            return Judgement(POSSIBLE, "eligible unit(s), borough unknown", judged)
+        return Judgement(ELIGIBLE, "eligible unit(s)", judged)
     if any(v == POSSIBLE for _, v, _ in judged):
         if lst.status == "upcoming":
-            return Verdict(EXCLUDED, "upcoming, details not published yet", judged)
-        return Verdict(POSSIBLE, next(r for _, v, r in judged if v == POSSIBLE), judged)
-    return Verdict(EXCLUDED, judged[0][2] if len(judged) == 1 else "no qualifying unit", judged)
+            return Judgement(EXCLUDED, "upcoming, details not published yet", judged)
+        return Judgement(POSSIBLE, next(r for _, v, r in judged if v == POSSIBLE), judged)
+    return Judgement(EXCLUDED, judged[0][2] if len(judged) == 1 else "no qualifying unit", judged)
