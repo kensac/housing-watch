@@ -3,7 +3,7 @@
 // `field.direction,...`, `cols` as a list. Everything read from the URL, or edited generically by path, is checked
 // against the server's field registry (`meta`) before it is typed; what does not check out is dropped.
 import type {
-  EventColumn, EventFilterInput, Field, FilterOp, ListingColumn, ListingFilterInput, Meta, Page, PageFilterInput,
+  EventColumn, EventFilterInput, Field, ListingColumn, ListingFilterInput, Meta, Page, PageFilterInput,
   SavedView, SortDirection, UnitColumn,
 } from './api'
 import type {
