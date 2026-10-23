@@ -3,7 +3,7 @@ import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
-import { api, qs, type Listing, type ListResponse, type ViewState } from '../api'
+import { gql, Q, type Listing, type ListResponse, type ViewState } from '../api'
 import { ApplicationBadge, SizeBadge, StatusBadge, VerdictBadge } from '../components/Badges'
 import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, Summary, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
@@ -40,7 +40,7 @@ const lead = (x: Listing, to: string | null) => (
 function useListings(st: ViewState, enabled: boolean) {
   return useInfiniteQuery({
     queryKey: ['listings', st.f, st.q, st.sort],
-    queryFn: ({ pageParam }) => api.get<ListResponse<Listing>>(`/api/listings${qs({ f: st.f, q: st.q, sort: st.sort, offset: pageParam })}`),
+    queryFn: ({ pageParam }) => gql<{ listings: ListResponse<Listing> }>(Q.listings, { f: st.f, q: st.q, sort: st.sort, offset: pageParam }).then((d) => d.listings),
     initialPageParam: 0,
     getNextPageParam: (last) => last.next_offset,
     placeholderData: keepPreviousData,

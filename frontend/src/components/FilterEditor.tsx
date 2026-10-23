@@ -3,7 +3,7 @@ import { DateInput } from '@mantine/dates'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 
-import { api, qs, type Chip, type Field, type Page } from '../api'
+import { gql, Q, type Chip, type Field, type Page } from '../api'
 import { num } from '../format'
 import { useMeta } from '../hooks'
 
@@ -38,8 +38,8 @@ export function FilterEditor({ page, current, others, q, onApply, onRemove }: Pr
   const field = fields.find((f) => f.name === name)
   const values = useQuery({
     queryKey: ['values', page, name, others, q],
-    queryFn: () => api.get<{ enum: boolean; counts: { value: string | null; count: number }[] }>(
-      `/api/values${qs({ page, field: name, f: others, q })}`),
+    queryFn: () => gql<{ values: { enum: boolean; counts: { value: string | null; count: number }[] } }>(
+      Q.values, { page, field: name, f: others, q }).then((d) => d.values),
     enabled: Boolean(field && field.type === 'text'),
   })
   const isEnum = Boolean(values.data?.enum)

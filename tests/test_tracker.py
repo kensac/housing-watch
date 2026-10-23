@@ -10,9 +10,20 @@ from housing_watch import queries as Q
 from housing_watch import tracker as T
 from housing_watch.orm import TrackerEventRow, TrackerRow
 from housing_watch.web.app import create_app
-from seed import L, Session, add_listing, seed
+from seed import L, Session, add_listing, gql, gql_error, seed
 
 SAME = {"origin": "http://testserver"}
+TRACKER = """{ tracker { configured rows { property status stage group stage_since stage_since_baseline page_url
+  events { at stage_from stage_to } listings { key } } } }"""
+LINK = """mutation($k: String!, $r: String) { linkTracker(listing_key: $k, row_key: $r) { listing_key row_key } }"""
+UNLINK = "mutation($k: String!) { unlinkTracker(listing_key: $k) }"
+APPLICATION = "query($k: String!) { listing(key: $k) { summary { application } } }"
+LISTINGS = """query($f: [String!], $sort: String! = "") {
+  listings(f: $f, sort: $sort) { items { key tracker_match application_since } } }"""
+
+
+def application(c, key: str) -> str | None:
+    return gql(c, APPLICATION, k=key)["data"]["listing"]["summary"]["application"]
 
 
 def cell(text, link=None, rich=None):
@@ -112,20 +123,23 @@ def test_sync_and_read(synced):
 
 def test_tracker_api_and_manual_links(synced):
     c = TestClient(create_app(synced))
-    t = c.get("/api/tracker").json()
+    t = gql(c, TRACKER)["data"]["tracker"]
     rows = {r["property"]: r for r in t["rows"]}
     assert t["configured"] and [x["key"] for x in rows["ONE LIC (42-10 27th St)"]["listings"]] == ["i:1"]
     assert rows["SVEN"]["listings"] == [] and rows["SVEN"]["page_url"] == "https://svenlic.com/"
     sven = T.row_key("SVEN")
-    assert c.post("/api/tracker/links", json={"listing_key": "a:1", "row_key": sven}).status_code == 403
-    assert c.post("/api/tracker/links", json={"listing_key": "a:1", "row_key": sven}, headers=SAME).status_code == 200
-    assert c.get("/api/listing?key=a%3A1").json()["summary"]["application"] == "Applied"
-    assert c.post("/api/tracker/links", json={"listing_key": "a:1", "row_key": "nope"}, headers=SAME).status_code == 404
-    assert c.post("/api/tracker/links", json={"listing_key": "i:1", "row_key": None}, headers=SAME).status_code == 200
-    assert c.get("/api/listing?key=i%3A1").json()["summary"]["application"] is None  # "not this row"
-    assert c.delete("/api/tracker/links?listing_key=i%3A1", headers=SAME).status_code == 204
-    assert c.get("/api/listing?key=i%3A1").json()["summary"]["application"] == "To Apply"  # automatic again
-    lst = c.get("/api/listings?f=application.in.Applied").json()
+    assert gql_error(gql(c, LINK, k="a:1", r=sven)) == "cross-origin request refused"
+    assert gql(c, LINK, SAME, k="a:1", r=sven)["data"]["linkTracker"] == {"listing_key": "a:1", "row_key": sven}
+    assert application(c, "a:1") == "Applied"
+    assert gql_error(gql(c, LINK, SAME, k="a:1", r="nope")) == "No such tracker row"
+    assert gql_error(gql(c, LINK, SAME, k="zz:9", r=sven)) == "No such listing"
+    assert gql(c, LINK, SAME, k="i:1", r=None)["data"]["linkTracker"]["row_key"] is None
+    assert application(c, "i:1") is None  # "not this row"
+    assert gql_error(gql(c, UNLINK, k="i:1")) == "cross-origin request refused"
+    assert gql(c, UNLINK, SAME, k="i:1")["data"]["unlinkTracker"] is True
+    assert application(c, "i:1") == "To Apply"  # automatic again
+    assert gql_error(gql(c, UNLINK, SAME, k="i:1")) == "No manual link for that listing"
+    lst = gql(c, LISTINGS, f=["application.in.Applied"])["data"]["listings"]
     assert [x["key"] for x in lst["items"]] == ["a:1"] and lst["items"][0]["tracker_match"] == "manual"
 
 
@@ -268,10 +282,11 @@ def test_stage_order_group_filter_and_api(sheet):
     assert {v for v, _ in counts[9:]} == {"Waiting on landlord", None}  # unknown statuses after the stages
 
     c = TestClient(create_app(pg))
-    lst = c.get("/api/listings?sort=application&f=application_group.in.their move").json()
+    lst = gql(c, LISTINGS, sort="application", f=["application_group.in.their move"])["data"]["listings"]
     assert [x["key"] for x in lst["items"]] == ["t:3"] and lst["items"][0]["application_since"]
-    assert c.get("/api/units?sort=application").json()["items"][0]["application_group"] == T.YOU
-    rows = c.get("/api/tracker").json()["rows"]
+    units = gql(c, '{ units(sort: "application") { items { application_group } } }')["data"]["units"]
+    assert units["items"][0]["application_group"] == T.YOU
+    rows = gql(c, TRACKER)["data"]["tracker"]["rows"]
     assert [r["property"] for r in rows] == ["20 Oak Ave", "50 Spruce St", "30 Pine Rd", "10 Elm St", "40 Cedar Pl"]
     elm = rows[3]
     assert (elm["status"], elm["stage"], elm["group"]) == ("Rejected", "Closed", T.DONE)

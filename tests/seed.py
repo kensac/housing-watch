@@ -72,3 +72,12 @@ def seed_jobs(engine) -> None:
                 {"i": jid, "a": args, "s": st, "w": w if st != "todo" else None},
             )
         c.execute(text("INSERT INTO procrastinate_events(job_id, type, at) VALUES (2, 'failed', now())"))
+
+
+def gql(client, query: str, headers: dict | None = None, **variables) -> dict:
+    """POST a GraphQL document to the web app; the whole response ({"data", "errors"})."""
+    return client.post("/graphql", json={"query": query, "variables": variables}, headers=headers).json()
+
+
+def gql_error(res: dict) -> str | None:
+    return res["errors"][0]["message"] if res.get("errors") else None

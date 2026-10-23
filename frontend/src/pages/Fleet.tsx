@@ -2,7 +2,7 @@ import { Alert, Badge, Card, Code, Group, SimpleGrid, Stack, Table, Text, Title,
 import { IconAlertTriangle } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 
-import { api, type Fleet } from '../api'
+import { gql, Q, type Fleet } from '../api'
 import { Dot } from '../components/Badges'
 import { PageHeader } from '../components/PageHeader'
 import { Loading, LoadError } from '../components/State'
@@ -18,7 +18,7 @@ const Empty = ({ cols, children }: { cols: number; children: React.ReactNode }) 
 
 export function FleetPage() {
   useTitle('Fleet')
-  const q = useQuery({ queryKey: ['fleet'], queryFn: () => api.get<Fleet>('/api/fleet'), refetchInterval: 15_000 })
+  const q = useQuery({ queryKey: ['fleet'], queryFn: () => gql<{ fleet: Fleet }>(Q.fleet).then((d) => d.fleet), refetchInterval: 15_000 })
   if (q.error) return <LoadError what="the fleet" error={q.error} retry={() => q.refetch()} />
   if (q.isLoading) return <Loading rows={10} label="Loading the fleet…" />
   const f = q.data!

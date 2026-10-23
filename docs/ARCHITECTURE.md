@@ -122,6 +122,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   back from it to what it was, with nothing else changed. `db.py` stores both in the event's detail.
 - `mcp_server.py` exposes `queries.py` over MCP (streamable HTTP, a thread of `serve` on `HW_MCP_PORT`),
   read-only, with FastMCP's OIDC proxy for sign-in (clients register themselves; the upstream decides who).
+  Its `graphql` tool runs a query in-process against the web schema and refuses mutations.
 - `digest.py` builds the email from `queries.py`: `send(engine, dry_run)` and `urgent(engine)` (an open,
   eligible listing has a pending new/reopened/changed event). Events with `detail.baseline = true` come from
   a source's first run; they collapse into one summary line and only their eligible listings are listed.
@@ -130,16 +131,20 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   `?f=<field>.<op>.<values>` (e.g. `units.rent.le.3000`), parsed into a typed AST and turned into SQL.
   Unit conditions must hold on one unit, band conditions on one band of it; verdict fields are applied in
   Python after the SQL prefilter.
-- `web/app.py` is a JSON API (`/api/...`) over `queries.py` and `views.py`; `frontend/` is the UI, React +
-  Mantine (default theme) + TanStack Query, built by the image into `web/dist/`, which the same app serves for
-  every non-API path. List state (filters, search, sort, columns, saved view, open listing) lives in the
-  app's URL, and filters cross the API in the `f=` grammar; lists scroll in batches of 200. Three list
+- `web/app.py` serves GraphQL at `/graphql` (Strawberry; the schema is `web/schema.py`, snake_case fields,
+  GraphiQL on GET) over `queries.py`, `views.py` and `tracker.py`, plus one REST route,
+  `/api/listing/application`, for the filled application PDF (a binary download). `frontend/` is the UI,
+  React + Mantine (default theme) + TanStack Query with a small `gql()` fetch helper, built by the image into
+  `web/dist/`, which the same app serves for every other path. List state (filters, search, sort, columns,
+  saved view, open listing) lives in the app's URL, and filters cross the API as `f: [String!]` in the
+  filters.py grammar (one that does not parse comes back in `problems`); lists scroll in batches of 200. Three list
   pages: Listings (a row per listing; its rent and AMI ranges cover the units that fit and match the unit
   filters), Units (a row per unit, so rent sorts exactly; unit and band filters hold on that unit) and
   Events. It is served by the hetzner worker container (`python -m housing_watch serve` = migrate +
-  worker + web, the web started only when `HW_WEB_PORT` is set) on the tailnet only. The one table it
-  writes is `saved_views` (`views.py`: a filter AST + sort + columns per page, re-validated against the
-  field registry on load), through same-origin POST/PATCH/DELETE. Nothing is seeded.
+  worker + web, the web started only when `HW_WEB_PORT` is set) on the tailnet only. The tables it
+  writes are `saved_views` (`views.py`: a filter AST + sort + columns per page, re-validated against the
+  field registry on load) and manual tracker links, through mutations that refuse anything not same-origin.
+  Nothing is seeded.
 - `commute.py` routes eligible, listed listings to `HW_COMMUTE_TO` by transit (Google Routes API, weekday
   8:30 AM), each origin address once per destination (again after 60 days), into `commutes`; a periodic
   `commute` task on the digest worker does it. queries.py attaches the minutes and lines at read time

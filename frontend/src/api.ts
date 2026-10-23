@@ -1,4 +1,4 @@
-// The JSON API of src/housing_watch/web/app.py. Filters travel as repeated `f=<field>.<op>.<values>`.
+// The GraphQL API of src/housing_watch/web/schema.py, at /graphql. Filters travel as `f: ["<field>.<op>.<values>"]`.
 
 export type Page = 'listings' | 'units' | 'events'
 export type Verdict = 'eligible' | 'possible' | 'excluded'
@@ -263,16 +263,17 @@ export interface Tracker {
 
 export class ApiError extends Error {}
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const r = await fetch(path, {
-    method,
-    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
+/** POST one GraphQL document; its `data`, or the first error's message as an ApiError. */
+export async function gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+  const r = await fetch('/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables }),
   })
-  if (r.status === 204) return undefined as T
-  const data = await r.json().catch(() => ({ error: r.statusText }))
-  if (!r.ok) throw new ApiError(data.error ?? r.statusText)
-  return data as T
+  const res = await r.json().catch(() => ({ errors: [{ message: r.statusText }] }))
+  if (res.errors?.length) throw new ApiError(res.errors[0].message)
+  if (!r.ok) throw new ApiError(r.statusText)
+  return res.data as T
 }
 
 export function qs(params: Record<string, string | number | string[] | null | undefined>): string {
@@ -285,9 +286,51 @@ export function qs(params: Record<string, string | number | string[] | null | un
   return s ? `?${s}` : ''
 }
 
-export const api = {
-  get: <T>(path: string) => call<T>('GET', path),
-  post: <T>(path: string, body?: unknown) => call<T>('POST', path, body ?? {}),
-  patch: <T>(path: string, body: unknown) => call<T>('PATCH', path, body),
-  delete: (path: string) => call<void>('DELETE', path),
+// --- documents: each selects every field its type above declares ------------------------------------
+
+const CHIP = 'i f label field op values'
+const LISTING = `key source title url address borough status kind deadline senior_only first_seen last_changed gone_since
+  verdict reason units eligible_units sizes rent_min rent_max ami_min ami_max commute commute_route application
+  application_group application_since application_since_baseline application_notes tracker_row tracker_match`
+const UNIT = `id key source title url address borough status kind deadline first_seen last_changed gone_since
+  listing_verdict size unit_no rent ami set_aside available chart_year income_min income_max verdict reason commute
+  application application_group application_since application_since_baseline`
+const EVENT = 'id at source key type summary detail notified baseline title verdict'
+const VIEW = 'id page name position is_default warnings count updated state { f q sort columns }'
+const page = (items: string) => `items { ${items} } total next_offset verdict_counts { eligible possible excluded }
+  filters { ${CHIP} } problems hidden_gone`
+const PAGE_META = 'fields { name label group type ops money choices } columns default_columns default_sort sorts'
+const LIST_ARGS = '$f: [String!], $q: String! = "", $sort: String! = "", $offset: Int! = 0, $limit: Int! = 200'
+
+export const Q = {
+  meta: `{ meta { profile { household income sizes excluded_boroughs } statuses verdicts op_labels
+    pages { listings { ${PAGE_META} } units { ${PAGE_META} } events { ${PAGE_META} } } } }`,
+  listings: `query(${LIST_ARGS}) { listings(f: $f, q: $q, sort: $sort, offset: $offset, limit: $limit) { ${page(LISTING)} } }`,
+  units: `query(${LIST_ARGS}) { units(f: $f, q: $q, sort: $sort, offset: $offset, limit: $limit) { ${page(UNIT)} } }`,
+  listing: `query($key: String!) { listing(key: $key) { summary { ${LISTING} } notes ext_id last_seen household pdfs
+    units { size unit_no rent ami set_aside available bands verdict reason chart_year } events { ${EVENT} } } }`,
+  applications: 'query($key: String!) { listingApplications(key: $key) { ready pdfs { n url form error } } }',
+  values: `query($page: String!, $field: String!, $f: [String!], $q: String! = "") {
+    values(page: $page, field: $field, f: $f, q: $q) { enum counts { value count } } }`,
+  events: `query($f: [String!], $before: Int) { events(f: $f, before: $before) {
+    items { ${EVENT} } total next_before filters { ${CHIP} } problems } }`,
+  overview: `{ overview { matrix eligible_open eligible_live new_24h new_7d baseline_24h changed_24h changed_7d failing
+    last_digest pending eligible_now { ${LISTING} } recent { ${EVENT} } total n_sources digest { subject text events } } }`,
+  sources: `{ sources { source title url every_hours health last_ok last_attempt failing_since consecutive_failures
+    next_due last_duration last_error last_events listings eligible possible workers } }`,
+  fleet: `{ fleet { available workers { name queues concurrency started last_seen age doing } queues
+    failures { id queue_name task_name args attempts at error } hosts { name last_run runs_24h fails_24h sources } } }`,
+  tracker: `{ tracker { configured synced rows { row_key position property status stage group stage_since
+    stage_since_baseline events { at stage_from stage_to group baseline } notes source_url page_url cells
+    listings { key title verdict status how commute } } } }`,
+  views: `{ views { ${VIEW} } }`,
+  createView: `mutation($page: String!, $name: String!, $is_default: Boolean! = false, $state: ViewStateInput) {
+    createView(page: $page, name: $name, is_default: $is_default, state: $state) { ${VIEW} } }`,
+  changeView: `mutation($id: Int!, $name: String, $state: ViewStateInput, $is_default: Boolean, $move: Int) {
+    changeView(id: $id, name: $name, state: $state, is_default: $is_default, move: $move) { ${VIEW} } }`,
+  duplicateView: `mutation($id: Int!) { duplicateView(id: $id) { ${VIEW} } }`,
+  deleteView: 'mutation($id: Int!) { deleteView(id: $id) }',
+  linkTracker: `mutation($listing_key: String!, $row_key: String) {
+    linkTracker(listing_key: $listing_key, row_key: $row_key) { listing_key row_key } }`,
+  unlinkTracker: 'mutation($listing_key: String!) { unlinkTracker(listing_key: $listing_key) }',
 }
