@@ -4,10 +4,11 @@ Object types are derived from the read model's dataclasses (derive.py), never wr
 a dataclass is in the schema, and in `schema.graphql`, with no other change. Only API envelopes (connections,
 inputs, payloads, meta) are declared here. Field names stay snake_case (auto_camel_case off).
 
-Lists are Relay connections (`first`/`after`, opaque cursors). Filters are `[String!]` in the URL grammar of
-filters.py; one that does not parse is reported in `problems`, not raised. Errors carry `extensions.code`
-(NOT_FOUND, BAD_USER_INPUT, FORBIDDEN, INTERNAL). Resolvers are async and run the blocking store reads in a
-worker thread; mutations need the context's `request`, and refuse it unless same-origin.
+Lists are Relay connections (`first`/`after`, opaque cursors). Filters, sorts and columns are typed inputs
+derived from the registries (filter_types.py); a filter that is well-typed but meaningless (an empty `in`, a blank
+`contains`) is refused with BAD_USER_INPUT. Closed value sets are enums, identifiers are `ID`. Errors carry
+`extensions.code` (NOT_FOUND, BAD_USER_INPUT, FORBIDDEN, INTERNAL). Resolvers are async and run the blocking store
+reads in a worker thread; mutations need the context's `request`, and refuse it unless same-origin.
 """
 
 import base64
@@ -20,24 +21,14 @@ import strawberry
 from starlette.concurrency import run_in_threadpool
 from strawberry.dataloader import DataLoader
 from strawberry.extensions import MaxAliasesLimiter, MaxTokensLimiter, QueryDepthLimiter
-from strawberry.scalars import JSON
 from strawberry.schema.config import StrawberryConfig
 
 from .. import applications, criteria, digest, models, queries, tracker, views
 from .. import commute as C
 from .. import filters as F
-from .derive import derive, enum_of
+from . import filter_types as FT
+from .derive import derive, enum_type, gql_name
 
-SORTS = {
-    "listings": {"verdict": "Verdict", "changed": "Last changed", "first_seen": "First seen",
-                 "rent": "Lowest rent that fits", "commute": "Commute", "application": "Application stage",
-                 "deadline": "Deadline", "title": "Title", "source": "Source", "borough": "Borough"},
-    "units": {"verdict": "Verdict", "rent": "Rent", "commute": "Commute", "application": "Application stage",
-              "ami": "AMI", "size": "Size",
-              "income_min": "Income min", "income_max": "Income max", "changed": "Last changed",
-              "first_seen": "First seen", "deadline": "Deadline", "title": "Building", "borough": "Borough",
-              "source": "Source"},
-}  # fmt: skip
 MAX_FIRST = 500
 
 
@@ -62,27 +53,28 @@ class Problem(Exception):
 
 # --- enums: the domain's own constants ------------------------------------------------------------------
 
-Verdict = enum_of("Verdict", queries.VERDICTS, "How a listing or unit fits the profile, judged at read time.")
-Status = enum_of("Status", queries.STATUSES, "A listing's status as published; gone once its source dropped it.")
-EventType = enum_of("EventType", queries.EVENT_TYPES)
-Page = enum_of("Page", views.FIELDS, "A list page of the app.")
-StageGroup = enum_of("StageGroup", tracker.GROUPS, "Whose move an application stage is.")
-Match = enum_of("TrackerMatch", tracker.MATCHES, "How a listing was matched to its tracker row.")
-FilterOp = enum_of("FilterOp", F.OP_LABEL)
-FieldType = enum_of("FieldType", F.OPS)
-Health = enum_of("Health", queries.HEALTH)
+# The Literal aliases of the read model become enums wherever derive() meets them; these give them descriptions.
+Verdict = enum_type(criteria.Verdict, "How a listing or unit fits the profile, judged at read time.")
+Status = enum_type(queries.Status, "A listing's status as published; gone once its source dropped it.")
+enum_type(models.PublishedStatus, "A listing's status as its source publishes it.")
+enum_type(models.Size, "A unit size: a GraphQL name cannot start with a digit, so 1br is `_1br`.")
+enum_type(models.Borough)
+enum_type(models.Kind, "What kind of opportunity: `re_rental` is re-rental.")
+enum_type(models.EventType)
+Page = enum_type(views.Page, "A list page of the app.")
+StageGroup = enum_type(tracker.StageGroup, "Whose move an application stage is.")
+enum_type(tracker.Match, "How a listing was matched to its tracker row.", name="TrackerMatch")
+enum_type(queries.Health, "Ok, failing, or never (no run has succeeded yet).")
+enum_type(queries.JobStatus, "A Procrastinate job's status.")
 
 
 # --- derived types ----------------------------------------------------------------------------------------
 
 derive(models.Band, "IncomeBand")
 derive(C.Route, "CommuteRoute")
-Listing = derive(queries.ListingSummary, "Listing", description="A listing, summarized and judged for the profile.",
-                 types={"verdict": Verdict, "status": Status, "application_group": StageGroup,
-                        "tracker_match": Match})  # fmt: skip
-Unit = derive(queries.UnitSummary, "Unit", types={"verdict": Verdict, "listing_verdict": Verdict, "status": Status,
-                                                  "application_group": StageGroup})  # fmt: skip
-derive(queries.UnitView, "DetailUnit", types={"verdict": Verdict})
+Listing = derive(queries.ListingSummary, "Listing", description="A listing, summarized and judged for the profile.")
+Unit = derive(queries.UnitSummary, "Unit")
+derive(queries.UnitView, "DetailUnit")
 ListingChange = derive(queries.ListingChange)
 PageChange = derive(queries.PageChange)
 SourceFailure = derive(queries.SourceFailure)
@@ -99,9 +91,8 @@ async def _event_listing(root: strawberry.Parent[queries.EventView], info: straw
     return await info.context["loaders"].listing.load(root.key) if root.key else None
 
 
-Event = derive(queries.EventView, "Event", types={"type": EventType, "verdict": Verdict}, exclude=("detail",),
-               extra={"detail": strawberry.field(resolver=_detail),
-                      "listing": strawberry.field(resolver=_event_listing)})  # fmt: skip
+Event = derive(queries.EventView, "Event", extra={"detail": strawberry.field(resolver=_detail),
+                                                  "listing": strawberry.field(resolver=_event_listing)})  # fmt: skip
 
 
 def _pdfs(root: strawberry.Parent[queries.ListingDetail]) -> list[str]:
@@ -110,33 +101,83 @@ def _pdfs(root: strawberry.Parent[queries.ListingDetail]) -> list[str]:
 
 
 ListingDetail = derive(queries.ListingDetail, extra={"pdfs": strawberry.field(resolver=_pdfs)})
-Source = derive(queries.SourceHealth, "Source", types={"health": Health})
+Source = derive(queries.SourceHealth, "Source")
 derive(queries.FleetWorker)
-derive(queries.FleetFailure, types={"args": JSON})  # a task's own kwargs: free-form by design
+derive(queries.FleetFailure)
 derive(queries.FleetHost)
-derive(tracker.Step, "StageStep", props=("group",), types={"group": StageGroup})
+derive(tracker.Step, "StageStep", props=("group",))
 derive(tracker.Cell, "TrackerCell")
-derive(queries.TrackerRowView, "TrackerRow", types={"group": StageGroup})
+derive(queries.TrackerRowView, "TrackerRow")
 Tracker = derive(queries.TrackerBoard, "Tracker")
 Profile = derive(criteria.Profile)
 
 
-def _ops(root: strawberry.Parent[F.Field]) -> list[FilterOp]:
-    """The operators a filter on this field can use."""
+@strawberry.type(description="A value an enum field can take.")
+class EnumChoice:
+    name: str = strawberry.field(description="As the filter takes it: the value's GraphQL enum name.")
+    label: str = strawberry.field(description="As the data has it.")
+
+
+def _ops(root: strawberry.Parent[F.Field]) -> list[FT.FilterOp]:
+    """The operators a filter on this field can use: keys of its filter object."""
     return list(F.OPS[root.type])
 
 
-FilterField = derive(F.Field, "FilterField", exclude=("scope", "column", "order"), props=("money",),
-                     types={"type": FieldType}, extra={"ops": strawberry.field(resolver=_ops)})  # fmt: skip
+def _choices(root: strawberry.Parent[F.Field]) -> list[EnumChoice]:
+    """An enum field's values, in order; empty for the other types."""
+    return [EnumChoice(name=gql_name(v), label=v) for v in root.choices]
 
 
-def _view_f(root: strawberry.Parent[views.State]) -> list[str]:
-    """The filters, in the URL grammar."""
-    return [c.url() for c in root.filters]
+def _path(root: strawberry.Parent[F.Field]) -> list[str]:
+    """Where it sits in the filter object: `["units", "rent"]` is `{units: {rent: {...}}}`."""
+    return list(root.path)
 
 
-derive(views.State, "ViewState", exclude=("page", "filters"), extra={"f": strawberry.field(resolver=_view_f)})
-View = derive(views.View, types={"page": Page}, description="A saved view: a named filter, search, sort and columns.")
+FilterField = derive(F.Field, "FilterField", exclude=("scope", "column", "order", "values"), props=("money",),
+                     types={"name": FT.FilterFieldName, "type": FT.FieldType},
+                     extra={"ops": strawberry.field(resolver=_ops), "choices": strawberry.field(resolver=_choices),
+                            "path": strawberry.field(resolver=_path)})  # fmt: skip
+
+
+@strawberry.type(description="What the Listings page shows: the part of its URL a saved view captures.")
+class ListingsViewState:
+    filter: FT.ListingFilter
+    q: str
+    sort: list[FT.ListingSort]
+    columns: list[FT.ListingColumn]
+
+
+@strawberry.type(description="What the Units page shows.")
+class UnitsViewState:
+    filter: FT.ListingFilter
+    q: str
+    sort: list[FT.UnitSort]
+    columns: list[FT.UnitColumn]
+
+
+@strawberry.type(description="What the Events page shows (newest first, no search).")
+class EventsViewState:
+    filter: FT.EventFilter
+    columns: list[FT.EventColumn]
+
+
+ViewState = Annotated[ListingsViewState | UnitsViewState | EventsViewState, strawberry.union("ViewState")]
+
+
+def view_state(st: views.State) -> ListingsViewState | UnitsViewState | EventsViewState:
+    if st.page == "events":
+        return EventsViewState(filter=FT.output(FT.EventFilter, st.filters), columns=list(st.columns))
+    cls = ListingsViewState if st.page == "listings" else UnitsViewState
+    return cls(filter=FT.output(FT.ListingFilter, st.filters), q=st.q, sort=FT.sort_output(st.page, st.sort),
+               columns=list(st.columns))  # fmt: skip
+
+
+def _state_of(root: strawberry.Parent[views.View]) -> ViewState:
+    """The saved state, typed by its page."""
+    return view_state(root.state)
+
+
+View = derive(views.View, exclude=("state",), extra={"state": strawberry.field(resolver=_state_of)})
 
 
 # --- envelopes --------------------------------------------------------------------------------------------
@@ -156,14 +197,11 @@ class Edge[T]:
     node: T
 
 
-@strawberry.type(description="A filter of the request that parsed, as a chip; `i` is its index in `f`.")
+@strawberry.type(description="One condition of the request's filter, in words: the operator `op` of field `field`.")
 class Chip:
-    i: int
-    f: str
+    field: FT.FilterFieldName
+    op: FT.FilterOp
     label: str
-    field: str
-    op: FilterOp
-    values: list[str]
 
 
 @strawberry.type
@@ -178,8 +216,7 @@ class Connection[T]:
     edges: list[Edge[T]]
     page_info: PageInfo
     total: int = strawberry.field(description="Everything matching, across pages.")
-    filters: list[Chip]
-    problems: list[str] = strawberry.field(description="Why each filter that did not parse was ignored.")
+    filters: list[Chip] = strawberry.field(description="The filter's conditions, in words.")
 
 
 @strawberry.type
@@ -201,7 +238,10 @@ class EventConnection(Connection[Event]):
 
 @strawberry.type
 class ValueCount:
-    value: str | None
+    value: str | None = strawberry.field(
+        description="As the filter takes it (an enum field's GraphQL name); null: empty."
+    )
+    label: str = strawberry.field(description="As the data has it.")
     count: int
 
 
@@ -212,31 +252,41 @@ class Values:
 
 
 @strawberry.type
-class Choice:
-    key: str
-    label: str
-
-
-@strawberry.type
 class OpLabel:
-    op: FilterOp
+    op: FT.FilterOp
     label: str
 
 
 @strawberry.type
-class PageMeta:
+class ListingsPageMeta:
     fields: list[FilterField]
-    columns: list[Choice]
-    default_columns: list[str]
-    default_sort: str
-    sorts: list[Choice]
+    columns: list[FT.ListingColumnChoice]
+    default_columns: list[FT.ListingColumn]
+    sorts: list[FT.ListingSortChoice]
+    default_sort: list[FT.ListingSort]
+
+
+@strawberry.type
+class UnitsPageMeta:
+    fields: list[FilterField]
+    columns: list[FT.UnitColumnChoice]
+    default_columns: list[FT.UnitColumn]
+    sorts: list[FT.UnitSortChoice]
+    default_sort: list[FT.UnitSort]
+
+
+@strawberry.type
+class EventsPageMeta:
+    fields: list[FilterField]
+    columns: list[FT.EventColumnChoice]
+    default_columns: list[FT.EventColumn]
 
 
 @strawberry.type
 class Pages:
-    listings: PageMeta
-    units: PageMeta
-    events: PageMeta
+    listings: ListingsPageMeta
+    units: UnitsPageMeta
+    events: EventsPageMeta
 
 
 @strawberry.type(description="The profile and the registries the app builds its pages from.")
@@ -269,82 +319,90 @@ class Digest:
     events: int
 
 
-@strawberry.type
-class MatrixCell:
-    verdict: Verdict
-    status: Status
-    count: int
-
-
-@strawberry.type
-class QueueCount:
-    queue: str
-    status: str
-    count: int
-
-
-def _matrix(root: strawberry.Parent[queries.Overview]) -> list[MatrixCell]:
-    """Listed listings by verdict and status."""
-    return [MatrixCell(verdict=v, status=s, count=n) for v, row in root.matrix.items() for s, n in row.items()]
-
-
 async def _digest(info: strawberry.Info) -> Digest | None:
     """The digest email that would go out next; null when nothing is pending."""
     built = await run_in_threadpool(digest.build, *_ctx(info))
     return Digest(subject=built[0], text=built[1], events=len(built[3])) if built else None
 
 
-Overview = derive(queries.Overview, exclude=("matrix",), extra={
-    "matrix": strawberry.field(resolver=_matrix), "digest": strawberry.field(resolver=_digest)})  # fmt: skip
-
-
-def _queues(root: strawberry.Parent[queries.Fleet]) -> list[QueueCount]:
-    """Jobs by queue and status."""
-    return [QueueCount(queue=q, status=s, count=n) for q, row in root.queues.items() for s, n in row.items()]
-
-
-Fleet = derive(queries.Fleet, exclude=("queues",), extra={"queues": strawberry.field(resolver=_queues)})
+Overview = derive(queries.Overview, extra={"digest": strawberry.field(resolver=_digest)})
+Fleet = derive(queries.Fleet)
 
 
 @strawberry.input
+class ListingsViewStateInput:
+    filter: FT.ListingFilterInput | None = None
+    q: str = ""
+    sort: list[FT.ListingSortInput] | None = strawberry.field(default=None, description="null or []: the default.")
+    columns: list[FT.ListingColumn] | None = strawberry.field(default=None, description="null or []: the default.")
+
+
+@strawberry.input
+class UnitsViewStateInput:
+    filter: FT.ListingFilterInput | None = None
+    q: str = ""
+    sort: list[FT.UnitSortInput] | None = strawberry.field(default=None, description="null or []: the default.")
+    columns: list[FT.UnitColumn] | None = strawberry.field(default=None, description="null or []: the default.")
+
+
+@strawberry.input
+class EventsViewStateInput:
+    filter: FT.EventFilterInput | None = None
+    columns: list[FT.EventColumn] | None = strawberry.field(default=None, description="null or []: the default.")
+
+
+@strawberry.input(one_of=True, description="A page's state: set exactly one, the page it is for.")
 class ViewStateInput:
-    f: list[str] | None = None
-    q: str | None = None
-    sort: str | None = None
-    columns: list[str] | None = None
+    listings: ListingsViewStateInput | None = strawberry.UNSET
+    units: UnitsViewStateInput | None = strawberry.UNSET
+    events: EventsViewStateInput | None = strawberry.UNSET
+
+
+@strawberry.input(one_of=True, description="A page's filter: set exactly one, the page it is for.")
+class PageFilterInput:
+    listings: FT.ListingFilterInput | None = strawberry.UNSET
+    units: FT.ListingFilterInput | None = strawberry.UNSET
+    events: FT.EventFilterInput | None = strawberry.UNSET
+
+
+class ViewMove(enum.Enum):
+    up = "up"
+    down = "down"
+
+
+strawberry.enum(ViewMove, description="One place up or down the page's views.")
 
 
 @strawberry.input
 class CreateViewInput:
-    page: Page
     name: str
+    state: ViewStateInput = strawberry.field(description="Its page is the view's page.")
     is_default: bool = False
-    state: ViewStateInput | None = None
 
 
 @strawberry.input
 class ChangeViewInput:
-    id: int
+    id: strawberry.ID
     name: str | None = None
-    state: ViewStateInput | None = None
+    state: ViewStateInput | None = strawberry.field(default=None, description="For the view's own page.")
     is_default: bool | None = None
-    move: int | None = strawberry.field(default=None, description="-1 or 1: one place up or down.")
+    move: ViewMove | None = None
 
 
 @strawberry.input
 class ViewIdInput:
-    id: int
+    id: strawberry.ID
 
 
 @strawberry.input
 class LinkTrackerInput:
-    listing_key: str
-    row_key: str | None = strawberry.field(default=None, description="null: the listing is in no row.")
+    listing_key: strawberry.ID
+    row_key: strawberry.ID | None = strawberry.field(default=None, description="null: the listing is in no row.")
 
 
 @strawberry.input
 class UnlinkTrackerInput:
-    listing_key: str
+    listing_key: strawberry.ID
 
 
 @strawberry.type
@@ -354,13 +412,13 @@ class ViewPayload:
 
 @strawberry.type
 class DeleteViewPayload:
-    id: int
+    id: strawberry.ID
 
 
 @strawberry.type
 class TrackerLinkPayload:
-    listing_key: str
-    row_key: str | None
+    listing_key: strawberry.ID
+    row_key: strawberry.ID | None
     listing: Listing | None = strawberry.field(description="The listing as it reads after the change.")
 
 
@@ -392,25 +450,22 @@ def mutation(name: str):
     return lambda fn: strawberry.mutation(resolver=blocking(fn), name=name, description=inspect.getdoc(fn))
 
 
-def _parse(page: str, raw: list[str] | None) -> tuple[list[tuple[int, F.Cond]], list[str]]:
-    """Parse every filter, keeping its index in the request; one that does not parse is reported, not fatal."""
-    out, problems = [], []
-    for i, s in enumerate(raw or []):
-        try:
-            out.append((i, F.parse_one(s, views.FIELDS[page])))
-        except F.FilterError as e:
-            problems.append(str(e))
-    return out, problems
+def _conds(page: str, given) -> list[F.Cond]:
+    """A filter input's conditions; one that means nothing is refused, saying why."""
+    try:
+        return F.from_tree(FT.tree(given), views.FIELDS[page])
+    except F.FilterError as e:
+        raise Problem(Code.BAD_USER_INPUT, str(e)) from None
 
 
-def _conds(page: str, raw: list[str] | None) -> tuple[list[F.Cond], list[str]]:
-    parsed, problems = _parse(page, raw)
-    return [c for _, c in parsed], problems
+def _chips(conds: list[F.Cond]) -> list[Chip]:
+    return [Chip(field=c.field.name, op=c.op, label=c.label()) for c in conds]
 
 
-def _chips(page: str, raw: list[str] | None) -> list[Chip]:
-    return [Chip(i=i, f=c.url(), label=c.label(), field=c.field.name, op=c.op, values=list(c.raw))
-            for i, c in _parse(page, raw)[0]]  # fmt: skip
+def _view_id(id: strawberry.ID) -> int:
+    if not str(id).isdigit():
+        raise Problem(Code.NOT_FOUND, "No such view")
+    return int(id)
 
 
 def _cursor(kind: str, n: int) -> str:
@@ -441,26 +496,29 @@ def _info(edges: list[Edge], more: bool, earlier: bool) -> PageInfo:
                     end_cursor=edges[-1].cursor if edges else None)  # fmt: skip
 
 
-def _list(cls, page: str, f, q, sort, first, after, info, search):
+def _list(cls, page: str, filter, q, sort, first, after, info, search):
     """A listings or units connection: position cursors over one filtered, sorted list."""
     engine, p = _ctx(info)
-    conds, problems = _conds(page, f)
+    conds = _conds(page, filter)
     start = (a + 1) if (a := _after(page, after)) is not None else 0
-    res = search(engine, queries.ListingQuery(conds, q, sort or views.DEFAULT_SORT[page], start, _first(first)), p)
+    res = search(engine, queries.ListingQuery(conds, q, FT.sorts(page, sort), start, _first(first)), p)
     edges = [Edge(cursor=_cursor(page, start + i), node=x) for i, x in enumerate(res.items)]
     return cls(
         edges=edges, page_info=_info(edges, res.next_offset is not None, start > 0), total=res.total,
         verdict_counts=VerdictCounts(**{v: res.verdict_counts.get(v, 0) for v in queries.VERDICTS}),
-        filters=_chips(page, f), problems=problems, hidden_gone=queries.hides_gone(conds),
+        filters=_chips(conds), hidden_gone=queries.hides_gone(conds),
     )  # fmt: skip
 
 
-def _state(page: str, st: ViewStateInput | None) -> views.State:
-    st = st or ViewStateInput()
-    conds, problems = _conds(page, st.f)
-    if problems:
-        raise Problem(Code.BAD_USER_INPUT, "; ".join(problems))
-    return views.State(page, conds, st.q or "", st.sort or "", tuple(st.columns or ()))
+def _state(st: ViewStateInput) -> views.State:
+    """The page's state from the one page set in the input."""
+    page, given = next((k, v) for k in views.FIELDS if (v := getattr(st, k)) not in (None, strawberry.UNSET))
+    conds = _conds(page, given.filter)
+    try:
+        return views.State(page, conds, getattr(given, "q", ""), FT.sorts(page, getattr(given, "sort", None))
+                           if page != "events" else (), FT.values_of(given.columns))  # fmt: skip
+    except views.ViewError as e:
+        raise Problem(Code.BAD_USER_INPUT, str(e)) from None
 
 
 def same_origin(req) -> None:
@@ -485,7 +543,7 @@ def _summary(engine, key: str, p) -> queries.ListingSummary | None:
 
 # --- schema ---------------------------------------------------------------------------------------------
 
-LIST = "Filters (`f`) are `field.op.values` strings; `meta.pages` lists the fields and operators."
+LIST = "`filter` has a field per filterable field, each holding its operators; `meta.pages` describes them."
 
 
 @strawberry.type
@@ -493,30 +551,40 @@ class Query:
     @query
     def meta(self, info: strawberry.Info) -> Meta:
         """The profile and the registries the app builds its pages from."""
-        pages = {
-            page: PageMeta(
-                fields=list(views.FIELDS[page].values()),
-                columns=[Choice(key=k, label=v) for k, v in views.COLUMNS[page].items()],
-                default_columns=list(views.DEFAULT_COLUMNS[page]), default_sort=views.DEFAULT_SORT[page],
-                sorts=[Choice(key=k, label=v) for k, v in SORTS.get(page, {}).items()],
-            )
-            for page in views.FIELDS
-        }  # fmt: skip
+
+        def common(page: str) -> dict:
+            col = FT.COLUMN_TYPES[page]
+            return {"fields": list(views.FIELDS[page].values()),
+                    "columns": [col(column=k, label=v) for k, v in views.COLUMNS[page].items()],
+                    "default_columns": list(views.DEFAULT_COLUMNS[page])}  # fmt: skip
+
+        def sorted_(page: str) -> dict:
+            choice = FT.SORT_TYPES[page][1]
+            return {"sorts": [choice(field=k, label=s.label, natural=s.natural) for k, s in views.SORTS[page].items()],
+                    "default_sort": FT.sort_output(page, views.DEFAULT_SORT[page])}  # fmt: skip
+
+        pages = Pages(listings=ListingsPageMeta(**common("listings"), **sorted_("listings")),
+                      units=UnitsPageMeta(**common("units"), **sorted_("units")),
+                      events=EventsPageMeta(**common("events")))  # fmt: skip
         return Meta(profile=_ctx(info)[1], statuses=list(queries.STATUSES), verdicts=list(queries.VERDICTS),
-                    ops=[OpLabel(op=k, label=v) for k, v in F.OP_LABEL.items()], pages=Pages(**pages))  # fmt: skip
+                    ops=[OpLabel(op=k, label=v) for k, v in F.OP_LABEL.items()], pages=pages)  # fmt: skip
 
-    @query(description=f"Listings matching the filters and search, one per building or opportunity. {LIST}")
-    def listings(self, info: strawberry.Info, f: list[str] | None = None, q: str = "", sort: str = "",
-                 first: int = 200, after: str | None = None) -> ListingConnection:  # fmt: skip
-        return _list(ListingConnection, "listings", f, q, sort, first, after, info, queries.search_listings)
+    @query(description=f"Listings matching the filter and search, one per building or opportunity. {LIST}")
+    def listings(self, info: strawberry.Info, filter: FT.ListingFilterInput | None = None, q: str = "",
+                 sort: list[FT.ListingSortInput] | None = None, first: int = 200,
+                 after: str | None = None) -> ListingConnection:  # fmt: skip
+        return _list(ListingConnection, "listings", filter, q, sort, first, after, info, queries.search_listings)
 
-    @query(description=f"Every unit or rent tier of the matching listings; unit filters hold on its own unit. {LIST}")
-    def units(self, info: strawberry.Info, f: list[str] | None = None, q: str = "", sort: str = "",
-              first: int = 200, after: str | None = None) -> UnitConnection:  # fmt: skip
-        return _list(UnitConnection, "units", f, q, sort, first, after, info, queries.search_units)
+    @query(
+        description=f"Every unit or rent tier of the matching listings; unit conditions hold on its own unit. {LIST}"
+    )
+    def units(self, info: strawberry.Info, filter: FT.ListingFilterInput | None = None, q: str = "",
+              sort: list[FT.UnitSortInput] | None = None, first: int = 200,
+              after: str | None = None) -> UnitConnection:  # fmt: skip
+        return _list(UnitConnection, "units", filter, q, sort, first, after, info, queries.search_units)
 
     @query
-    def listing(self, info: strawberry.Info, key: str) -> ListingDetail:
+    def listing(self, info: strawberry.Info, key: strawberry.ID) -> ListingDetail:
         """One listing with every unit, its notes and its history."""
         engine, p = _ctx(info)
         d = queries.listing_detail(engine, key, p)
@@ -525,7 +593,7 @@ class Query:
         return d
 
     @query(name="listingApplications")
-    def listing_applications(self, info: strawberry.Info, key: str) -> Applications:
+    def listing_applications(self, info: strawberry.Info, key: strawberry.ID) -> Applications:
         """Each linked application PDF, fetched to see whether it is a form we can fill."""
         engine, p = _ctx(info)
         d = queries.listing_detail(engine, key, p)
@@ -539,28 +607,32 @@ class Query:
         return Applications(pdfs=out, ready=applications.applicant() is not None)
 
     @query
-    def values(self, info: strawberry.Info, page: Page, field: str, f: list[str] | None = None, q: str = "") -> Values:
-        """Distinct values of a field with counts under the other filters (send them without the one being
+    def values(self, info: strawberry.Info, field: FT.FilterFieldName, filter: PageFilterInput,
+               q: str = "") -> Values:  # fmt: skip
+        """Distinct values of a field with counts under a page's filter (send it without the condition being
         edited); `enum` says whether the field has few enough values to pick from."""
         engine, p = _ctx(info)
-        if field not in views.FIELDS[page.value]:
-            raise Problem(Code.NOT_FOUND, "Unknown field")
-        fld = views.FIELDS[page.value][field]
-        conds, _ = _conds(page.value, f)
+        page, given = next((k, v) for k in views.FIELDS if (v := getattr(filter, k)) not in (None, strawberry.UNSET))
+        fld = views.FIELDS[page].get(field.value)
+        if fld is None:
+            raise Problem(Code.BAD_USER_INPUT, f"{page} has no field {field.name}")
+        conds = _conds(page, given)
         is_enum = queries.is_enum(engine, fld, p)
-        counts = queries.value_counts(engine, page.value, fld, conds, q, p) if is_enum else []
-        return Values(enum=is_enum, counts=[ValueCount(value=v, count=n) for v, n in counts])
+        counts = queries.value_counts(engine, page, fld, conds, q, p) if is_enum else []
+        name = gql_name if fld.type == "enum" else str
+        return Values(enum=is_enum, counts=[ValueCount(value=None if v in (None, "") else name(v),
+                                                       label=v or "(empty)", count=n) for v, n in counts])  # fmt: skip
 
     @query
-    def events(self, info: strawberry.Info, f: list[str] | None = None, first: int = 200,
+    def events(self, info: strawberry.Info, filter: FT.EventFilterInput | None = None, first: int = 200,
                after: str | None = None) -> EventConnection:  # fmt: skip
-        """What happened, newest first. Listing filters apply through the event's listing."""
+        """What happened, newest first. Listing conditions (`listing`) apply through the event's listing."""
         engine, p = _ctx(info)
-        conds, problems = _conds("events", f)
+        conds = _conds("events", filter)
         page = queries.events(engine, conds, before=_after("events", after), limit=_first(first), p=p)
         edges = [Edge(cursor=_cursor("events", e.id), node=e) for e in page.items]
         return EventConnection(edges=edges, page_info=_info(edges, page.next_before is not None, after is not None),
-                               total=page.total, filters=_chips("events", f), problems=problems)  # fmt: skip
+                               total=page.total, filters=_chips(conds))  # fmt: skip
 
     @query
     def overview(self, info: strawberry.Info) -> Overview:
@@ -594,7 +666,7 @@ class Mutation:
     def create_view(self, info: strawberry.Info, input: CreateViewInput) -> ViewPayload:
         """Save a view of a page."""
         engine = _write(info)
-        st = _state(input.page.value, input.state)
+        st = _state(input.state)
         try:
             return ViewPayload(view=views.create(engine, st, input.name, input.is_default))
         except views.ViewError as e:
@@ -604,34 +676,35 @@ class Mutation:
     def change_view(self, info: strawberry.Info, input: ChangeViewInput) -> ViewPayload:
         """Rename, replace the state, set or clear the default, or move it one place."""
         engine = _write(info)
-        v = views.get(engine, input.id)
+        vid = _view_id(input.id)
+        v = views.get(engine, vid)
         if v is None:
             raise Problem(Code.NOT_FOUND, "No such view")
         kw: dict = {}
         if input.name is not None:
             kw["name"] = input.name
         if input.state is not None:
-            kw["state"] = _state(v.page, input.state)
+            kw["state"] = _state(input.state)
         if input.is_default is not None:
             kw["is_default"] = input.is_default
-        if input.move in (-1, 1):
-            kw["move"] = input.move
+        if input.move is not None:
+            kw["move"] = -1 if input.move == ViewMove.up else 1
         try:
-            return ViewPayload(view=views.change(engine, input.id, **kw))
+            return ViewPayload(view=views.change(engine, vid, **kw))
         except views.ViewError as e:
             raise Problem(Code.BAD_USER_INPUT, str(e)) from None
 
     @mutation("duplicateView")
     def duplicate_view(self, info: strawberry.Info, input: ViewIdInput) -> ViewPayload:
         """A copy of a view, named "<name> (copy)"."""
-        v = views.duplicate(_write(info), input.id)
+        v = views.duplicate(_write(info), _view_id(input.id))
         if v is None:
             raise Problem(Code.NOT_FOUND, "No such view")
         return ViewPayload(view=v)
 
     @mutation("deleteView")
     def delete_view(self, info: strawberry.Info, input: ViewIdInput) -> DeleteViewPayload:
-        if not views.delete(_write(info), input.id):
+        if not views.delete(_write(info), _view_id(input.id)):
             raise Problem(Code.NOT_FOUND, "No such view")
         return DeleteViewPayload(id=input.id)
 

@@ -2,9 +2,11 @@
 
 `derive(Dataclass)` makes a Strawberry type with the dataclass's fields and their Python types: nested
 dataclasses become their own derived types, `X | None` stays nullable, lists, tuples and sets become lists (sets
-sorted), and a field's trailing comment becomes its description. A field made with `queries.internal()` is
-left out. `types` narrows a field to a GraphQL enum (or JSON), `props` adds properties, `extra` adds resolved
-fields. A dict field must be given a type: free-form JSON is a choice, never a default.
+sorted), a `type X = Literal[...]` alias becomes the GraphQL enum `X` (one per alias, see enum_type), the
+models.Key and models.Serial aliases become `ID`, and a field's trailing comment becomes its description. A field
+made with `queries.internal()` is left out. `types` overrides a field's type (e.g. JSON), `props` adds
+properties, `extra` adds resolved fields. A dict field must be given a type: free-form JSON is a choice, never a
+default.
 
 Resolvers return the dataclass instances themselves; the derived type only describes them.
 """
@@ -17,18 +19,35 @@ import inspect
 import re
 import types as pytypes
 import typing
-from datetime import datetime
+from datetime import date, datetime
 
 import strawberry
 
-_SCALARS = (str, int, float, bool, datetime)
+from ..models import Key, Serial
+
+_SCALARS = (str, int, float, bool, datetime, date)
 _DERIVED: dict[type, type] = {}  # dataclass -> its Strawberry type
+_ENUMS: dict[object, type[enum.Enum]] = {}  # Literal alias -> its GraphQL enum
+
+
+def gql_name(v: str) -> str:
+    """A domain value as a GraphQL enum value name: "your move" is `your_move`, "1br" is `_1br`."""
+    n = re.sub(r"\W+", "_", v)
+    return f"_{n}" if n[:1].isdigit() else n
 
 
 def enum_of(name: str, values, description: str | None = None):
-    """A GraphQL enum over domain string constants. A value that is not a GraphQL name gets one ("your move"
-    is `your_move`); the domain keeps its strings, and they serialize by value."""
-    return strawberry.enum(enum.Enum(name, {re.sub(r"\W+", "_", v): v for v in values}), description=description)
+    """A GraphQL enum over domain string constants. A value that is not a GraphQL name gets one (gql_name); the
+    domain keeps its strings, and they serialize by value."""
+    return strawberry.enum(enum.Enum(name, {gql_name(v): v for v in values}), description=description)
+
+
+def enum_type(alias, description: str | None = None, name: str | None = None) -> type[enum.Enum]:
+    """The GraphQL enum of a `type X = Literal[...]` alias, named after it; made once, so every field and input
+    that uses the alias shares it. Call it first to give the enum a description or another name."""
+    if alias not in _ENUMS:
+        _ENUMS[alias] = enum_of(name or alias.__name__, typing.get_args(alias.__value__), description)
+    return _ENUMS[alias]
 
 
 def derive(dc: type, name: str | None = None, *, types: dict | None = None, props: tuple[str, ...] = (),
@@ -77,6 +96,12 @@ def _map(t, leaf, where: str):
         return list[_map(args[0], leaf, where)]
     if leaf is not None:
         return leaf
+    if t in (Key, Serial):
+        return strawberry.ID
+    if isinstance(t, typing.TypeAliasType):
+        if typing.get_origin(t.__value__) is typing.Literal:
+            return enum_type(t)
+        return _map(t.__value__, None, where)
     if t is dict or origin is dict:
         raise TypeError(f"{where}: give a dict field a type (an object type, or JSON when it is free-form)")
     if dataclasses.is_dataclass(t):

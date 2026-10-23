@@ -3,7 +3,7 @@ import { IconDownload, IconExternalLink } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 
-import { qs, request } from '../api'
+import { BOROUGH, KIND, qs, request } from '../api'
 import { graphql } from '../gql'
 import { commute, date, money, pct, when } from '../format'
 import { useMotion } from '../hooks'
@@ -12,7 +12,7 @@ import { Loading, LoadError } from './State'
 import { TrackerPanel } from './TrackerPanel'
 
 const ListingDoc = graphql(`
-  query Listing($key: String!) {
+  query Listing($key: ID!) {
     listing(key: $key) {
       summary { ...ListingFields } notes ext_id last_seen household pdfs
       units { size unit_no rent ami set_aside available bands { household income_min income_max } verdict reason chart_year }
@@ -22,7 +22,7 @@ const ListingDoc = graphql(`
 `)
 
 const ApplicationsDoc = graphql(`
-  query ListingApplications($key: String!) {
+  query ListingApplications($key: ID!) {
     listingApplications(key: $key) { ready pdfs { n url form error } }
   }
 `)
@@ -90,7 +90,7 @@ export function ListingDrawer({ k, onClose }: { k: string | null; onClose: () =>
             <Group gap="xs">
               <VerdictBadge v={x.verdict} />
               <StatusBadge s={x.status} />
-              <Badge variant="default" c="dimmed" translate="no">{x.source} · {x.kind}</Badge>
+              <Badge variant="default" c="dimmed" translate="no">{x.source} · {KIND[x.kind]}</Badge>
               <Text size="sm" c="dimmed">{x.verdict === 'eligible' ? `${x.eligible_units} of ${x.units} units fit your profile` : x.reason}</Text>
             </Group>
             {x.url && (
@@ -102,7 +102,7 @@ export function ListingDrawer({ k, onClose }: { k: string | null; onClose: () =>
           </Stack>
           <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md" verticalSpacing="sm">
             <Fact label="Address">{x.address ?? '—'}</Fact>
-            <Fact label="Borough">{x.borough ?? 'Unknown'}</Fact>
+            <Fact label="Borough">{x.borough ? BOROUGH[x.borough] : 'Unknown'}</Fact>
             <Fact label="Deadline">{date(x.deadline)}</Fact>
             {x.commute != null && <Fact label="Commute">{commute(x.commute, x.commute_route)}</Fact>}
             <Fact label="First seen">{when(x.first_seen)}</Fact>

@@ -3,25 +3,32 @@ import { IconFilterPlus } from '@tabler/icons-react'
 import { useState } from 'react'
 
 import type { Chip, Page } from '../api'
-import { useMotion } from '../hooks'
+import { getCond, setCond } from '../filters'
+import { useMeta, useMotion } from '../hooks'
 import classes from './FilterBar.module.css'
-import { FilterEditor } from './FilterEditor'
+import { FilterEditor, type Condition } from './FilterEditor'
 
 interface Props {
   page: Page
-  f: string[]
-  chips: Chip[] // labels from the server; chip.i is its index in `f` (filters that did not parse have none)
+  filter: unknown // the page's filter object
+  chips: Chip[] // its conditions in words, from the server: one per field and operator
   q: string
-  onChange: (f: string[]) => void
+  onChange: (filter: unknown) => void
 }
 
-/** The active filters as chips (click one to edit it, × to remove it) plus "Add Filter", laid out inline in the
+/** The filter's conditions as chips (click one to edit it, × to remove it) plus "Add Filter", laid out inline in the
  * toolbar; every change is in the URL, so the browser's Back undoes it. */
-export function FilterBar({ page, f, chips, q, onChange }: Props) {
-  const [editing, setEditing] = useState<number | 'new' | null>(null)
+export function FilterBar({ page, filter, chips, q, onChange }: Props) {
+  const fields = useMeta().data?.pages[page].fields ?? []
+  const [editing, setEditing] = useState<string | null>(null) // a chip's key, or 'new'
   const motion = useMotion()
-  const others = (i: number | 'new') => f.filter((_, j) => j !== i)
   const close = () => setEditing(null)
+  const conds = chips.flatMap((c) => {
+    const field = fields.find((f) => f.name === c.field)
+    return field ? [{ chip: c, cond: { field, op: c.op, value: getCond(filter, field.path, c.op) }, key: `${c.field}.${c.op}` }] : []
+  })
+  const without = (c: { field: { path: readonly string[] }; op: string }) => setCond(filter, c.field.path, c.op, undefined)
+  const put = (base: unknown, c: Condition) => setCond(base, c.field.path, c.op, c.value)
   return (
     <>
       <Popover opened={editing === 'new'} onChange={(o) => !o && close()} position="bottom-start" trapFocus returnFocus transitionProps={motion}>
@@ -33,31 +40,31 @@ export function FilterBar({ page, f, chips, q, onChange }: Props) {
         </Popover.Target>
         <Popover.Dropdown aria-label="Add a filter">
           {editing === 'new' && (
-            <FilterEditor page={page} others={f} q={q} onApply={(nf) => { onChange([...f, nf]); close() }} />
+            <FilterEditor page={page} others={filter} q={q} onApply={(c) => { onChange(put(filter, c)); close() }} />
           )}
         </Popover.Dropdown>
       </Popover>
-      {chips.map((c) => { const i = c.i; return (
-        <Popover key={c.f} opened={editing === i} onChange={(o) => !o && close()} position="bottom-start" trapFocus returnFocus transitionProps={motion}>
+      {conds.map(({ chip, cond, key }) => (
+        <Popover key={key} opened={editing === key} onChange={(o) => !o && close()} position="bottom-start" trapFocus returnFocus transitionProps={motion}>
           <Popover.Target>
-            <Pill withRemoveButton onRemove={() => onChange(others(i))} classNames={{ root: classes.chip, remove: classes.remove }}
-              removeButtonProps={{ 'aria-hidden': false, tabIndex: 0, 'aria-label': `Remove filter: ${c.label}` }}>
-              <UnstyledButton className={classes.edit} onClick={() => setEditing(editing === i ? null : i)}
-                aria-haspopup="dialog" aria-expanded={editing === i} aria-label={`Edit filter: ${c.label}`}>
-                {c.label}
+            <Pill withRemoveButton onRemove={() => onChange(without(cond))} classNames={{ root: classes.chip, remove: classes.remove }}
+              removeButtonProps={{ 'aria-hidden': false, tabIndex: 0, 'aria-label': `Remove filter: ${chip.label}` }}>
+              <UnstyledButton className={classes.edit} onClick={() => setEditing(editing === key ? null : key)}
+                aria-haspopup="dialog" aria-expanded={editing === key} aria-label={`Edit filter: ${chip.label}`}>
+                {chip.label}
               </UnstyledButton>
             </Pill>
           </Popover.Target>
-          <Popover.Dropdown aria-label={`Edit filter: ${c.label}`}>
-            {editing === i && (
-              <FilterEditor page={page} current={c} others={others(i)} q={q}
-                onApply={(nf) => { onChange(f.map((x, j) => (j === i ? nf : x))); close() }}
-                onRemove={() => { onChange(others(i)); close() }} />
+          <Popover.Dropdown aria-label={`Edit filter: ${chip.label}`}>
+            {editing === key && (
+              <FilterEditor page={page} current={cond} others={without(cond)} q={q}
+                onApply={(c) => { onChange(put(without(cond), c)); close() }}
+                onRemove={() => { onChange(without(cond)); close() }} />
             )}
           </Popover.Dropdown>
         </Popover>
-      ) })}
-      {f.length > 0 && <Button variant="subtle" size="xs" c="dimmed" onClick={() => onChange([])}>Clear Filters</Button>}
+      ))}
+      {chips.length > 0 && <Button variant="subtle" size="xs" c="dimmed" onClick={() => onChange({})}>Clear Filters</Button>}
     </>
   )
 }

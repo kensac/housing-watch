@@ -3,6 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from typing import Literal, get_args
+
+# Closed value sets, as type aliases: the API (web/derive.py, the MCP models) turns each into an enum.
+type Borough = Literal["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"]
+type Size = Literal["studio", "sro", "1br", "2br", "3br", "4br", "5br", "6br", "unknown"]  # parse.size's values
+type Kind = Literal["re-rental", "lottery", "waitlist", "homeownership"]
+type PublishedStatus = Literal["open", "waitlist", "upcoming", "unknown", "closed"]  # "unknown": the source shows none
+type EventType = Literal["new", "reopened", "changed", "closed", "gone", "page_changed", "watching", "source_failed",
+                         "source_recovered"]  # fmt: skip
+type Key = str  # an opaque identifier ("<source>:<ext_id>", a tracker row key): the API's ID
+type Serial = int  # a database id: the API's ID too
+
+
+def values(alias) -> tuple[str, ...]:
+    """The strings a Literal alias allows, in order."""
+    return get_args(alias.__value__)
 
 
 @dataclass(frozen=True)
@@ -18,7 +34,7 @@ class Band:
 class Unit:
     """One rentable offering: a specific apartment, or a tier (size + AMI) when units are not named."""
 
-    size: str  # normalized by sizes.normalize: "studio", "1br", "2br", ..., "unknown"
+    size: Size  # normalized by parse.size
     rent: float | None = None
     ami: int | None = None
     unit_no: str | None = None  # "8L", or None for a tier
@@ -40,9 +56,9 @@ class Listing:
     title: str
     url: str
     address: str | None = None
-    borough: str | None = None  # "Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island", or None
-    status: str = "open"  # "open" | "closed" | "waitlist" | "upcoming" | "unknown" (the source shows none)
-    kind: str = "re-rental"  # "re-rental" | "lottery" | "waitlist" | "homeownership"
+    borough: Borough | None = None
+    status: PublishedStatus = "open"
+    kind: Kind = "re-rental"
     units: list[Unit] = field(default_factory=list)
     deadline: str | None = None  # ISO date when the source publishes one
     senior_only: bool = False

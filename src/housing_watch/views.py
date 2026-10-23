@@ -1,8 +1,9 @@
-"""Saved views: a named filter AST + quick search + sort + columns for one UI page.
+"""Saved views: a named filter + quick search + sort + columns for one UI page.
 
-Stored as the AST, not a URL, and re-validated against today's field registry on every load: a view
-that names a dropped field still opens, minus that filter, with a warning. Nothing is seeded; views
-exist only once the user saves one. This is the only table the web UI writes.
+Stored as State.to_json() (the filter as its JSON tree, the sort as field/direction pairs) and re-validated
+against today's registries on every load: a view that names a dropped field, sort or column still opens, minus
+that part, with a warning. Nothing is seeded; views exist only once the user saves one. This is the only table
+the web UI writes.
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from urllib.parse import urlencode
+from typing import Literal
 
 from sqlalchemy import func, select, update
 from sqlalchemy.engine import Engine
@@ -19,9 +20,12 @@ from sqlalchemy.orm import Session
 from . import filters as F
 from . import queries
 from .criteria import PROFILE, Profile
+from .models import Serial
 from .orm import SavedViewRow
 
+type Page = Literal["listings", "units", "events"]  # a list page of the app
 FIELDS = {"listings": F.LISTING_FIELDS, "units": F.LISTING_FIELDS, "events": F.EVENT_FIELDS}
+SORTS = {"listings": queries.LISTING_SORTS, "units": queries.UNIT_SORTS, "events": {}}
 COLUMNS = {
     "listings": {"verdict": "Verdict", "sizes": "Sizes", "rent": "Rent", "ami": "AMI", "status": "Status",
                  "deadline": "Deadline", "borough": "Borough", "commute": "Commute", "application": "Application",
@@ -39,7 +43,9 @@ DEFAULT_COLUMNS = {
     "units": ("verdict", "size", "rent", "ami", "income", "commute", "application", "status", "borough"),
     "events": ("verdict", "source", "mailed"),
 }
-DEFAULT_SORT = {"listings": "verdict", "units": "verdict", "events": ""}
+DEFAULT_SORT: dict[str, tuple[queries.Sort, ...]] = {"listings": queries.DEFAULT_SORT, "units": queries.DEFAULT_SORT,
+                                                     "events": ()}  # fmt: skip
+VERSION = 2  # of State.to_json(); alembic 0010 moved version 1 (DSL strings) to it
 
 
 class ViewError(ValueError):
@@ -50,61 +56,56 @@ class ViewError(ValueError):
 class State:
     """What a list page shows: the part of its URL a saved view captures."""
 
-    page: str
+    page: Page
     filters: list[F.Cond] = field(default_factory=list)
     q: str = ""
-    sort: str = ""
-    columns: tuple[str, ...] = ()
+    sort: tuple[queries.Sort, ...] = ()  # empty: the page's default
+    columns: tuple[str, ...] = ()  # empty: the page's default
 
     def __post_init__(self):
-        self.sort = self.sort or DEFAULT_SORT[self.page]
-        self.columns = tuple(c for c in self.columns if c in COLUMNS[self.page]) or DEFAULT_COLUMNS[self.page]
+        if bad := [s.field for s in self.sort if s.field not in SORTS[self.page]]:
+            raise ViewError(f"{self.page} can't be sorted by {', '.join(bad)}")
+        if bad := [c for c in self.columns if c not in COLUMNS[self.page]]:
+            raise ViewError(f"{self.page} has no column {', '.join(bad)}")
+        self.sort = tuple(self.sort) or DEFAULT_SORT[self.page]
+        self.columns = tuple(dict.fromkeys(self.columns)) or DEFAULT_COLUMNS[self.page]
+
+    @property
+    def filter(self) -> dict:
+        """The filters as their JSON tree."""
+        return F.to_tree(self.filters)
 
     def to_json(self) -> dict:
-        return {"filters": [c.to_json() for c in self.filters], "q": self.q, "sort": self.sort,
+        return {"version": VERSION, "filter": self.filter, "q": self.q,
+                "sort": [{"field": s.field, "direction": s.direction} for s in self.sort],
                 "columns": list(self.columns)}  # fmt: skip
 
-    def key(self) -> tuple:
-        return (tuple(c.url() for c in self.filters), self.q.strip(), self.sort, self.columns)
 
-    def params(self, **extra) -> list[tuple[str, str]]:
-        out = [("f", c.url()) for c in self.filters]
-        if self.q.strip():
-            out.append(("q", self.q.strip()))
-        if self.sort != DEFAULT_SORT[self.page]:
-            out.append(("sort", self.sort))
-        if self.columns != DEFAULT_COLUMNS[self.page]:
-            out.append(("cols", ",".join(self.columns)))
-        return out + [(k, str(v)) for k, v in extra.items() if v not in (None, "")]
-
-    def url(self, **extra) -> str:
-        qs = urlencode(self.params(**extra))
-        return f"/{self.page}" + (f"?{qs}" if qs else "")
-
-
-def state_from_json(page: str, q: dict) -> tuple[State, list[str]]:
-    conds, warnings = F.from_json(q.get("filters") or [], FIELDS[page])
+def state_from_json(page: Page, q: dict) -> tuple[State, list[str]]:
+    conds, warnings = F.from_saved(q.get("filter"), FIELDS[page])
+    sort = [queries.Sort(s.get("field", ""), s.get("direction", "asc")) for s in q.get("sort") or []]
+    if dropped := [s.field for s in sort if s.field not in SORTS[page] or s.direction not in ("asc", "desc")]:
+        warnings.append(f"Sort by {', '.join(dropped)} no longer exists and was dropped.")
     cols = tuple(q.get("columns") or ())
-    gone = [c for c in cols if c not in COLUMNS[page]]
-    if gone:
+    if gone := [c for c in cols if c not in COLUMNS[page]]:
         warnings.append(f"Column(s) {', '.join(gone)} no longer exist and were dropped.")
-    return State(page, conds, q.get("q") or "", q.get("sort") or "", cols), warnings
+    sort = [s for s in sort if s.field not in dropped]
+    return State(page, conds, q.get("q") or "", tuple(sort), tuple(c for c in cols if c not in gone)), warnings
 
 
 @dataclass
 class View:
-    id: int
-    page: str
+    """A saved view: a named filter, search, sort and columns."""
+
+    id: Serial
+    page: Page
     name: str
     position: int
     is_default: bool
     state: State
-    warnings: list[str]
+    warnings: list[str]  # what of the saved state no longer applies, and was dropped
     updated: datetime | None = None
-    count: int | None = None
-
-    def url(self) -> str:
-        return self.state.url(view=self.id)
+    count: int | None = None  # what it matches now
 
 
 def _view(r: SavedViewRow) -> View:
@@ -203,8 +204,8 @@ def matches(engine: Engine, st: State, p: Profile = PROFILE) -> int:
     if st.page == "events":
         return queries.events(engine, st.filters, limit=1, p=p).total
     if st.page == "units":
-        return queries.search_units(engine, queries.ListingQuery(st.filters, st.q, limit=1), p).total
-    return queries.search_listings(engine, queries.ListingQuery(st.filters, st.q, limit=1), p).total
+        return queries.search_units(engine, queries.ListingQuery(st.filters, st.q, st.sort, limit=1), p).total
+    return queries.search_listings(engine, queries.ListingQuery(st.filters, st.q, st.sort, limit=1), p).total
 
 
 _counts: dict[tuple, tuple[float, int]] = {}

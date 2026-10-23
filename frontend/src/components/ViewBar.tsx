@@ -5,9 +5,10 @@ import { IconAlertTriangle, IconArrowDown, IconArrowUp, IconBookmark, IconCopy, 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { request, type Page, type SavedView, type ViewState } from '../api'
+import { request, type SavedView } from '../api'
+import { stateInput, stateUrl, viewState, type ListState } from '../filters'
 import { graphql } from '../gql'
-import { stateUrl, TITLES, useMeta, useMotion, useRefreshViews } from '../hooks'
+import { TITLES, useMeta, useMotion, useRefreshViews } from '../hooks'
 
 const CreateViewDoc = graphql(`
   mutation CreateView($input: CreateViewInput!) { createView(input: $input) { view { ...ViewFields } } }
@@ -18,17 +19,18 @@ const ChangeViewDoc = graphql(`
 `)
 
 const DuplicateViewDoc = graphql(`
-  mutation DuplicateView($id: Int!) { duplicateView(input: { id: $id }) { view { ...ViewFields } } }
+  mutation DuplicateView($id: ID!) { duplicateView(input: { id: $id }) { view { ...ViewFields } } }
 `)
 
 const DeleteViewDoc = graphql(`
-  mutation DeleteView($id: Int!) { deleteView(input: { id: $id }) { id } }
+  mutation DeleteView($id: ID!) { deleteView(input: { id: $id }) { id } }
 `)
 
-const message = (e: unknown) => String((e as Error)?.message ?? e)
+const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /** The page title, or the open saved view with its actions. Views are only ever created by the user. */
-export function ViewBar({ page, state, view, modified }: { page: Page; state: ViewState; view: SavedView | null; modified: boolean }) {
+export function ViewBar({ state, view, modified }: { state: ListState; view: SavedView | null; modified: boolean }) {
+  const page = state.page
   const meta = useMeta().data
   const refresh = useRefreshViews()
   const navigate = useNavigate()
@@ -39,7 +41,7 @@ export function ViewBar({ page, state, view, modified }: { page: Page; state: Vi
   const [nameError, setNameError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null) // the action in flight, for its button's spinner
 
-  const go = (v: SavedView) => navigate(stateUrl(page, v.state, meta, v.id))
+  const go = (v: SavedView) => navigate(stateUrl(viewState(v), meta, v.id))
   /** Runs a view change; says what happened either way. Returns false when it failed. */
   const run = async (what: string, done: string, fn: () => Promise<SavedView | void>, after?: (v: SavedView | void) => void) => {
     setBusy(what)
@@ -62,7 +64,7 @@ export function ViewBar({ page, state, view, modified }: { page: Page; state: Vi
     setBusy('save the view')
     try {
       const v = naming === 'new'
-        ? (await request(CreateViewDoc, { input: { page, name: n, is_default: isDefault, state } })).createView.view
+        ? (await request(CreateViewDoc, { input: { name: n, is_default: isDefault, state: stateInput(state) } })).createView.view
         : (await request(ChangeViewDoc, { input: { id: view!.id, name: n } })).changeView.view
       await refresh()
       setNaming(null)
@@ -93,7 +95,7 @@ export function ViewBar({ page, state, view, modified }: { page: Page; state: Vi
           </Button>
           {view && modified && (
             <Button size="xs" loading={busy === 'save the changes'}
-              onClick={() => run('save the changes', `Saved changes to “${view.name}”`, () => request(ChangeViewDoc, { input: { id: view.id, state } }).then(() => undefined))}>
+              onClick={() => run('save the changes', `Saved changes to “${view.name}”`, () => request(ChangeViewDoc, { input: { id: view.id, state: stateInput(state) } }).then(() => undefined))}>
               Save Changes
             </Button>
           )}
@@ -116,15 +118,15 @@ export function ViewBar({ page, state, view, modified }: { page: Page; state: Vi
                   Duplicate
                 </Menu.Item>
                 <Menu.Item leftSection={<IconArrowUp size={15} aria-hidden />}
-                  onClick={() => run('move the view', `Moved “${view.name}” up`, () => request(ChangeViewDoc, { input: { id: view.id, move: -1 } }).then(() => undefined))}>Move Up</Menu.Item>
+                  onClick={() => run('move the view', `Moved “${view.name}” up`, () => request(ChangeViewDoc, { input: { id: view.id, move: 'up' } }).then(() => undefined))}>Move Up</Menu.Item>
                 <Menu.Item leftSection={<IconArrowDown size={15} aria-hidden />}
-                  onClick={() => run('move the view', `Moved “${view.name}” down`, () => request(ChangeViewDoc, { input: { id: view.id, move: 1 } }).then(() => undefined))}>Move Down</Menu.Item>
+                  onClick={() => run('move the view', `Moved “${view.name}” down`, () => request(ChangeViewDoc, { input: { id: view.id, move: 'down' } }).then(() => undefined))}>Move Down</Menu.Item>
                 <Menu.Divider />
                 <Menu.Item color="red" leftSection={<IconTrash size={15} aria-hidden />} onClick={() => modals.openConfirmModal({
                   title: `Delete “${view.name}”?`, children: 'The view’s filters, sort and columns are removed. Listings are not affected.',
                   labels: { confirm: 'Delete View', cancel: 'Keep View' }, confirmProps: { color: 'red' }, cancelProps: { variant: 'default' },
                   transitionProps: motion,
-                  onConfirm: () => run('delete the view', `Deleted “${view.name}”`, () => request(DeleteViewDoc, { id: view.id }).then(() => undefined), () => navigate(stateUrl(page, view.state, meta))),
+                  onConfirm: () => run('delete the view', `Deleted “${view.name}”`, () => request(DeleteViewDoc, { id: view.id }).then(() => undefined), () => navigate(stateUrl(viewState(view), meta))),
                 })}>Delete…</Menu.Item>
               </Menu.Dropdown>
             </Menu>

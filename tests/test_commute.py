@@ -59,10 +59,10 @@ def test_refresh_routes_only_eligible_listings_once(pg, monkeypatch):
     (x,) = [x for x in Q.judged(pg) if x.key == "a:1"]
     assert x.commute == 34 and x.commute_route == C.Route(["A", "Q32"], 7, 1)
     assert all(y.commute is None for y in Q.judged(pg) if y.key != "a:1")
-    hits = Q.search_listings(pg, Q.ListingQuery([F.parse_one("commute.le.40", F.LISTING_FIELDS)])).items
+    hits = Q.search_listings(pg, Q.ListingQuery(F.from_tree({"commute": {"le": 40}}, F.LISTING_FIELDS))).items
     assert [h.key for h in hits] == ["a:1"]
     assert Q.listing_detail(pg, "a:1").summary.commute == 34  # the drawer too
-    units = Q.search_units(pg, Q.ListingQuery(sort="commute")).items
+    units = Q.search_units(pg, Q.ListingQuery(sort=(Q.Sort("commute"),))).items
     assert units[0].key == "a:1" and units[0].commute == 34
 
 

@@ -41,7 +41,7 @@ export function TrackerPanel({ x }: { x: Listing }) {
       await refresh()
       notifications.show({ message: done })
     } catch (e) {
-      notifications.show({ color: 'red', title: 'Couldn’t change the tracker link', message: String((e as Error).message ?? e) })
+      notifications.show({ color: 'red', title: 'Couldn’t change the tracker link', message: e instanceof Error ? e.message : String(e) })
     } finally {
       setBusy(false)
     }
