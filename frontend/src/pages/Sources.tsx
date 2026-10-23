@@ -2,7 +2,7 @@ import { Anchor, Badge, Group, Stack, Table, Text, Tooltip } from '@mantine/core
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 
-import { api, type Source } from '../api'
+import { gql, Q, type Source } from '../api'
 import { PageHeader } from '../components/PageHeader'
 import { Loading, LoadError } from '../components/State'
 import { ago, duration, num, when } from '../format'
@@ -13,7 +13,7 @@ const HEALTH = { ok: 'green', failing: 'red', never: 'gray' } as const
 export function SourcesPage() {
   useTitle('Sources')
   const motion = useMotion()
-  const q = useQuery({ queryKey: ['sources'], queryFn: () => api.get<Source[]>('/api/sources'), refetchInterval: 60_000 })
+  const q = useQuery({ queryKey: ['sources'], queryFn: () => gql<{ sources: Source[] }>(Q.sources).then((d) => d.sources), refetchInterval: 60_000 })
   if (q.error) return <LoadError what="sources" error={q.error} retry={() => q.refetch()} />
   if (q.isLoading) return <Loading rows={12} label="Loading sources…" />
   const rows = [...q.data!].sort((a, b) => (a.health === 'failing' ? 0 : 1) - (b.health === 'failing' ? 0 : 1) || a.source.localeCompare(b.source))

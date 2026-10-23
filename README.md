@@ -33,8 +33,9 @@ tables), so the same input always gives the same output.
   (`changes.py`: "Rent: 1BR #8L $2,900 → $2,750"); a status flapping to "unknown" and
   back is noise and never mailed.
 - `mcp_server.py` is a read-only MCP server (search, fetch, find listings/units, recent
-  changes, overview, sources) for agents and chat apps, behind OAuth via an upstream OIDC
-  provider; it has no unauthenticated mode.
+  changes, overview, sources, and `graphql`: any query against the web UI's schema, mutations
+  refused) for agents and chat apps, behind OAuth via an upstream OIDC provider; it has no
+  unauthenticated mode.
 
 `docs/ARCHITECTURE.md` is the full design.
 
@@ -77,8 +78,10 @@ python -m housing_watch serve                # migrate + worker + web: the image
 ```
 
 The web UI is `frontend/` (React + Mantine). `cd frontend && npm ci && npm run build` builds it into
-`src/housing_watch/web/dist/` for `serve`; `npm run dev` serves it with hot reload and proxies `/api` to
-`HW_API` (a running `serve`).
+`src/housing_watch/web/dist/` for `serve`; `npm run dev` serves it with hot reload and proxies `/graphql`
+and `/api` to `HW_API` (a running `serve`). The UI's API is GraphQL at `/graphql` (Strawberry,
+`web/schema.py`; GraphiQL on GET), plus one REST route for the filled application PDF,
+`/api/listing/application`.
 
 The image is `ghcr.io/kensac/housing-watch` (amd64 and arm64), built on every
 push to `main`. Its entrypoint is `python -m housing_watch`, with `serve` as the

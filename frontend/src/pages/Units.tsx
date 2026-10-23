@@ -3,7 +3,7 @@ import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
-import { api, qs, type ListResponse, type Unit } from '../api'
+import { gql, Q, type ListResponse, type Unit } from '../api'
 import { ApplicationBadge, SizeBadge, StatusBadge, VerdictBadge } from '../components/Badges'
 import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, Summary, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
@@ -47,7 +47,7 @@ export function UnitsPage() {
   const st = ctx.state
   const q = useInfiniteQuery({
     queryKey: ['units', st.f, st.q, st.sort],
-    queryFn: ({ pageParam }) => api.get<ListResponse<Unit>>(`/api/units${qs({ f: st.f, q: st.q, sort: st.sort, offset: pageParam })}`),
+    queryFn: ({ pageParam }) => gql<{ units: ListResponse<Unit> }>(Q.units, { f: st.f, q: st.q, sort: st.sort, offset: pageParam }).then((d) => d.units),
     initialPageParam: 0,
     getNextPageParam: (last) => last.next_offset,
     placeholderData: keepPreviousData,

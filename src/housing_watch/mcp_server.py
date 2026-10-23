@@ -7,6 +7,7 @@ upstream tokens are kept encrypted under FASTMCP_HOME; losing them means reconne
 
 `search` and `fetch` have the shapes ChatGPT's connectors and deep research expect; the other tools take the
 web UI's filter grammar (filters.py) and return the same fields as its API, minus the applicant's PDFs.
+`graphql` runs a query in-process against the web app's own schema (web/schema.py); it refuses mutations.
 """
 
 from __future__ import annotations
@@ -56,6 +57,11 @@ def _event(e: queries.EventView) -> dict:
 
 def build(engine: Engine, p: Profile = PROFILE, auth=None):
     from fastmcp import FastMCP
+    from fastmcp.exceptions import ToolError
+    from graphql import GraphQLSyntaxError, OperationDefinitionNode, OperationType, parse
+    from strawberry.types.graphql import OperationType as Op
+
+    from .web.schema import schema
 
     mcp = FastMCP(
         "housing-watch",
@@ -154,6 +160,21 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         """The fields filters can use on a page, with type, operators and allowed values."""
         return [{"name": f.name, "label": f.label, "type": f.type, "ops": list(F.OPS[f.type]),
                  "choices": list(f.choices)} for f in views.FIELDS[page].values()]  # fmt: skip
+
+    @mcp.tool(annotations=READ)
+    def graphql(query: str, variables: dict | None = None) -> dict:
+        """Run a read-only GraphQL query against the web app's schema; mutations are refused. Introspect it
+        first: `{ __schema { queryType { fields { name description } } } }`. Filter arguments (`f`) take
+        `field.op.values` strings, as in the other tools."""
+        try:
+            doc = parse(query)
+        except GraphQLSyntaxError as e:
+            return {"data": None, "errors": [e.formatted]}
+        if any(isinstance(d, OperationDefinitionNode) and d.operation != OperationType.QUERY for d in doc.definitions):
+            raise ToolError("graphql tool is read-only")
+        res = schema.execute_sync(query, variables, context_value={"engine": engine, "profile": p},
+                                  allowed_operation_types={Op.QUERY})  # fmt: skip
+        return {"data": res.data, "errors": [e.formatted for e in res.errors or []]}
 
     return mcp
 

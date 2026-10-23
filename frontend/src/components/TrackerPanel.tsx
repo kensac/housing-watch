@@ -2,7 +2,7 @@ import { Button, Group, Select, Stack, Text, Timeline } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
 
-import { api, qs, type Listing, type StageStep } from '../api'
+import { gql, Q, type Listing, type StageStep } from '../api'
 import { when } from '../format'
 import { useTracker, useTrackerRefresh } from '../hooks'
 import { ApplicationBadge } from './Badges'
@@ -46,9 +46,9 @@ export function TrackerPanel({ x }: { x: Listing }) {
       setBusy(false)
     }
   }
-  const link = (row: string | null) => run(() => api.post('/api/tracker/links', { listing_key: x.key, row_key: row }),
+  const link = (row: string | null) => run(() => gql(Q.linkTracker, { listing_key: x.key, row_key: row }),
     row ? 'Linked to the tracker row' : 'Marked as not in the tracker')
-  const reset = () => run(() => api.delete(`/api/tracker/links${qs({ listing_key: x.key })}`), 'Back to automatic matching')
+  const reset = () => run(() => gql(Q.unlinkTracker, { listing_key: x.key }), 'Back to automatic matching')
   if (tracker.data && !tracker.data.configured) return <Text size="sm" c="dimmed">The tracker sheet isn’t connected.</Text>
   const rows = tracker.data?.rows ?? []
   const row = rows.find((r) => r.property === x.tracker_row)

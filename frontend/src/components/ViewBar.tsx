@@ -5,7 +5,7 @@ import { IconAlertTriangle, IconArrowDown, IconArrowUp, IconBookmark, IconCopy, 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { api, type Page, type SavedView, type ViewState } from '../api'
+import { gql, Q, type Page, type SavedView, type ViewState } from '../api'
 import { stateUrl, TITLES, useMeta, useMotion, useRefreshViews } from '../hooks'
 
 const message = (e: unknown) => String((e as Error)?.message ?? e)
@@ -45,8 +45,8 @@ export function ViewBar({ page, state, view, modified }: { page: Page; state: Vi
     setBusy('save the view')
     try {
       const v = naming === 'new'
-        ? await api.post<SavedView>('/api/views', { page, name: n, is_default: isDefault, state })
-        : await api.patch<SavedView>(`/api/views/${view!.id}`, { name: n })
+        ? (await gql<{ createView: SavedView }>(Q.createView, { page, name: n, is_default: isDefault, state })).createView
+        : (await gql<{ changeView: SavedView }>(Q.changeView, { id: view!.id, name: n })).changeView
       await refresh()
       setNaming(null)
       notifications.show({ color: 'green', message: naming === 'new' ? `Saved “${n}”` : `Renamed to “${n}”` })
@@ -76,7 +76,7 @@ export function ViewBar({ page, state, view, modified }: { page: Page; state: Vi
           </Button>
           {view && modified && (
             <Button size="xs" loading={busy === 'save the changes'}
-              onClick={() => run('save the changes', `Saved changes to “${view.name}”`, () => api.patch<SavedView>(`/api/views/${view.id}`, { state }))}>
+              onClick={() => run('save the changes', `Saved changes to “${view.name}”`, () => gql<void>(Q.changeView, { id: view.id, state }))}>
               Save Changes
             </Button>
           )}
@@ -91,23 +91,23 @@ export function ViewBar({ page, state, view, modified }: { page: Page; state: Vi
                 <Menu.Item leftSection={<IconPencil size={15} aria-hidden />} onClick={() => openName('rename')}>Rename…</Menu.Item>
                 <Menu.Item leftSection={view.is_default ? <IconStarOff size={15} aria-hidden /> : <IconStar size={15} aria-hidden />}
                   onClick={() => run('change the default view', view.is_default ? `“${view.name}” no longer opens by default` : `“${view.name}” now opens by default`,
-                    () => api.patch(`/api/views/${view.id}`, { is_default: !view.is_default }))}>
+                    () => gql<void>(Q.changeView, { id: view.id, is_default: !view.is_default }))}>
                   {view.is_default ? 'Stop Opening by Default' : 'Open by Default'}
                 </Menu.Item>
                 <Menu.Item leftSection={<IconCopy size={15} aria-hidden />}
-                  onClick={() => run('duplicate the view', `Duplicated “${view.name}”`, () => api.post<SavedView>(`/api/views/${view.id}/duplicate`), (v) => v && go(v))}>
+                  onClick={() => run('duplicate the view', `Duplicated “${view.name}”`, () => gql<{ duplicateView: SavedView }>(Q.duplicateView, { id: view.id }).then((d) => d.duplicateView), (v) => v && go(v))}>
                   Duplicate
                 </Menu.Item>
                 <Menu.Item leftSection={<IconArrowUp size={15} aria-hidden />}
-                  onClick={() => run('move the view', `Moved “${view.name}” up`, () => api.patch(`/api/views/${view.id}`, { move: -1 }))}>Move Up</Menu.Item>
+                  onClick={() => run('move the view', `Moved “${view.name}” up`, () => gql<void>(Q.changeView, { id: view.id, move: -1 }))}>Move Up</Menu.Item>
                 <Menu.Item leftSection={<IconArrowDown size={15} aria-hidden />}
-                  onClick={() => run('move the view', `Moved “${view.name}” down`, () => api.patch(`/api/views/${view.id}`, { move: 1 }))}>Move Down</Menu.Item>
+                  onClick={() => run('move the view', `Moved “${view.name}” down`, () => gql<void>(Q.changeView, { id: view.id, move: 1 }))}>Move Down</Menu.Item>
                 <Menu.Divider />
                 <Menu.Item color="red" leftSection={<IconTrash size={15} aria-hidden />} onClick={() => modals.openConfirmModal({
                   title: `Delete “${view.name}”?`, children: 'The view’s filters, sort and columns are removed. Listings are not affected.',
                   labels: { confirm: 'Delete View', cancel: 'Keep View' }, confirmProps: { color: 'red' }, cancelProps: { variant: 'default' },
                   transitionProps: motion,
-                  onConfirm: () => run('delete the view', `Deleted “${view.name}”`, () => api.delete(`/api/views/${view.id}`), () => navigate(stateUrl(page, view.state, meta))),
+                  onConfirm: () => run('delete the view', `Deleted “${view.name}”`, () => gql<void>(Q.deleteView, { id: view.id }), () => navigate(stateUrl(page, view.state, meta))),
                 })}>Delete…</Menu.Item>
               </Menu.Dropdown>
             </Menu>

@@ -3,7 +3,7 @@ import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
-import { api, qs, type Event, type EventsResponse } from '../api'
+import { gql, Q, type Event, type EventsResponse } from '../api'
 import { EventBadge, VerdictBadge } from '../components/Badges'
 import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, type Cells } from '../components/ListPage'
 import { ListingDrawer } from '../components/ListingDrawer'
@@ -38,7 +38,7 @@ export function EventsPage() {
   const st = ctx.state
   const q = useInfiniteQuery({
     queryKey: ['events', st.f],
-    queryFn: ({ pageParam }) => api.get<EventsResponse>(`/api/events${qs({ f: st.f, before: pageParam })}`),
+    queryFn: ({ pageParam }) => gql<{ events: EventsResponse }>(Q.events, { f: st.f, before: pageParam }).then((d) => d.events),
     initialPageParam: null as number | null,
     getNextPageParam: (last) => last.next_before,
     placeholderData: keepPreviousData,

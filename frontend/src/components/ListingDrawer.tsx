@@ -3,7 +3,7 @@ import { IconDownload, IconExternalLink } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 
-import { api, qs, type Applications, type Detail } from '../api'
+import { gql, Q, qs, type Applications, type Detail } from '../api'
 import { commute, date, money, pct, when } from '../format'
 import { useMotion } from '../hooks'
 import { EventBadge, SizeBadge, StatusBadge, VerdictBadge } from './Badges'
@@ -25,7 +25,7 @@ function Section({ title, right, children }: { title: ReactNode; right?: ReactNo
 }
 
 function ApplicationsPanel({ k }: { k: string }) {
-  const q = useQuery({ queryKey: ['applications', k], queryFn: () => api.get<Applications>(`/api/listing/applications${qs({ key: k })}`) })
+  const q = useQuery({ queryKey: ['applications', k], queryFn: () => gql<{ listingApplications: Applications }>(Q.applications, { key: k }).then((d) => d.listingApplications) })
   if (q.isLoading) return <Group gap="xs" role="status"><Loader size="xs" /><Text size="sm" c="dimmed">Checking the application PDF…</Text></Group>
   if (q.error) return <LoadError what="the application PDFs" error={q.error} retry={() => q.refetch()} />
   if (!q.data?.pdfs.length) return <Text size="sm" c="dimmed">No application PDF is linked from this listing.</Text>
@@ -58,7 +58,7 @@ function ApplicationsPanel({ k }: { k: string }) {
 
 /** One listing: facts, every unit with your income band, application PDFs, notes and history. */
 export function ListingDrawer({ k, onClose }: { k: string | null; onClose: () => void }) {
-  const q = useQuery({ queryKey: ['listing', k], queryFn: () => api.get<Detail>(`/api/listing${qs({ key: k })}`), enabled: Boolean(k) })
+  const q = useQuery({ queryKey: ['listing', k], queryFn: () => gql<{ listing: Detail }>(Q.listing, { key: k }).then((d) => d.listing), enabled: Boolean(k) })
   const motion = useMotion()
   const d = q.data
   const x = d?.summary

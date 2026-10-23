@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
-import { api, qs, type Listing, type ListResponse, type TrackerRow } from '../api'
+import { gql, Q, type Listing, type ListResponse, type TrackerRow } from '../api'
 import { ApplicationBadge, VerdictBadge } from '../components/Badges'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { PageHeader } from '../components/PageHeader'
@@ -20,13 +20,13 @@ function LinkListing({ row }: { row: TrackerRow }) {
   const refresh = useTrackerRefresh()
   const found = useQuery({
     queryKey: ['link-search', q],
-    queryFn: () => api.get<ListResponse<Listing>>(`/api/listings${qs({ q, limit: 20, f: ['gone_since.empty'] })}`),
+    queryFn: () => gql<{ listings: ListResponse<Listing> }>(Q.listings, { q, limit: 20, f: ['gone_since.empty'] }).then((d) => d.listings),
     enabled: q.trim().length >= 2,
   })
   const link = async (key: string | null) => {
     if (!key) return
     try {
-      await api.post('/api/tracker/links', { listing_key: key, row_key: row.row_key })
+      await gql(Q.linkTracker, { listing_key: key, row_key: row.row_key })
       await refresh()
       notifications.show({ message: `Linked to “${row.property}”` })
     } catch (e) {

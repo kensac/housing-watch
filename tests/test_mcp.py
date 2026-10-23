@@ -35,6 +35,24 @@ def test_bad_filter_is_reported(pg):
         call(pg, "find_listings", filters=["nope.in.x"])
 
 
+def test_graphql_tool(pg):
+    from fastmcp.exceptions import ToolError
+
+    seed(pg)
+    res = call(pg, "graphql", query='{ listings(f: ["verdict.in.eligible"]) { items { key } } }')
+    assert res["data"]["listings"]["items"] == [{"key": "a:1"}] and res["errors"] == []
+    fields = call(pg, "graphql", query="{ __schema { queryType { fields { name } } } }")["data"]["__schema"]
+    assert "listings" in {f["name"] for f in fields["queryType"]["fields"]}
+    with pytest.raises(ToolError, match="read-only"):
+        call(pg, "graphql", query="mutation { deleteView(id: 1) }")
+    with pytest.raises(ToolError, match="read-only"):
+        call(pg, "graphql", query="query A { views { id } } mutation B { deleteView(id: 1) }")
+    bad = call(pg, "graphql", query="{ listings(")
+    assert bad["data"] is None and "Syntax Error" in bad["errors"][0]["message"]
+    missing = call(pg, "graphql", query="query($k: String!) { listing(key: $k) { key } }", variables={"k": "x"})
+    assert missing["errors"]
+
+
 def test_never_runs_without_auth(monkeypatch):
     for k in ("HW_MCP_BASE_URL", "HW_MCP_OIDC_CONFIG_URL", "HW_MCP_CLIENT_ID", "HW_MCP_CLIENT_SECRET"):
         monkeypatch.delenv(k, raising=False)

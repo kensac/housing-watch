@@ -3,16 +3,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, type MouseEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
-import { api, qs, type Meta, type Page, type SavedView, type Tracker, type ViewState } from './api'
+import { gql, Q, qs, type Meta, type Page, type SavedView, type Tracker, type ViewState } from './api'
 
 export const TITLES: Record<Page, string> = { listings: 'Listings', units: 'Units', events: 'Events' }
 
 export function useMeta() {
-  return useQuery({ queryKey: ['meta'], queryFn: () => api.get<Meta>('/api/meta'), staleTime: Infinity })
+  return useQuery({ queryKey: ['meta'], queryFn: () => gql<{ meta: Meta }>(Q.meta).then((d) => d.meta), staleTime: Infinity })
 }
 
 export function useViews() {
-  return useQuery({ queryKey: ['views'], queryFn: () => api.get<SavedView[]>('/api/views') })
+  return useQuery({ queryKey: ['views'], queryFn: () => gql<{ views: SavedView[] }>(Q.views).then((d) => d.views) })
 }
 
 export function useRefreshViews() {
@@ -101,7 +101,7 @@ export function rowClick(go: () => void) {
 }
 
 export function useTracker() {
-  return useQuery({ queryKey: ['tracker'], queryFn: () => api.get<Tracker>('/api/tracker') })
+  return useQuery({ queryKey: ['tracker'], queryFn: () => gql<{ tracker: Tracker }>(Q.tracker).then((d) => d.tracker) })
 }
 
 /** Re-read everything a tracker link changes: the listing, the lists and the tracker page. */
