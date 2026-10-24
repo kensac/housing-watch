@@ -15,7 +15,7 @@ dependencies = [
     "uvicorn==0.54.0",
     "prometheus-client==0.26.0",
     "pypdf==6.21.2",
-    "reportlab==5.0.1",
+    "reportlab==5.1.0",
     "google-auth[requests]==2.62.0",
     "playwright==1.64.0",
     "fastmcp==4.1.3",
