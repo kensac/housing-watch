@@ -1,4 +1,4 @@
-"""Read-only MCP server over the store, for agents and chat apps (Claude, ChatGPT).
+"""MCP server over the store, for agents and chat apps (Claude, ChatGPT): every read and write the web app has.
 
 Streamable HTTP at HW_MCP_BASE_URL + /mcp. Sign-in is OAuth: FastMCP's OIDC proxy lets MCP clients register
 themselves (DCR), then sends the user to the upstream OIDC provider (HW_MCP_OIDC_CONFIG_URL), which decides
@@ -7,8 +7,10 @@ upstream tokens are kept encrypted under FASTMCP_HOME; losing them means reconne
 
 `search` and `fetch` have the shapes ChatGPT's connectors and deep research expect; the other tools take typed
 filters (the JSON tree of filters.py, as pydantic models in mcp_models.py) and return the same fields as the web
-API, minus the applicant's PDFs; every tool's parameters and output have a JSON Schema. `graphql` runs a query
-in-process against the web app's own schema (web/schema.py, `schema.graphql`); it refuses mutations.
+API, minus the applicant's PDFs; every tool's parameters and output have a JSON Schema. The write tools are the
+web app's mutations: saved views (create, change, duplicate, delete) and manual tracker links (link, unlink).
+`graphql` runs a query or mutation in-process against the web app's own schema (web/schema.py, `schema.graphql`);
+its context is trusted, since OAuth already decided who may call it, so mutations skip the same-origin check.
 """
 
 from __future__ import annotations
@@ -16,17 +18,19 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import asdict
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field
 from sqlalchemy.engine import Engine
 
-from . import digest, queries, views
+from . import digest, queries, tracker, views
 from . import filters as F
 from . import mcp_models as M
 from .criteria import PROFILE, Profile
 
 READ = {"readOnlyHint": True, "openWorldHint": False}
+WRITE = {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
+DELETE = {"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
 FILTERS = (
     "Filters are objects with a key per field holding its operators, all of which must hold, e.g. "
     '{"verdict": {"in": ["eligible"]}, "borough": {"in": ["Brooklyn", "Queens"]}, "units": {"rent": {"le": 3000}, '
@@ -171,21 +175,114 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
                 for f in views.FIELDS[page].values()]  # fmt: skip
 
     @mcp.tool(annotations=READ)
+    def saved_views() -> list[M.ViewModel]:
+        """Every saved view (named filter, search, sort and columns of a page) with its current match count."""
+        return [M.ViewModel.of(v) for v in views.with_counts(engine, p)]
+
+    @mcp.tool(annotations=READ)
+    def tracker_board() -> M.TrackerModel:
+        """Every row of the applicant's tracker sheet, by stage: its stage history, cells and matched listings.
+        `row_key` is what `link_tracker` takes."""
+        return M.TrackerModel.model_validate(asdict(queries.tracker_board(engine, p)))
+
+    def _view(vid: int) -> views.View:
+        if (v := views.get(engine, vid)) is None:
+            raise ToolError(f"no view {vid}")
+        return v
+
+    def _state(st: M.ViewState) -> views.State:
+        try:
+            return st.state()
+        except (F.FilterError, views.ViewError) as e:
+            raise ToolError(str(e)) from None
+
+    @mcp.tool(annotations=WRITE)
+    def create_view(
+        name: Annotated[str, Field(description="1 to 80 characters")],
+        state: Annotated[M.ViewState, Field(description="Its page is the view's page. " + FILTERS)],
+        is_default: Annotated[bool, Field(description="the page opens on it")] = False,
+    ) -> M.ViewModel:
+        """Save a view of a page."""
+        st = _state(state)
+        try:
+            return M.ViewModel.of(views.create(engine, st, name, is_default))
+        except views.ViewError as e:
+            raise ToolError(str(e)) from None
+
+    @mcp.tool(annotations=WRITE)
+    def change_view(
+        id: int,
+        name: str | None = None,
+        state: Annotated[M.ViewState | None, Field(description="for the view's own page; replaces it whole")] = None,
+        is_default: bool | None = None,
+        move: Annotated[Literal["up", "down"] | None, Field(description="one place among the page's views")] = None,
+    ) -> M.ViewModel:
+        """Rename a view, replace its state, set or clear it as its page's default, or move it one place."""
+        _view(id)
+        try:
+            v = views.change(engine, id, name=name, state=_state(state) if state else None, is_default=is_default,
+                             move={"up": -1, "down": 1, None: 0}[move])  # fmt: skip
+        except views.ViewError as e:
+            raise ToolError(str(e)) from None
+        return M.ViewModel.of(v)
+
+    @mcp.tool(annotations=WRITE)
+    def duplicate_view(id: int) -> M.ViewModel:
+        """A copy of a view, named "<name> (copy)"."""
+        _view(id)
+        return M.ViewModel.of(views.duplicate(engine, id))
+
+    @mcp.tool(annotations=DELETE)
+    def delete_view(id: int) -> M.Deleted:
+        """Delete a saved view."""
+        if not views.delete(engine, id):
+            raise ToolError(f"no view {id}")
+        return M.Deleted(id=id)
+
+    def _listing(key: str) -> queries.ListingSummary | None:
+        return next((x for x in queries.judged(engine, p) if x.key == key), None)
+
+    @mcp.tool(annotations=WRITE | {"idempotentHint": True})
+    def link_tracker(
+        listing_key: str,
+        row_key: Annotated[str | None, Field(description="a `tracker_board` row; null: the listing is in no row")],
+    ) -> M.TrackerLink:
+        """Link a listing to a tracker sheet row by hand, overriding automatic matching, or mark it as in no row."""
+        if not listing_key or _listing(listing_key) is None:
+            raise ToolError(f"no listing {listing_key!r}")
+        if row_key is not None and row_key not in {r.row_key for r in tracker.load(engine)[0]}:
+            raise ToolError(f"no tracker row {row_key!r}")
+        tracker.set_link(engine, listing_key, row_key)
+        x = _listing(listing_key)
+        return M.TrackerLink(listing_key=listing_key, row_key=row_key, listing=_summary(x) if x else None)
+
+    @mcp.tool(annotations=WRITE | {"idempotentHint": True})
+    def unlink_tracker(listing_key: str) -> M.TrackerLink:
+        """Drop a manual tracker link: the listing goes back to automatic matching."""
+        if not tracker.clear_link(engine, listing_key):
+            raise ToolError(f"no manual link for {listing_key!r}")
+        x = _listing(listing_key)
+        row = tracker.row_key(x.tracker_row) if x and x.tracker_row else None
+        return M.TrackerLink(listing_key=listing_key, row_key=row, listing=_summary(x) if x else None)
+
+    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False})
     async def graphql(query: str, variables: dict | None = None) -> dict:
-        """Run a read-only GraphQL query against the web app's schema; mutations are refused. Introspect it
-        first: `{ __schema { queryType { fields { name description } } } }`. Lists are Relay connections:
-        `{ listings(filter: { verdict: { in: [eligible] }, units: { rent: { le: 3000 } } }, first: 20) { total
-        edges { node { key title } } page_info { has_next_page end_cursor } } }`, the next page with
-        `after: <end_cursor>`. Enum values are GraphQL names (`Staten_Island`, `_1br`, `re_rental`). The result is
+        """Run a GraphQL query or mutation against the web app's schema. Introspect it first:
+        `{ __schema { queryType { fields { name description } } mutationType { fields { name description } } } }`.
+        Lists are Relay connections: `{ listings(filter: { verdict: { in: [eligible] }, units: { rent: { le: 3000 } }
+        }, first: 20) { total edges { node { key title } } page_info { has_next_page end_cursor } } }`, the next page
+        with `after: <end_cursor>`. Mutations: createView, changeView, duplicateView, deleteView, linkTracker,
+        unlinkTracker. Enum values are GraphQL names (`Staten_Island`, `_1br`, `re_rental`). The result is
         free-form: whatever the query selects. Errors carry `extensions.code`."""
         try:
             doc = parse(query)
         except GraphQLSyntaxError as e:
             return {"data": None, "errors": [e.formatted]}
-        if any(isinstance(d, OperationDefinitionNode) and d.operation != OperationType.QUERY for d in doc.definitions):
-            raise ToolError("graphql tool is read-only")
-        res = await schema.execute(query, variables, context_value=context(engine, p),
-                                   allowed_operation_types={Op.QUERY})  # fmt: skip
+        if any(isinstance(d, OperationDefinitionNode) and d.operation == OperationType.SUBSCRIPTION
+               for d in doc.definitions):  # fmt: skip
+            raise ToolError("graphql tool runs queries and mutations, not subscriptions")
+        res = await schema.execute(query, variables, context_value=context(engine, p, trusted=True),
+                                   allowed_operation_types={Op.QUERY, Op.MUTATION})  # fmt: skip
         return {"data": res.data, "errors": [e.formatted for e in res.errors or []]}
 
     return mcp

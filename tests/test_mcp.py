@@ -4,7 +4,9 @@ import json
 import pytest
 
 from housing_watch import mcp_server
-from seed import seed
+from housing_watch import tracker as T
+from housing_watch.orm import TrackerRow
+from seed import Session, seed
 
 
 def call(eng, tool: str, **args):
@@ -100,14 +102,72 @@ def test_graphql_tool(pg):
     assert {"listing": {"key": "a:1"}} in [e["node"] for e in ev["edges"]]  # DataLoaders work in-process too
     fields = call(pg, "graphql", query="{ __schema { queryType { fields { name } } } }")["data"]["__schema"]
     assert "listings" in {f["name"] for f in fields["queryType"]["fields"]}
-    with pytest.raises(ToolError, match="read-only"):
-        call(pg, "graphql", query="mutation { deleteView(input: { id: 1 }) { id } }")
-    with pytest.raises(ToolError, match="read-only"):
-        call(pg, "graphql", query="query A { views { id } } mutation B { deleteView(input: { id: 1 }) { id } }")
+    make = 'mutation { createView(input: { name: "Cheap", state: { listings: { q: "main" } } }) { view { id } } }'
+    made = call(pg, "graphql", query=make)  # trusted: no same-origin check
+    assert made["errors"] == [] and made["data"]["createView"]["view"]["id"]
+    gone = call(pg, "graphql", query="mutation { deleteView(input: { id: 99 }) { id } }")
+    assert gone["errors"][0]["extensions"]["code"] == "NOT_FOUND"
+    with pytest.raises(ToolError, match="subscriptions"):
+        call(pg, "graphql", query="subscription { x }")
     bad = call(pg, "graphql", query="{ listings(")
     assert bad["data"] is None and "Syntax Error" in bad["errors"][0]["message"]
     missing = call(pg, "graphql", query="query($k: ID!) { listing(key: $k) { ext_id } }", variables={"k": "x"})
     assert missing["errors"][0]["extensions"]["code"] == "NOT_FOUND"
+
+
+def test_view_tools(pg):
+    from fastmcp.exceptions import ToolError
+
+    seed(pg)
+    st = {"listings": {"filter": {"verdict": {"in": ["eligible"]}}, "sort": [{"field": "title"}]}}
+    v = call(pg, "create_view", name="Eligible", state=st, is_default=True)
+    assert (v["page"], v["is_default"], v["filter"]) == ("listings", True, {"verdict": {"in": ["eligible"]}})
+    assert v["sort"] == [{"field": "title", "direction": "asc"}]
+    ev = call(pg, "create_view", name="New", state={"events": {"filter": {"type": {"in": ["new"]}}}})
+    assert ev["page"] == "events" and ev["position"] == 0
+    copy = call(pg, "duplicate_view", id=v["id"])
+    assert copy["name"] == "Eligible (copy)" and not copy["is_default"]
+    moved = call(pg, "change_view", id=copy["id"], name="Mine", move="up", is_default=True)
+    assert (moved["name"], moved["position"], moved["is_default"]) == ("Mine", 0, True)
+    listed = {x["id"]: x for x in call(pg, "saved_views")["result"]}
+    assert listed[v["id"]]["count"] == 1 and not listed[v["id"]]["is_default"]
+    with pytest.raises(ToolError, match="one page"):
+        call(pg, "change_view", id=v["id"], state={"units": {}})
+    with pytest.raises(ToolError, match="exactly one"):
+        call(pg, "create_view", name="x", state={"listings": {}, "units": {}})
+    with pytest.raises(ToolError, match="name"):
+        call(pg, "create_view", name=" ", state={"listings": {}})
+    with pytest.raises(ToolError):
+        call(pg, "create_view", name="x", state={"units": {"columns": ["mailed"]}})  # an events column
+    assert call(pg, "delete_view", id=ev["id"]) == {"id": ev["id"]}
+    for tool in ("delete_view", "duplicate_view", "change_view"):
+        with pytest.raises(ToolError, match="no view"):
+            call(pg, tool, id=ev["id"])
+    t = tools(pg)
+    assert t["delete_view"].annotations.destructive_hint and not t["create_view"].annotations.read_only_hint
+    assert t["find_listings"].annotations.read_only_hint
+
+
+def test_tracker_tools(pg):
+    from fastmcp.exceptions import ToolError
+
+    seed(pg)
+    with Session(pg) as s, s.begin():
+        s.add(TrackerRow(row_key=T.row_key("Row A"), position=2, property="Row A", status="Applied", cells={}))
+    board = call(pg, "tracker_board")
+    assert [r["property"] for r in board["rows"]] == ["Row A"] and board["rows"][0]["listings"] == []
+    key = board["rows"][0]["row_key"]
+    linked = call(pg, "link_tracker", listing_key="a:1", row_key=key)
+    assert linked["row_key"] == key and linked["listing"]["application"] == "Applied"
+    assert [x["key"] for x in call(pg, "tracker_board")["rows"][0]["listings"]] == ["a:1"]
+    with pytest.raises(ToolError, match="no tracker row"):
+        call(pg, "link_tracker", listing_key="a:1", row_key="nope")
+    with pytest.raises(ToolError, match="no listing"):
+        call(pg, "link_tracker", listing_key="zz:9", row_key=key)
+    un = call(pg, "unlink_tracker", listing_key="a:1")
+    assert un["row_key"] is None and un["listing"]["application"] is None
+    with pytest.raises(ToolError, match="no manual link"):
+        call(pg, "unlink_tracker", listing_key="a:1")
 
 
 def test_never_runs_without_auth(monkeypatch):
