@@ -32,10 +32,11 @@ tables), so the same input always gives the same output.
   eligible unit is open, it sends right away instead. A change leads with what changed
   (`changes.py`: "Rent: 1BR #8L $2,900 → $2,750"); a status flapping to "unknown" and
   back is noise and never mailed.
-- `mcp_server.py` is a read-only MCP server (search, fetch, find listings/units, recent
-  changes, overview, sources, and `graphql`: any query against the web UI's schema, mutations
-  refused) for agents and chat apps, behind OAuth via an upstream OIDC provider; it has no
-  unauthenticated mode.
+- `mcp_server.py` is an MCP server with every read and write the web UI has (search, fetch,
+  find listings/units, recent changes, overview, sources, saved views and the tracker board;
+  create/change/duplicate/delete views, link/unlink tracker rows; and `graphql`: any query or
+  mutation against the web UI's schema) for agents and chat apps, behind OAuth via an
+  upstream OIDC provider; it has no unauthenticated mode.
 
 `docs/ARCHITECTURE.md` is the full design.
 

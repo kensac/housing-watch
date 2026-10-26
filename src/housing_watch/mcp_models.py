@@ -14,7 +14,7 @@ import typing
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
 from . import filters as F
 from . import queries, views
@@ -238,3 +238,94 @@ class FieldInfo(BaseModel):
     type: F.FieldType
     ops: list[F.Op]
     choices: list[str] = Field(description="An enum field's values.")
+
+
+# --- saved views and the tracker: what the write tools take and return -------------------------------------
+
+
+def _columns(page: str):
+    return Literal[tuple(views.COLUMNS[page])]
+
+
+_EMPTY = "Empty: the page's default."
+
+
+class ListingsViewState(Strict):
+    filter: ListingFilter | None = None
+    q: str = ""
+    sort: list[ListingSort] = Field(default_factory=list, description=_EMPTY)
+    columns: list[_columns("listings")] = Field(default_factory=list, description=_EMPTY)
+
+
+class UnitsViewState(Strict):
+    filter: ListingFilter | None = None
+    q: str = ""
+    sort: list[UnitSort] = Field(default_factory=list, description=_EMPTY)
+    columns: list[_columns("units")] = Field(default_factory=list, description=_EMPTY)
+
+
+class EventsViewState(Strict):
+    filter: EventFilter | None = None
+    columns: list[_columns("events")] = Field(default_factory=list, description=_EMPTY)
+
+
+class ViewState(Strict):
+    """A page's state: set exactly one, the page it is for."""
+
+    listings: ListingsViewState | None = None
+    units: UnitsViewState | None = None
+    events: EventsViewState | None = None
+
+    @model_validator(mode="after")
+    def _one(self):
+        if sum(x is not None for x in (self.listings, self.units, self.events)) != 1:
+            raise ValueError("set exactly one of listings, units, events")
+        return self
+
+    def state(self) -> views.State:
+        page, given = next((k, v) for k in views.FIELDS if (v := getattr(self, k)) is not None)
+        conds = F.from_tree(tree(given.filter), views.FIELDS[page])
+        srt = sorts(page, given.sort) if page != "events" else ()
+        return views.State(page, conds, getattr(given, "q", ""), srt, tuple(given.columns))
+
+
+class SortModel(BaseModel):
+    field: str
+    direction: queries.Direction
+
+
+class ViewModel(BaseModel):
+    """A saved view: a named filter, search, sort and columns for one page."""
+
+    id: int
+    page: views.Page
+    name: str
+    position: int
+    is_default: bool = Field(description="The page opens on it.")
+    filter: dict = Field(description="filters.py's JSON tree, as the tools take it.")
+    q: str
+    sort: list[SortModel]
+    columns: list[str]
+    warnings: list[str] = Field(description="What of the saved state no longer applies, and was dropped.")
+    updated: datetime | None
+    count: int | None = Field(None, description="What it matches now.")
+
+    @classmethod
+    def of(cls, v: views.View) -> ViewModel:
+        st = v.state.to_json()
+        return cls(id=v.id, page=v.page, name=v.name, position=v.position, is_default=v.is_default,
+                   filter=st["filter"], q=st["q"], sort=st["sort"], columns=st["columns"], warnings=v.warnings,
+                   updated=v.updated, count=v.count)  # fmt: skip
+
+
+class Deleted(BaseModel):
+    id: int
+
+
+TrackerModel = model_of(queries.TrackerBoard, "Tracker")
+
+
+class TrackerLink(BaseModel):
+    listing_key: str
+    row_key: str | None = Field(description="The row the listing is matched to now; null: none.")
+    listing: ListingModel | None = Field(description="The listing as it reads after the change.")
