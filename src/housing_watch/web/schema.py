@@ -8,7 +8,8 @@ Lists are Relay connections (`first`/`after`, opaque cursors). Filters, sorts an
 derived from the registries (filter_types.py); a filter that is well-typed but meaningless (an empty `in`, a blank
 `contains`) is refused with BAD_USER_INPUT. Closed value sets are enums, identifiers are `ID`. Errors carry
 `extensions.code` (NOT_FOUND, BAD_USER_INPUT, FORBIDDEN, INTERNAL). Resolvers are async and run the blocking store
-reads in a worker thread; mutations need the context's `request`, and refuse it unless same-origin.
+reads in a worker thread; mutations need the context's `request`, and refuse it unless same-origin, or a context
+marked `trusted` by a caller that authenticated the user itself (the MCP server, behind OAuth).
 """
 
 import base64
@@ -529,7 +530,9 @@ def same_origin(req) -> None:
 
 
 def _write(info: strawberry.Info):
-    """The engine for a mutation, after the same-origin check."""
+    """The engine for a mutation, after the same-origin check (none for a trusted context)."""
+    if info.context.get("trusted"):
+        return info.context["engine"]
     req = info.context.get("request")
     if req is None:
         raise Problem(Code.FORBIDDEN, "writes need a request")
@@ -743,9 +746,11 @@ class Loaders:
         return [by.get(k) for k in keys]
 
 
-def context(engine, profile, request=None) -> dict:
-    """What resolvers read: the store, the profile, the request (for writes) and the DataLoaders."""
-    return {"engine": engine, "profile": profile, "request": request, "loaders": Loaders(engine, profile)}
+def context(engine, profile, request=None, trusted: bool = False) -> dict:
+    """What resolvers read: the store, the profile, the request (for writes) and the DataLoaders. `trusted`: the
+    caller authenticated the user, so writes skip the browser's same-origin check."""
+    return {"engine": engine, "profile": profile, "request": request, "trusted": trusted,
+            "loaders": Loaders(engine, profile)}  # fmt: skip
 
 
 class Schema(strawberry.Schema):

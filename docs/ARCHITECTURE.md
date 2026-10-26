@@ -121,11 +121,13 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   added or removed, rent, availability, income limits) and flags noise: a status moving to "unknown", or
   back from it to what it was, with nothing else changed. `db.py` stores both in the event's detail.
 - `mcp_server.py` exposes `queries.py` over MCP (streamable HTTP, a thread of `serve` on `HW_MCP_PORT`),
-  read-only, with FastMCP's OIDC proxy for sign-in (clients register themselves; the upstream decides who).
+  with FastMCP's OIDC proxy for sign-in (clients register themselves; the upstream decides who).
   Every tool's parameters and result are typed (`mcp_models.py`), so its JSON Schema lists the filter fields,
   operators and enum values; enums there are the data's own strings ("1br"), not GraphQL names.
-  Its `graphql` tool runs a query in-process against the web schema (with the same DataLoaders and limits)
-  and refuses mutations.
+  Its write tools are the web app's mutations (saved views; manual tracker links), annotated as writes.
+  Its `graphql` tool runs a query or mutation in-process against the web schema (with the same DataLoaders
+  and limits) in a `trusted` context: OAuth already decided who may call it, so mutations skip the browser's
+  same-origin check.
 - `digest.py` builds the email from `queries.py`: `send(engine, dry_run)` and `urgent(engine)` (an open,
   eligible listing has a pending new/reopened/changed event). Events with `detail.baseline = true` come from
   a source's first run; they collapse into one summary line and only their eligible listings are listed.
