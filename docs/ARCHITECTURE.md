@@ -123,11 +123,20 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 - `mcp_server.py` exposes `queries.py` over MCP (streamable HTTP, a thread of `serve` on `HW_MCP_PORT`),
   with FastMCP's OIDC proxy for sign-in (clients register themselves; the upstream decides who).
   Every tool's parameters and result are typed (`mcp_models.py`), so its JSON Schema lists the filter fields,
-  operators and enum values; enums there are the data's own strings ("1br"), not GraphQL names.
-  Its write tools are the web app's mutations (saved views; manual tracker links), annotated as writes.
-  Its `graphql` tool runs a query or mutation in-process against the web schema (with the same DataLoaders
-  and limits) in a `trusted` context: OAuth already decided who may call it, so mutations skip the browser's
-  same-origin check.
+  operators and enum values; enums there are the data's own strings ("1br"), not GraphQL names. A saved view
+  comes back with its state typed by page, in the shape `create_view` takes. Schemas go out with their
+  `$defs` (`dereference_schemas=False`): expanded, the filter schema repeated in every place it is used
+  (325 KB of tools/list; now under 150 KB, which a test bounds). An optional field is not required rather
+  than nullable, and unset fields are left out of results.
+  Its write tools are the web app's mutations (saved views; manual tracker links), annotated as writes. Both
+  are thin adapters over the same domain functions (`views.create/change/duplicate/delete`, `tracker.link/
+  unlink`, `queries.tracker_link`), which raise `models.NotFound`, `views.ViewError` or `filters.FilterError`;
+  GraphQL maps those to codes in `Schema.process_errors`, MCP to tool errors in its `tool` wrapper. Each MCP
+  write is logged at INFO (`mcp write <tool> by <sub> <email>: <args>`, args as keys or lengths, never values
+  of objects); reads are not. `graphql` runs read-only queries in-process against the web schema (same
+  DataLoaders and limits); `graphql_mutation` runs mutations in a `trusted` context: OAuth already decided
+  who may call it, so they skip the browser's same-origin check. `context(trusted=)` is keyword-only and the
+  web app's /graphql never passes it (a test holds that).
 - `digest.py` builds the email from `queries.py`: `send(engine, dry_run)` and `urgent(engine)` (an open,
   eligible listing has a pending new/reopened/changed event). Events with `detail.baseline = true` come from
   a source's first run; they collapse into one summary line and only their eligible listings are listed.
@@ -168,7 +177,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
     with BAD_USER_INPUT. `values` and the views mutations take a page's input as a `@oneOf` object; a saved
     view's state comes back as the `ViewState` union of the three pages' states.
   - Errors carry `extensions.code`: NOT_FOUND, BAD_USER_INPUT (also every document or variable error),
-    FORBIDDEN (a cross-origin mutation), INTERNAL (a bug, the only kind logged).
+    FORBIDDEN (a cross-origin mutation), INTERNAL (a bug, the only kind logged). Resolvers raise the domain's
+    own errors; `Schema.process_errors` gives them their code.
   - Depth (10), token (2000) and alias (15) limits; introspection stays on. Resolvers are async and run
     the blocking store reads in a worker thread; `Event.listing` goes through a per-request DataLoader.
     Mutations take an `input` and return a payload.

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from housing_watch import filters as F
 from housing_watch import queries as Q
 from housing_watch import views as V
+from housing_watch.models import NotFound
 from housing_watch.orm import SavedViewRow
 from seed import seed
 
@@ -38,12 +39,42 @@ def test_crud(pg):
     assert got.name == "Queens only" and got.state.filter == cheap
     d = V.duplicate(pg, a.id)
     assert d.name == "Queens only (copy)" and d.state.to_json() == got.state.to_json() and d.id != a.id
-    assert V.delete(pg, d.id) and not V.delete(pg, d.id) and V.get(pg, d.id) is None
+    V.delete(pg, d.id)
+    assert V.get(pg, d.id) is None
+    for write in (V.delete, V.duplicate, lambda e, i: V.change(e, i, name="x")):
+        with pytest.raises(NotFound, match="No such view"):
+            write(pg, d.id)
     assert V.get(pg, b.id).page == "events" and V.get(pg, b.id).state.sort == ()
     with pytest.raises(V.ViewError):
         V.create(pg, state(), "   ")
     with pytest.raises(V.ViewError):
         V.change(pg, a.id, state=state(page="events"))
+
+
+def test_copy_name_always_fits(pg):
+    long = "x" * (V.MAX_NAME - 3) + " yz"
+    v = V.create(pg, state(), long)
+    copy = V.duplicate(pg, V.duplicate(pg, v.id).id)
+    assert copy.name == "x" * (V.MAX_NAME - len(V.COPY)) + V.COPY and len(copy.name) == V.MAX_NAME
+    assert V.copy_name("A") == "A (copy)" and V.copy_name("a" * 72 + " b") == "a" * 72 + V.COPY  # no trailing space
+
+
+def test_make_state():
+    st = V.make_state("listings", {"borough": {"in": ["Queens"]}}, "loft", [("rent", None), ("title", "desc")],
+                      ["rent"])  # fmt: skip
+    assert st.sort == (Q.Sort("rent", "asc"), Q.Sort("title", "desc")) and st.columns == ("rent",) and st.q == "loft"
+    assert V.make_state("events", None, sort=[("rent", None)]).sort == ()  # events have no sort
+    assert V.make_state("listings").sort == Q.DEFAULT_SORT
+    with pytest.raises(V.ViewError, match="can't be sorted by ami"):
+        V.make_state("listings", sort=[("ami", None)])
+    with pytest.raises(F.FilterError):
+        V.make_state("listings", {"borough": {"in": []}})
+
+
+def test_writes_return_counts(pg):
+    seed(pg)
+    v = V.create(pg, state({"verdict": {"in": ["eligible"]}}), "Eligible")
+    assert v.count == 1 and V.change(pg, v.id, state=state()).count == 4 and V.duplicate(pg, v.id).count == 4
 
 
 def test_state_refuses_what_its_page_lacks():

@@ -20,10 +20,12 @@ from sqlalchemy.orm import Session
 from . import filters as F
 from . import queries
 from .criteria import PROFILE, Profile
-from .models import Serial
+from .models import NotFound, Serial
 from .orm import SavedViewRow
 
 type Page = Literal["listings", "units", "events"]  # a list page of the app
+type Move = Literal["up", "down"]  # one place among the page's views
+MOVES: dict[str, int] = {"up": -1, "down": 1}
 FIELDS = {"listings": F.LISTING_FIELDS, "units": F.LISTING_FIELDS, "events": F.EVENT_FIELDS}
 SORTS = {"listings": queries.LISTING_SORTS, "units": queries.UNIT_SORTS, "events": {}}
 COLUMNS = {
@@ -46,10 +48,12 @@ DEFAULT_COLUMNS = {
 DEFAULT_SORT: dict[str, tuple[queries.Sort, ...]] = {"listings": queries.DEFAULT_SORT, "units": queries.DEFAULT_SORT,
                                                      "events": ()}  # fmt: skip
 VERSION = 2  # of State.to_json(); alembic 0010 moved version 1 (DSL strings) to it
+MAX_NAME = 80
+COPY = " (copy)"
 
 
 class ViewError(ValueError):
-    pass
+    """A view or state that cannot be saved; the message says why."""
 
 
 @dataclass
@@ -79,6 +83,20 @@ class State:
         return {"version": VERSION, "filter": self.filter, "q": self.q,
                 "sort": [{"field": s.field, "direction": s.direction} for s in self.sort],
                 "columns": list(self.columns)}  # fmt: skip
+
+
+def sorts(page: Page, given) -> tuple[queries.Sort, ...]:
+    """(field, direction or None) pairs as a sort, each in its given or natural direction; none: the default."""
+    specs = SORTS[page]
+    out = tuple(queries.Sort(f, d or (specs[f].natural if f in specs else "asc")) for f, d in given)
+    return out or DEFAULT_SORT[page]
+
+
+def make_state(page: Page, filter: dict | None = None, q: str = "", sort=(), columns=()) -> State:
+    """A page's state from what the API and the MCP tools take: the filter's JSON tree, (field, direction or
+    None) sort pairs, column names. FilterError or ViewError says what is wrong."""
+    conds = F.from_tree(filter, FIELDS[page])
+    return State(page, conds, q, sorts(page, sort) if page != "events" else (), tuple(columns))
 
 
 def state_from_json(page: Page, q: dict) -> tuple[State, list[str]]:
@@ -133,9 +151,15 @@ def default(engine: Engine, page: str) -> View | None:
 
 def _name(name: str) -> str:
     name = " ".join((name or "").split())
-    if not name or len(name) > 80:
-        raise ViewError("A view needs a name of 1 to 80 characters.")
+    if not name or len(name) > MAX_NAME:
+        raise ViewError(f"A view needs a name of 1 to {MAX_NAME} characters.")
     return name
+
+
+def _get(s: Session, view_id: int) -> SavedViewRow:
+    if (r := s.get(SavedViewRow, view_id)) is None:
+        raise NotFound("No such view")
+    return r
 
 
 def _set_default(s: Session, page: str, view_id: int, on: bool) -> None:
@@ -145,7 +169,7 @@ def _set_default(s: Session, page: str, view_id: int, on: bool) -> None:
     s.execute(update(SavedViewRow).where(SavedViewRow.id == view_id).values(is_default=on))
 
 
-def create(engine: Engine, state: State, name: str, is_default: bool = False) -> View:
+def create(engine: Engine, state: State, name: str, is_default: bool = False, p: Profile = PROFILE) -> View:
     with Session(engine) as s, s.begin():
         pos = s.scalar(
             select(func.coalesce(func.max(SavedViewRow.position), -1) + 1).where(SavedViewRow.page == state.page)
@@ -156,15 +180,14 @@ def create(engine: Engine, state: State, name: str, is_default: bool = False) ->
         if is_default:
             _set_default(s, state.page, r.id, True)
         view_id = r.id
-    return get(engine, view_id)
+    return counted(engine, get(engine, view_id), p)
 
 
 def change(engine: Engine, view_id: int, *, name: str | None = None, state: State | None = None,
-           is_default: bool | None = None, move: int = 0) -> View | None:  # fmt: skip
+           is_default: bool | None = None, move: int = 0, p: Profile = PROFILE) -> View:  # fmt: skip
+    """Rename it, replace its state, set or clear it as its page's default, or move it `move` places."""
     with Session(engine) as s, s.begin():
-        r = s.get(SavedViewRow, view_id)
-        if r is None:
-            return None
+        r = _get(s, view_id)
         vals: dict = {"updated": func.now()}
         if name is not None:
             vals["name"] = _name(name)
@@ -183,21 +206,23 @@ def change(engine: Engine, view_id: int, *, name: str | None = None, state: Stat
             ids.insert(j, ids.pop(i))
             for pos, vid in enumerate(ids):
                 s.execute(update(SavedViewRow).where(SavedViewRow.id == vid).values(position=pos))
-    return get(engine, view_id)
+    return counted(engine, get(engine, view_id), p)
 
 
-def duplicate(engine: Engine, view_id: int) -> View | None:
-    v = get(engine, view_id)
-    return create(engine, v.state, f"{v.name} (copy)"[:80]) if v else None
+def copy_name(name: str) -> str:
+    """A copy's name: "<name> (copy)", shortened to fit."""
+    return f"{name[: MAX_NAME - len(COPY)].rstrip()}{COPY}"
 
 
-def delete(engine: Engine, view_id: int) -> bool:
+def duplicate(engine: Engine, view_id: int, p: Profile = PROFILE) -> View:
+    if (v := get(engine, view_id)) is None:
+        raise NotFound("No such view")
+    return create(engine, v.state, copy_name(v.name), p=p)
+
+
+def delete(engine: Engine, view_id: int) -> None:
     with Session(engine) as s, s.begin():
-        r = s.get(SavedViewRow, view_id)
-        if r is None:
-            return False
-        s.delete(r)
-        return True
+        s.delete(_get(s, view_id))
 
 
 def matches(engine: Engine, st: State, p: Profile = PROFILE) -> int:
@@ -211,13 +236,16 @@ def matches(engine: Engine, st: State, p: Profile = PROFILE) -> int:
 _counts: dict[tuple, tuple[float, int]] = {}
 
 
+def counted(engine: Engine, v: View, p: Profile = PROFILE) -> View:
+    """The view with its current match count (cached for a minute; badges, not accounting)."""
+    ck = (str(engine.url), v.id, v.updated)
+    hit = _counts.get(ck)
+    if not hit or time.monotonic() - hit[0] > 60:
+        hit = _counts[ck] = (time.monotonic(), matches(engine, v.state, p))
+    v.count = hit[1]
+    return v
+
+
 def with_counts(engine: Engine, p: Profile = PROFILE) -> list[View]:
-    """Every view with its current match count (cached for a minute; badges, not accounting)."""
-    out = list_views(engine)
-    for v in out:
-        ck = (str(engine.url), v.id, v.updated)
-        hit = _counts.get(ck)
-        if not hit or time.monotonic() - hit[0] > 60:
-            hit = _counts[ck] = (time.monotonic(), matches(engine, v.state, p))
-        v.count = hit[1]
-    return out
+    """Every view with its current match count."""
+    return [counted(engine, v, p) for v in list_views(engine)]

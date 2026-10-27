@@ -8,6 +8,7 @@ from sqlalchemy import select, update
 from housing_watch import filters as F
 from housing_watch import queries as Q
 from housing_watch import tracker as T
+from housing_watch.models import NotFound
 from housing_watch.orm import TrackerEventRow, TrackerRow
 from housing_watch.web.app import create_app
 from seed import L, Session, add_listing, gql, gql_error, nodes, seed
@@ -157,6 +158,24 @@ def test_tracker_api_and_manual_links(synced):
     assert gql_error(gql(c, UNLINK, SAME, k="i:1")) == "No manual link for that listing"
     lst = gql(c, LISTINGS, filter={"application": {"in": ["Applied"]}})["data"]["listings"]
     assert [x["key"] for x in nodes(lst)] == ["a:1"] and nodes(lst)[0]["tracker_match"] == "manual"
+
+
+def test_link_and_unlink(synced, monkeypatch):
+    sven = T.row_key("SVEN")
+    with pytest.raises(NotFound, match="No such listing"):
+        T.link(synced, "zz:9", sven)
+    with pytest.raises(NotFound, match="No such tracker row"):
+        T.link(synced, "a:1", "nope")
+    with pytest.raises(NotFound, match="No manual link"):
+        T.unlink(synced, "a:1")
+    T.link(synced, "a:1", sven)
+    calls = []
+    judge = Q._judged
+    monkeypatch.setattr(Q, "_judged", lambda *a: calls.append(1) or judge(*a))
+    got = Q.tracker_link(synced, "a:1")
+    assert (got.row_key, got.listing.tracker_match, len(calls)) == (sven, "manual", 1)  # one keyed lookup
+    T.unlink(synced, "a:1")
+    assert Q.tracker_link(synced, "a:1").row_key is None and Q.judged_listing(synced, "zz:9") is None
 
 
 def test_sync_is_off_unconfigured(pg, monkeypatch):

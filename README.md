@@ -34,9 +34,10 @@ tables), so the same input always gives the same output.
   back is noise and never mailed.
 - `mcp_server.py` is an MCP server with every read and write the web UI has (search, fetch,
   find listings/units, recent changes, overview, sources, saved views and the tracker board;
-  create/change/duplicate/delete views, link/unlink tracker rows; and `graphql`: any query or
-  mutation against the web UI's schema) for agents and chat apps, behind OAuth via an
-  upstream OIDC provider; it has no unauthenticated mode.
+  create/change/duplicate/delete views, link/unlink tracker rows; `graphql`: read-only queries
+  against the web UI's schema; `graphql_mutation`: its mutations) for agents and chat apps, behind
+  OAuth via an upstream OIDC provider; it has no unauthenticated mode. Each write is logged with
+  its caller.
 
 `docs/ARCHITECTURE.md` is the full design.
 

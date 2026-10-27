@@ -952,7 +952,7 @@ type Mutation {
   """
   changeView(input: ChangeViewInput!): ViewPayload!
 
-  """A copy of a view, named "<name> (copy)"."""
+  """A copy of a view, named "<name> (copy)" (the name shortened to fit)."""
   duplicateView(input: ViewIdInput!): ViewPayload!
   deleteView(input: ViewIdInput!): DeleteViewPayload!
 
@@ -1416,11 +1416,14 @@ type TrackerCell {
   link: String
 }
 
+"""Where a listing stands in the tracker after a link change."""
 type TrackerLinkPayload {
   listing_key: ID!
+
+  """The row it is matched to now; null: none"""
   row_key: ID
 
-  """The listing as it reads after the change."""
+  """The listing as it reads after the change"""
   listing: Listing
 }
 

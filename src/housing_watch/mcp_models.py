@@ -3,7 +3,9 @@ queries.py's, results from the read-model dataclasses (minus `internal()` fields
 JSON Schema for its parameters and its output, and never restate a field.
 
 A filter model dumps (`tree()`) to filters.py's JSON tree, the same shape the GraphQL input takes, except that enum
-values are the data's own strings ("1br", "Staten Island"), not GraphQL names.
+values are the data's own strings ("1br", "Staten Island"), not GraphQL names. Each model is a JSON Schema `$defs`
+entry, referenced wherever it is used (the server sends schemas unexpanded); an optional field is just not required,
+never `anyOf [X, null]`, and an unset one is left out of the output.
 """
 
 from __future__ import annotations
@@ -14,14 +16,31 @@ import typing
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, model_serializer, model_validator
+from pydantic.json_schema import SkipJsonSchema
 
 from . import filters as F
 from . import queries, views
+from .web.derive import comments
+
+
+def _no_default(s: dict) -> None:
+    s.pop("default", None)
+
+
+def opt(t, description: str | None = None, **kw):
+    """An optional field: absent or null in, absent out; `t` alone in the schema."""
+    return t | SkipJsonSchema[None], Field(None, description=description, json_schema_extra=_no_default, **kw)
 
 
 class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+    """Refuses unknown keys; leaves unset (None) fields out of its output."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True, serialize_by_alias=True)
+
+    @model_serializer(mode="wrap")
+    def _set_only(self, handler):
+        return {k: v for k, v in handler(self).items() if v is not None}
 
 
 class NumberRange(Strict):
@@ -67,10 +86,7 @@ def _leaf(f: F.Field) -> type[BaseModel]:
     if key not in _LEAVES:
         item = f.values if f.type == "enum" else str
         name = f"{f.values.__name__}Filter" if f.type == "enum" else f"{f.type.capitalize()}Filter"
-        ops = {
-            f"{op}_": (_op_type(f.type, op, item) | None, Field(None, alias=op, description=F.OP_DOC[op]))
-            for op in F.OPS[f.type]
-        }
+        ops = {f"{op}_": opt(_op_type(f.type, op, item), F.OP_DOC[op], alias=op) for op in F.OPS[f.type]}
         _LEAVES[key] = create_model(name, __base__=Strict, **ops)
     return _LEAVES[key]
 
@@ -82,11 +98,16 @@ _NESTED_DOC = {
 }
 
 
+def _label(f: F.Field, prefix: str) -> str | None:
+    """The field's label, unless it only restates its name."""
+    return None if f.label.lower().replace(" ", "_") == f.name[len(prefix) :] else f.label
+
+
 def _container(name: str, fields: dict[str, F.Field], prefix: str, nested: dict[str, type[BaseModel]],
                doc: str) -> type[BaseModel]:  # fmt: skip
     level = [f for n, f in fields.items() if n.startswith(prefix) and "." not in n[len(prefix) :]]
-    spec: dict = {f.name[len(prefix) :]: (_leaf(f) | None, Field(None, description=f.label)) for f in level}
-    spec |= {k: (m | None, Field(None, description=_NESTED_DOC[k])) for k, m in nested.items()}
+    spec: dict = {f.name[len(prefix) :]: opt(_leaf(f), _label(f, prefix)) for f in level}
+    spec |= {k: opt(m, _NESTED_DOC[k]) for k, m in nested.items()}
     return create_model(name, __base__=Strict, __doc__=doc, **spec)
 
 
@@ -106,8 +127,8 @@ def _sort_model(name: str, specs: dict[str, queries.SortSpec]) -> type[BaseModel
     return create_model(
         name, __base__=Strict,
         field=(Literal[tuple(specs)], Field(description="; ".join(f"{k}: {s.label}" for k, s in specs.items()))),
-        direction=(queries.Direction | None, Field(None, description="Omitted: the field's natural direction "
-                   "(newest first for times, ascending otherwise).")),
+        direction=opt(queries.Direction, "Omitted: the field's natural direction (newest first for times, ascending "
+                      "otherwise)."),
     )  # fmt: skip
 
 
@@ -116,10 +137,7 @@ UnitSort = _sort_model("UnitSort", queries.UNIT_SORTS)
 
 
 def sorts(page: str, given: list[BaseModel]) -> tuple[queries.Sort, ...]:
-    specs = views.SORTS[page]
-    return (
-        tuple(queries.Sort(s.field, s.direction or specs[s.field].natural) for s in given) or views.DEFAULT_SORT[page]
-    )
+    return views.sorts(page, [(s.field, s.direction) for s in given])
 
 
 # --- results: the read model without its internal fields ---------------------------------------------------
@@ -142,9 +160,9 @@ def model_of(dc: type, name: str | None = None, **override) -> type[BaseModel]:
     """A pydantic model of a read-model dataclass: its public fields, nested dataclasses as models."""
     if not override and dc in _MODELS:
         return _MODELS[dc]
-    hints = typing.get_type_hints(dc)
-    spec = {f.name: (override.get(f.name, _py(hints[f.name])), ...) for f in dataclasses.fields(dc)
-            if not f.metadata.get("internal")}  # fmt: skip
+    hints, notes = typing.get_type_hints(dc), comments(dc)
+    spec = {f.name: (override.get(f.name, _py(hints[f.name])), Field(description=notes.get(f.name)))
+            for f in dataclasses.fields(dc) if not f.metadata.get("internal")}  # fmt: skip
     m = create_model(name or dc.__name__, __doc__=dc.__doc__ if dc.__doc__ and "(" not in dc.__doc__[:40] else None,
                      **spec)  # fmt: skip
     if not override:
@@ -251,30 +269,33 @@ _EMPTY = "Empty: the page's default."
 
 
 class ListingsViewState(Strict):
-    filter: ListingFilter | None = None
+    filter: ListingFilter | SkipJsonSchema[None] = Field(None, json_schema_extra=_no_default)
     q: str = ""
     sort: list[ListingSort] = Field(default_factory=list, description=_EMPTY)
     columns: list[_columns("listings")] = Field(default_factory=list, description=_EMPTY)
 
 
 class UnitsViewState(Strict):
-    filter: ListingFilter | None = None
+    filter: ListingFilter | SkipJsonSchema[None] = Field(None, json_schema_extra=_no_default)
     q: str = ""
     sort: list[UnitSort] = Field(default_factory=list, description=_EMPTY)
     columns: list[_columns("units")] = Field(default_factory=list, description=_EMPTY)
 
 
 class EventsViewState(Strict):
-    filter: EventFilter | None = None
+    filter: EventFilter | SkipJsonSchema[None] = Field(None, json_schema_extra=_no_default)
     columns: list[_columns("events")] = Field(default_factory=list, description=_EMPTY)
+
+
+_PAGE_STATE = {"listings": ListingsViewState, "units": UnitsViewState, "events": EventsViewState}
 
 
 class ViewState(Strict):
     """A page's state: set exactly one, the page it is for."""
 
-    listings: ListingsViewState | None = None
-    units: UnitsViewState | None = None
-    events: EventsViewState | None = None
+    listings: ListingsViewState | SkipJsonSchema[None] = Field(None, json_schema_extra=_no_default)
+    units: UnitsViewState | SkipJsonSchema[None] = Field(None, json_schema_extra=_no_default)
+    events: EventsViewState | SkipJsonSchema[None] = Field(None, json_schema_extra=_no_default)
 
     @model_validator(mode="after")
     def _one(self):
@@ -283,15 +304,19 @@ class ViewState(Strict):
         return self
 
     def state(self) -> views.State:
+        """As views.make_state() builds it; FilterError or ViewError says what is wrong."""
         page, given = next((k, v) for k in views.FIELDS if (v := getattr(self, k)) is not None)
-        conds = F.from_tree(tree(given.filter), views.FIELDS[page])
-        srt = sorts(page, given.sort) if page != "events" else ()
-        return views.State(page, conds, getattr(given, "q", ""), srt, tuple(given.columns))
+        sort = [(s.field, s.direction) for s in getattr(given, "sort", ())]
+        return views.make_state(page, tree(given.filter), getattr(given, "q", ""), sort, given.columns)
 
-
-class SortModel(BaseModel):
-    field: str
-    direction: queries.Direction
+    @classmethod
+    def of(cls, st: views.State) -> ViewState:
+        """A saved state, as create_view and change_view take it."""
+        j = st.to_json()
+        given = {"filter": j["filter"] or None, "columns": j["columns"]}
+        if st.page != "events":
+            given |= {"q": j["q"], "sort": j["sort"]}
+        return cls.model_validate({st.page: _PAGE_STATE[st.page].model_validate(given)})
 
 
 class ViewModel(BaseModel):
@@ -302,20 +327,15 @@ class ViewModel(BaseModel):
     name: str
     position: int
     is_default: bool = Field(description="The page opens on it.")
-    filter: dict = Field(description="filters.py's JSON tree, as the tools take it.")
-    q: str
-    sort: list[SortModel]
-    columns: list[str]
+    state: ViewState = Field(description="As create_view and change_view take it.")
     warnings: list[str] = Field(description="What of the saved state no longer applies, and was dropped.")
     updated: datetime | None
-    count: int | None = Field(None, description="What it matches now.")
+    count: int = Field(description="What it matches now.")
 
     @classmethod
     def of(cls, v: views.View) -> ViewModel:
-        st = v.state.to_json()
         return cls(id=v.id, page=v.page, name=v.name, position=v.position, is_default=v.is_default,
-                   filter=st["filter"], q=st["q"], sort=st["sort"], columns=st["columns"], warnings=v.warnings,
-                   updated=v.updated, count=v.count)  # fmt: skip
+                   state=ViewState.of(v.state), warnings=v.warnings, updated=v.updated, count=v.count)  # fmt: skip
 
 
 class Deleted(BaseModel):
@@ -325,7 +345,4 @@ class Deleted(BaseModel):
 TrackerModel = model_of(queries.TrackerBoard, "Tracker")
 
 
-class TrackerLink(BaseModel):
-    listing_key: str
-    row_key: str | None = Field(description="The row the listing is matched to now; null: none.")
-    listing: ListingModel | None = Field(description="The listing as it reads after the change.")
+TrackerLinkModel = model_of(queries.TrackerLink)

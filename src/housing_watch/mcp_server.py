@@ -7,18 +7,24 @@ upstream tokens are kept encrypted under FASTMCP_HOME; losing them means reconne
 
 `search` and `fetch` have the shapes ChatGPT's connectors and deep research expect; the other tools take typed
 filters (the JSON tree of filters.py, as pydantic models in mcp_models.py) and return the same fields as the web
-API, minus the applicant's PDFs; every tool's parameters and output have a JSON Schema. The write tools are the
-web app's mutations: saved views (create, change, duplicate, delete) and manual tracker links (link, unlink).
-`graphql` runs a query or mutation in-process against the web app's own schema (web/schema.py, `schema.graphql`);
-its context is trusted, since OAuth already decided who may call it, so mutations skip the same-origin check.
+API, minus the applicant's PDFs; every tool's parameters and output have a JSON Schema, sent with its `$defs` (not
+expanded, which would repeat the filter schema in every place it is used). The write tools are the web app's
+mutations, thin adapters over the same views.py / tracker.py functions: saved views (create, change, duplicate,
+delete) and manual tracker links (link, unlink). Each write is logged at INFO with its caller (the OAuth subject).
+`graphql` runs read-only queries in-process against the web app's own schema (web/schema.py, `schema.graphql`);
+`graphql_mutation` runs mutations, with a context marked trusted (OAuth already decided who may call it), so they
+skip the browser's same-origin check. The web app's /graphql never sets it.
 """
 
 from __future__ import annotations
 
+import functools
+import inspect
 import json
+import logging
 import os
 from dataclasses import asdict
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import Field
 from sqlalchemy.engine import Engine
@@ -27,7 +33,10 @@ from . import digest, queries, tracker, views
 from . import filters as F
 from . import mcp_models as M
 from .criteria import PROFILE, Profile
+from .models import NotFound
 
+log = logging.getLogger("housing_watch")
+REFUSALS = (NotFound, views.ViewError, F.FilterError)  # the domain's refusals: the caller's to fix, not bugs
 READ = {"readOnlyHint": True, "openWorldHint": False}
 WRITE = {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
 DELETE = {"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
@@ -45,6 +54,36 @@ def _summary(x: queries.ListingSummary):
 
 def _conds(page: str, tree: dict) -> list[F.Cond]:
     return F.from_tree(tree, views.FIELDS[page])  # FilterError explains a bad one to the caller
+
+
+def caller() -> str:
+    """Who is calling, for the audit log: the OAuth subject and email, nothing else."""
+    from fastmcp.server.dependencies import get_access_token
+
+    t = get_access_token()
+    if t is None:
+        return "anonymous"
+    c = t.claims or {}
+    who, email = c.get("sub") or t.client_id, c.get("email") or c.get("preferred_username")
+    return f"{who} <{email}>" if email else str(who)
+
+
+def brief(v) -> str:
+    """An argument in a few characters: objects by their keys, lists by their length."""
+    if hasattr(v, "model_dump"):
+        v = v.model_dump(mode="json", by_alias=True, exclude_none=True)
+    if isinstance(v, dict):
+        return "{" + ",".join(v) + "}"
+    if isinstance(v, list):
+        return f"[{len(v)}]"
+    r = repr(v)
+    return r if len(r) <= 80 else r[:77] + "..."
+
+
+def _errors(out) -> str:
+    """A GraphQL result's error codes, for the audit log."""
+    errs = out.get("errors") if isinstance(out, dict) else None
+    return f" errors: {','.join(str((e.get('extensions') or {}).get('code')) for e in errs)}" if errs else ""
 
 
 def _event(e: queries.EventView) -> M.Change:
@@ -69,25 +108,71 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
 
     from .web.schema import context, schema
 
+    def tool(annotations: dict, args=None, more: str = ""):
+        """mcp.tool, with the domain's refusals as clean tool errors, and every write logged with its caller.
+        `args` summarizes the arguments for the log (default: brief() of each); `more` extends the docstring."""
+
+        def deco(fn):
+            sig, writes = inspect.signature(fn), not annotations.get("readOnlyHint")
+
+            def audit(kw: dict, outcome: str) -> None:
+                if writes:
+                    bound = sig.bind(**kw).arguments
+                    said = args(bound) if args else " ".join(f"{k}={brief(v)}" for k, v in bound.items())
+                    log.info("mcp write %s by %s: %s%s", fn.__name__, caller(), said, outcome)
+
+            def refused(kw: dict, e: Exception):
+                audit(kw, f" refused: {e}")
+                return ToolError(str(e), log_level=logging.INFO)  # the caller's to fix: not an error here
+
+            if inspect.iscoroutinefunction(fn):
+
+                @functools.wraps(fn)
+                async def run(**kw):
+                    try:
+                        out = await fn(**kw)
+                    except REFUSALS as e:
+                        raise refused(kw, e) from None
+                    audit(kw, _errors(out))
+                    return out
+            else:
+
+                @functools.wraps(fn)
+                def run(**kw):
+                    try:
+                        out = fn(**kw)
+                    except REFUSALS as e:
+                        raise refused(kw, e) from None
+                    audit(kw, _errors(out))
+                    return out
+
+            doc = " ".join(x for x in (inspect.getdoc(fn), more) if x)
+            return mcp.tool(annotations=annotations, description=doc)(run)
+
+        return deco
+
     mcp = FastMCP(
         "housing-watch",
         instructions=(
             "NYC affordable-housing listings scraped hourly from ~48 sources, judged against one applicant's "
             f"profile (household {p.household}, income ${p.income:,}, sizes {', '.join(sorted(p.sizes))}). "
             "verdict is eligible / possible / excluded with a reason; commute is transit minutes to work; "
-            "application is the stage from the applicant's tracker sheet. " + FILTERS
+            "application is the stage from the applicant's tracker sheet. Read with search/fetch, find_*, "
+            "recent_changes, overview, saved_views, tracker_board or `graphql` (queries only); write with the view and "
+            "tracker tools or `graphql_mutation`. " + FILTERS
         ),
         auth=auth,
+        dereference_schemas=False,  # $defs once per tool; expanded, the filter schema repeats in every use
     )
 
-    @mcp.tool(annotations=READ)
+    @tool(READ)
     def search(query: str) -> M.SearchResults:
         """Search listings by building name, address, neighborhood, borough or notes. Returns ids for `fetch`."""
         res = queries.search_listings(engine, queries.ListingQuery([], query, offset=0, limit=20), p)
         return M.SearchResults(results=[M.SearchHit(id=x.key, title=f"{x.title} ({x.verdict})", url=x.url)
                                         for x in res.items])  # fmt: skip
 
-    @mcp.tool(annotations=READ)
+    @tool(READ)
     def fetch(id: str) -> M.Document:
         """One listing by id (a `search` result or listing key): units, verdict, commute, tracker stage, history."""
         d = queries.listing_detail(engine, id, p)
@@ -98,7 +183,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         return M.Document(id=id, title=d.summary.title, url=d.summary.url, text=json.dumps(body, default=str),
                           metadata=M.FetchMetadata(verdict=d.summary.verdict))  # fmt: skip
 
-    @mcp.tool(annotations=READ)
+    @tool(READ)
     def find_listings(
         filter: Annotated[M.ListingFilter | None, Field(description=FILTERS)] = None,
         q: Annotated[str, Field(description="free-text search")] = "",
@@ -115,7 +200,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         return M.ListingsPage(items=[_summary(x) for x in res.items], total=res.total, next_offset=res.next_offset,
                               verdict_counts=M.VerdictCounts(**res.verdict_counts))  # fmt: skip
 
-    @mcp.tool(annotations=READ)
+    @tool(READ)
     def find_units(
         filter: Annotated[M.ListingFilter | None, Field(description=FILTERS)] = None,
         q: str = "",
@@ -130,7 +215,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         return M.UnitsPage(items=[M.UnitModel.model_validate(queries.public(u)) for u in res.items],
                            total=res.total, next_offset=res.next_offset)  # fmt: skip
 
-    @mcp.tool(annotations=READ)
+    @tool(READ)
     def recent_changes(
         filter: Annotated[
             M.EventFilter | None,
@@ -150,7 +235,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         return M.Changes(items=[e for e in items if include_noise or not e.noise], total=page.total,
                          next_before=page.next_before)  # fmt: skip
 
-    @mcp.tool(annotations=READ)
+    @tool(READ)
     def overview() -> M.OverviewResult:
         """Counts by verdict and status, eligible listings open now, recent activity, failing sources, and the
         digest email that would go out next."""
@@ -162,127 +247,126 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
             "next_digest": built[1] if built and built[0] else None,
         })  # fmt: skip
 
-    @mcp.tool(annotations=READ)
+    @tool(READ)
     def sources() -> list[M.SourceModel]:
         """Every source: last success, failures, listing counts, schedule."""
         return [M.SourceModel.model_validate(asdict(x)) for x in queries.sources(engine, p)]
 
-    @mcp.tool(annotations=READ)
+    @tool(READ)
     def filter_fields(page: views.Page = "listings") -> list[M.FieldInfo]:
         """The fields filters can use on a page, with their path in the filter, type, operators and values."""
         return [M.FieldInfo(name=f.name, path=list(f.path), label=f.label, group=f.group, type=f.type,
                             ops=list(F.OPS[f.type]), choices=list(f.choices))
                 for f in views.FIELDS[page].values()]  # fmt: skip
 
-    @mcp.tool(annotations=READ)
+    @tool(READ)
     def saved_views() -> list[M.ViewModel]:
         """Every saved view (named filter, search, sort and columns of a page) with its current match count."""
         return [M.ViewModel.of(v) for v in views.with_counts(engine, p)]
 
-    @mcp.tool(annotations=READ)
+    @tool(READ)
     def tracker_board() -> M.TrackerModel:
         """Every row of the applicant's tracker sheet, by stage: its stage history, cells and matched listings.
         `row_key` is what `link_tracker` takes."""
         return M.TrackerModel.model_validate(asdict(queries.tracker_board(engine, p)))
 
-    def _view(vid: int) -> views.View:
-        if (v := views.get(engine, vid)) is None:
-            raise ToolError(f"no view {vid}")
-        return v
-
-    def _state(st: M.ViewState) -> views.State:
-        try:
-            return st.state()
-        except (F.FilterError, views.ViewError) as e:
-            raise ToolError(str(e)) from None
-
-    @mcp.tool(annotations=WRITE)
+    @tool(WRITE)
     def create_view(
-        name: Annotated[str, Field(description="1 to 80 characters")],
+        name: Annotated[str, Field(description=f"1 to {views.MAX_NAME} characters")],
         state: Annotated[M.ViewState, Field(description="Its page is the view's page. " + FILTERS)],
         is_default: Annotated[bool, Field(description="the page opens on it")] = False,
     ) -> M.ViewModel:
         """Save a view of a page."""
-        st = _state(state)
-        try:
-            return M.ViewModel.of(views.create(engine, st, name, is_default))
-        except views.ViewError as e:
-            raise ToolError(str(e)) from None
+        return M.ViewModel.of(views.create(engine, state.state(), name, is_default, p))
 
-    @mcp.tool(annotations=WRITE)
+    @tool(WRITE)
     def change_view(
         id: int,
         name: str | None = None,
         state: Annotated[M.ViewState | None, Field(description="for the view's own page; replaces it whole")] = None,
         is_default: bool | None = None,
-        move: Annotated[Literal["up", "down"] | None, Field(description="one place among the page's views")] = None,
+        move: Annotated[views.Move | None, Field(description="one place among the page's views")] = None,
     ) -> M.ViewModel:
         """Rename a view, replace its state, set or clear it as its page's default, or move it one place."""
-        _view(id)
-        try:
-            v = views.change(engine, id, name=name, state=_state(state) if state else None, is_default=is_default,
-                             move={"up": -1, "down": 1, None: 0}[move])  # fmt: skip
-        except views.ViewError as e:
-            raise ToolError(str(e)) from None
+        v = views.change(engine, id, name=name, state=state.state() if state else None, is_default=is_default,
+                         move=views.MOVES[move] if move else 0, p=p)  # fmt: skip
         return M.ViewModel.of(v)
 
-    @mcp.tool(annotations=WRITE)
+    @tool(WRITE)
     def duplicate_view(id: int) -> M.ViewModel:
-        """A copy of a view, named "<name> (copy)"."""
-        _view(id)
-        return M.ViewModel.of(views.duplicate(engine, id))
+        """A copy of a view, named "<name> (copy)" (the name shortened to fit)."""
+        return M.ViewModel.of(views.duplicate(engine, id, p))
 
-    @mcp.tool(annotations=DELETE)
+    @tool(DELETE)
     def delete_view(id: int) -> M.Deleted:
         """Delete a saved view."""
-        if not views.delete(engine, id):
-            raise ToolError(f"no view {id}")
+        views.delete(engine, id)
         return M.Deleted(id=id)
 
-    def _listing(key: str) -> queries.ListingSummary | None:
-        return next((x for x in queries.judged(engine, p) if x.key == key), None)
-
-    @mcp.tool(annotations=WRITE | {"idempotentHint": True})
+    @tool(WRITE | {"idempotentHint": True})
     def link_tracker(
         listing_key: str,
         row_key: Annotated[str | None, Field(description="a `tracker_board` row; null: the listing is in no row")],
-    ) -> M.TrackerLink:
+    ) -> M.TrackerLinkModel:
         """Link a listing to a tracker sheet row by hand, overriding automatic matching, or mark it as in no row."""
-        if not listing_key or _listing(listing_key) is None:
-            raise ToolError(f"no listing {listing_key!r}")
-        if row_key is not None and row_key not in {r.row_key for r in tracker.load(engine)[0]}:
-            raise ToolError(f"no tracker row {row_key!r}")
-        tracker.set_link(engine, listing_key, row_key)
-        x = _listing(listing_key)
-        return M.TrackerLink(listing_key=listing_key, row_key=row_key, listing=_summary(x) if x else None)
+        tracker.link(engine, listing_key, row_key)
+        return M.TrackerLinkModel.model_validate(asdict(queries.tracker_link(engine, listing_key, p)))
 
-    @mcp.tool(annotations=WRITE | {"idempotentHint": True})
-    def unlink_tracker(listing_key: str) -> M.TrackerLink:
+    @tool(WRITE | {"idempotentHint": True})
+    def unlink_tracker(listing_key: str) -> M.TrackerLinkModel:
         """Drop a manual tracker link: the listing goes back to automatic matching."""
-        if not tracker.clear_link(engine, listing_key):
-            raise ToolError(f"no manual link for {listing_key!r}")
-        x = _listing(listing_key)
-        row = tracker.row_key(x.tracker_row) if x and x.tracker_row else None
-        return M.TrackerLink(listing_key=listing_key, row_key=row, listing=_summary(x) if x else None)
+        tracker.unlink(engine, listing_key)
+        return M.TrackerLinkModel.model_validate(asdict(queries.tracker_link(engine, listing_key, p)))
 
-    @mcp.tool(annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False})
-    async def graphql(query: str, variables: dict | None = None) -> dict:
-        """Run a GraphQL query or mutation against the web app's schema. Introspect it first:
-        `{ __schema { queryType { fields { name description } } mutationType { fields { name description } } } }`.
-        Lists are Relay connections: `{ listings(filter: { verdict: { in: [eligible] }, units: { rent: { le: 3000 } }
-        }, first: 20) { total edges { node { key title } } page_info { has_next_page end_cursor } } }`, the next page
-        with `after: <end_cursor>`. Mutations: createView, changeView, duplicateView, deleteView, linkTracker,
-        unlinkTracker. Enum values are GraphQL names (`Staten_Island`, `_1br`, `re_rental`). The result is
-        free-form: whatever the query selects. Errors carry `extensions.code`."""
+    def _parse(query: str):
+        """(the document, None), or (None, the syntax error as a result)."""
         try:
             doc = parse(query)
         except GraphQLSyntaxError as e:
-            return {"data": None, "errors": [e.formatted]}
-        if any(isinstance(d, OperationDefinitionNode) and d.operation == OperationType.SUBSCRIPTION
-               for d in doc.definitions):  # fmt: skip
-            raise ToolError("graphql tool runs queries and mutations, not subscriptions")
+            return None, {"data": None, "errors": [e.formatted]}
+        return doc, None
+
+    def _only(doc, allowed: OperationType, other: str) -> None:
+        ops = {d.operation for d in doc.definitions if isinstance(d, OperationDefinitionNode)}
+        if ops - {allowed}:
+            raise ToolError(f"this tool runs {allowed.value} operations only; {other}", log_level=logging.INFO)
+
+    GQL = (
+        "Lists are Relay connections: `{ listings(filter: { verdict: { in: [eligible] }, units: { rent: { le: 3000 } } "
+        "}, first: 20) { total edges { node { key title } } page_info { has_next_page end_cursor } } }`, the next page "
+        "with `after: <end_cursor>`. Enum values are GraphQL names (`Staten_Island`, `_1br`, `re_rental`). The result "
+        "is free-form: whatever the query selects. Errors carry `extensions.code`."
+    )
+
+    @tool(READ, more=GQL)
+    async def graphql(query: str, variables: dict | None = None) -> dict:
+        """Run a read-only GraphQL query against the web app's schema (mutations: `graphql_mutation`). Introspect
+        it first: `{ __schema { queryType { fields { name description } } } }`."""
+        doc, bad = _parse(query)
+        if bad:
+            return bad
+        _only(doc, OperationType.QUERY, "use graphql_mutation for mutations")
+        res = await schema.execute(query, variables, context_value=context(engine, p),
+                                   allowed_operation_types={Op.QUERY})  # fmt: skip
+        return {"data": res.data, "errors": [e.formatted for e in res.errors or []]}
+
+    def _fields(bound: dict) -> str:
+        doc, _ = _parse(bound["query"])
+        names = [f.name.value for d in (doc.definitions if doc else []) if isinstance(d, OperationDefinitionNode)
+                 for f in d.selection_set.selections if hasattr(f, "name")]  # fmt: skip
+        return f"mutations={','.join(names) or '?'} variables={brief(bound.get('variables') or {})}"
+
+    @tool(DELETE, args=_fields, more=GQL)
+    async def graphql_mutation(query: str, variables: dict | None = None) -> dict:
+        """Run a GraphQL mutation against the web app's schema: createView, changeView, duplicateView, deleteView,
+        linkTracker, unlinkTracker (the same writes as the other tools). Introspect it with `graphql`:
+        `{ __schema { mutationType { fields { name description } } } }`."""
+        doc, bad = _parse(query)
+        if bad:
+            return bad
+        _only(doc, OperationType.MUTATION, "use graphql for queries")
         res = await schema.execute(query, variables, context_value=context(engine, p, trusted=True),
-                                   allowed_operation_types={Op.QUERY, Op.MUTATION})  # fmt: skip
+                                   allowed_operation_types={Op.MUTATION})  # fmt: skip
         return {"data": res.data, "errors": [e.formatted for e in res.errors or []]}
 
     return mcp
