@@ -56,7 +56,7 @@ def derive(dc: type, name: str | None = None, *, types: dict | None = None, prop
     name = name or dc.__name__
     types = types or {}
     hints = typing.get_type_hints(dc)
-    notes = _comments(dc)
+    notes = comments(dc)
     anns: dict = {}
     ns: dict = {"__module__": __name__, "__qualname__": name,
                 "is_type_of": classmethod(lambda cls, obj, info: isinstance(obj, (dc, cls)))}  # fmt: skip
@@ -133,7 +133,7 @@ def _getter(attr: str, t):
     return get
 
 
-def _comments(dc: type) -> dict[str, str]:
+def comments(dc: type) -> dict[str, str]:
     """field name -> its trailing comment in the class body."""
     try:
         src = inspect.getsource(dc)

@@ -25,8 +25,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from . import fetch
-from .models import values
-from .orm import TrackerEventRow, TrackerLinkRow, TrackerRow
+from .models import NotFound, values
+from .orm import ListingRow, TrackerEventRow, TrackerLinkRow, TrackerRow
 from .parse import addr_keys, name_key, units, url_key
 
 SHEET = os.environ.get("HW_TRACKER_SHEET", "")
@@ -300,16 +300,23 @@ def match(
     return out
 
 
-def set_link(engine: Engine, listing_key: str, key: str | None) -> None:
+def link(engine: Engine, listing_key: str, key: str | None) -> None:
+    """Link a listing to a row by hand (key None: to no row), overriding automatic matching."""
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
     stmt = pg_insert(TrackerLinkRow).values(listing_key=listing_key, row_key=key)
-    with engine.begin() as c:
-        c.execute(
+    with Session(engine) as s, s.begin():
+        if not s.scalar(select(ListingRow.key).where(ListingRow.key == listing_key)):
+            raise NotFound("No such listing")
+        if key is not None and not s.scalar(select(TrackerRow.row_key).where(TrackerRow.row_key == key)):
+            raise NotFound("No such tracker row")
+        s.execute(
             stmt.on_conflict_do_update(index_elements=["listing_key"], set_={"row_key": key, "created": func.now()})
         )
 
 
-def clear_link(engine: Engine, listing_key: str) -> bool:
+def unlink(engine: Engine, listing_key: str) -> None:
+    """Drop a manual link: the listing goes back to automatic matching."""
     with Session(engine) as s, s.begin():
-        return s.execute(delete(TrackerLinkRow).where(TrackerLinkRow.listing_key == listing_key)).rowcount > 0
+        if not s.execute(delete(TrackerLinkRow).where(TrackerLinkRow.listing_key == listing_key)).rowcount:
+            raise NotFound("No manual link for that listing")

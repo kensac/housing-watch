@@ -238,21 +238,38 @@ def _units(r: ListingRow, lst: Listing, x: ListingSummary, p: Profile) -> list[U
     return out
 
 
-_cache: dict[tuple, tuple[tuple, list[ListingSummary], list[UnitSummary]]] = {}
+@dataclass(frozen=True)
+class _Judged:
+    listings: list[ListingSummary]
+    units: list[UnitSummary]
+    by_key: dict[str, ListingSummary]
+
+
+_cache: dict[tuple, tuple[tuple, _Judged]] = {}
 _lock = threading.Lock()
 
 
 def judged(engine: Engine, p: Profile = PROFILE) -> list[ListingSummary]:
     """Every listing, summarized and judged; recomputed only when the listings table moved."""
-    return _judged(engine, p)[0]
+    return _judged(engine, p).listings
 
 
 def judged_units(engine: Engine, p: Profile = PROFILE) -> list[UnitSummary]:
     """Every unit of every listing, judged; cached with judged()."""
-    return _judged(engine, p)[1]
+    return _judged(engine, p).units
 
 
-def _judged(engine: Engine, p: Profile) -> tuple[list[ListingSummary], list[UnitSummary]]:
+def judged_by_key(engine: Engine, p: Profile = PROFILE) -> dict[str, ListingSummary]:
+    """judged() by listing key."""
+    return _judged(engine, p).by_key
+
+
+def judged_listing(engine: Engine, key: str, p: Profile = PROFILE) -> ListingSummary | None:
+    """One listing as judged(), by key."""
+    return _judged(engine, p).by_key.get(key)
+
+
+def _judged(engine: Engine, p: Profile) -> _Judged:
     with Session(engine) as s:
         version = tuple(
             s.execute(
@@ -270,7 +287,7 @@ def _judged(engine: Engine, p: Profile) -> tuple[list[ListingSummary], list[Unit
         ck = (str(engine.url), p)
         hit = _cache.get(ck)
         if hit and hit[0] == version:
-            return hit[1], hit[2]
+            return hit[1]
         with _lock:
             commutes = C.table(engine)
             rows = _load(s)
@@ -279,8 +296,8 @@ def _judged(engine: Engine, p: Profile) -> tuple[list[ListingSummary], list[Unit
             refs = T.match(out, *T.load(engine), T.history(engine))  # the tracker sheet's rows, matched to listings
             out = [_with_tracker(x, refs.get(x.key)) for x in out]
             units = [u for r, lst, x in zip(rows, lsts, out, strict=True) for u in _units(r, lst, x, p)]
-            _cache[ck] = (version, out, units)
-        return out, units
+            j = _cache[ck] = (version, _Judged(out, units, {x.key: x for x in out}))
+        return j[1]
 
 
 COMPUTED = {  # read-time values behind filters.COMPUTED
@@ -434,7 +451,7 @@ def filter_units(
     engine: Engine, conds: list[F.Cond], q: str = "", p: Profile = PROFILE, hide_gone: bool | None = None
 ) -> list[UnitSummary]:
     """Like filter_listings, but every unit and band condition must hold on the row's own unit."""
-    by_key = {x.key: x for x in judged(engine, p)}
+    by_key = judged_by_key(engine, p)
     allu = judged_units(engine, p)
     where = F.unit_where(conds)
     if where:
@@ -521,7 +538,7 @@ def is_enum(engine: Engine, fld: F.Field, p: Profile = PROFILE) -> bool:
 def _values_by_key(s: Session, fld: F.Field, keys: list[str], p: Profile, engine: Engine):
     """(listing key, value) pairs for one listing/unit/band/computed field over the given listings."""
     if fld.scope == "computed":
-        by = {x.key: x for x in judged(engine, p)}
+        by = judged_by_key(engine, p)
         return [(k, COMPUTED[_name(fld)](by[k])) for k in keys if k in by]
     u, b, ls = UnitRow.__table__, BandRow.__table__, ListingRow.__table__
     if fld.scope == "listing":
@@ -572,7 +589,7 @@ def _unit_value_counts(engine: Engine, fld: F.Field, others: list[F.Cond], q: st
     """How many units each value of the field would give on the Units page."""
     units = filter_units(engine, others, q, p, hide)
     if fld.scope == "computed":
-        by_key = {x.key: x for x in judged(engine, p)}
+        by_key = judged_by_key(engine, p)
         vals = [(u.id, UNIT_COMPUTED[_name(fld)](u, by_key[u.key])) for u in units]
     else:
         ids = [u.id for u in units]
@@ -735,8 +752,7 @@ def listing_detail(engine: Engine, key: str, p: Profile = PROFILE) -> ListingDet
         ]
         evs = s.scalars(select(EventRow).where(EventRow.key == key).order_by(EventRow.at.desc()).limit(50))
         return ListingDetail(
-            summary=next((x for x in judged(engine, p) if x.key == key), None)
-            or _summary(r, lst, p),  # with commute + tracker
+            summary=judged_listing(engine, key, p) or _summary(r, lst, p),  # with commute + tracker
             notes=lst.notes,
             ext_id=r.ext_id,
             last_seen=r.last_seen,
@@ -757,7 +773,7 @@ class EventPage:
 
 
 def _attach(engine: Engine, evs: list[EventView], p: Profile) -> list[EventView]:
-    by_key = {x.key: x for x in judged(engine, p)}
+    by_key = judged_by_key(engine, p)
     for e in evs:
         x = by_key.get(e.key or "")
         if x:
@@ -927,6 +943,20 @@ def tracker_board(engine: Engine, p: Profile = PROFILE) -> TrackerBoard:
         ))  # fmt: skip
     out.sort(key=lambda d: (T.rank(d.stage), d.stage_since is None, d.stage_since or synced, d.position))
     return TrackerBoard(bool(T.SHEET), synced, out)
+
+
+@dataclass
+class TrackerLink:
+    """Where a listing stands in the tracker after a link change."""
+
+    listing_key: Key
+    row_key: Key | None  # the row it is matched to now; null: none
+    listing: ListingSummary | None  # the listing as it reads after the change
+
+
+def tracker_link(engine: Engine, key: str, p: Profile = PROFILE) -> TrackerLink:
+    x = judged_listing(engine, key, p)
+    return TrackerLink(key, T.row_key(x.tracker_row) if x and x.tracker_row else None, x)
 
 
 # --- sources -------------------------------------------------------------------------------------------

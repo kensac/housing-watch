@@ -250,16 +250,14 @@ UnitSortInput, UnitSort, UnitSortChoice = _sort_types("Unit", queries.UNIT_SORTS
 SORT_TYPES = {"listings": (ListingSort, ListingSortChoice), "units": (UnitSort, UnitSortChoice)}
 
 
+def sort_pairs(given: list | None) -> list[tuple[str, str | None]]:
+    """Sort inputs as views.sorts() takes them."""
+    return [(s.field.value, s.direction.value if s.direction else None) for s in given or ()]
+
+
 def sorts(page: str, given: list | None) -> tuple[queries.Sort, ...]:
-    """The query's sort from its input: each field in its given or natural direction; none is the default."""
-    specs = views.SORTS[page]
-    return (
-        tuple(
-            queries.Sort(s.field.value, s.direction.value if s.direction else specs[s.field.value].natural)
-            for s in given or ()
-        )
-        or views.DEFAULT_SORT[page]
-    )
+    """The query's sort from its input (views.sorts)."""
+    return views.sorts(page, sort_pairs(given))
 
 
 def sort_output(page: str, sort: tuple[queries.Sort, ...]) -> list:

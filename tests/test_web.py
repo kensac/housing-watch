@@ -288,7 +288,8 @@ def test_saved_views(client):
     assert v["state"] == {"__typename": "ListingsViewState", "q": "", "columns": v["state"]["columns"],
                           "filter": {"borough": {"in": ["Queens"]}, "verdict": None, "units": None},
                           "sort": [{"field": "rent", "direction": "desc"}]}  # fmt: skip
-    assert v["is_default"] and v["page"] == "listings" and gql(client, VIEWS)["data"]["views"][0]["count"] == 1
+    assert v["is_default"] and v["page"] == "listings" and v["count"] == 1  # a write returns the count too
+    assert gql(client, VIEWS)["data"]["views"][0]["count"] == 1
     vid = v["id"]
     st = {"listings": {"filter": {"verdict": {"in": ["eligible"]}}, "columns": ["rent", "verdict"]}}
     p = gql(client, CHANGE, SAME, id=vid, state=st, name="Renamed")["data"]["changeView"]
@@ -326,6 +327,22 @@ def test_view_writes_need_same_origin(client):
     ok = gql(client, CREATE, {"referer": "http://testserver/listings"}, name="X")
     assert ok["data"]["createView"]["view"]["name"] == "X"
     assert gql_code(gql(client, "mutation { deleteView(input: { id: 1 }) { id } }")) == "FORBIDDEN"
+
+
+def test_http_never_marks_the_context_trusted(client, pg, monkeypatch):
+    from housing_watch.web import app as web_app
+
+    made = []
+    real = web_app.context
+    monkeypatch.setattr(web_app, "context", lambda *a, **kw: made.append((a, kw)) or real(*a, **kw))
+    sneaky = {"origin": "http://evil.example", "trusted": "true", "x-trusted": "1", "authorization": "Bearer x"}
+    body = {"query": DELETE, "variables": {"id": 1, "trusted": True}, "extensions": {"trusted": True}}
+    res = client.post("/graphql", json=body, headers=sneaky).json()
+    assert gql_code(res) == "FORBIDDEN" and gql_error(res) == "cross-origin request refused"
+    res = client.post("/graphql?trusted=1", json={"query": CREATE, "variables": {"name": "X"}}).json()
+    assert gql_code(res) == "FORBIDDEN"  # no origin at all
+    assert len(made) == 2 and all(len(a) == 3 and kw == {} for a, kw in made)  # (engine, profile, request) only
+    assert gql(client, VIEWS)["data"]["views"] == []
 
 
 def test_stale_view_warns(client, pg):

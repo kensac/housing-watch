@@ -21,6 +21,10 @@ def values(alias) -> tuple[str, ...]:
     return get_args(alias.__value__)
 
 
+class NotFound(LookupError):
+    """A write names something the store does not have. The message says what; the API and MCP show it."""
+
+
 @dataclass(frozen=True)
 class Band:
     """Income range for one household size."""

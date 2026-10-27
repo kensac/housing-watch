@@ -7,9 +7,11 @@ inputs, payloads, meta) are declared here. Field names stay snake_case (auto_cam
 Lists are Relay connections (`first`/`after`, opaque cursors). Filters, sorts and columns are typed inputs
 derived from the registries (filter_types.py); a filter that is well-typed but meaningless (an empty `in`, a blank
 `contains`) is refused with BAD_USER_INPUT. Closed value sets are enums, identifiers are `ID`. Errors carry
-`extensions.code` (NOT_FOUND, BAD_USER_INPUT, FORBIDDEN, INTERNAL). Resolvers are async and run the blocking store
-reads in a worker thread; mutations need the context's `request`, and refuse it unless same-origin, or a context
-marked `trusted` by a caller that authenticated the user itself (the MCP server, behind OAuth).
+`extensions.code` (NOT_FOUND, BAD_USER_INPUT, FORBIDDEN, INTERNAL); the domain's refusals (models.NotFound,
+views.ViewError, filters.FilterError) get theirs in Schema.process_errors, so resolvers stay thin. Resolvers are
+async and run the blocking store reads in a worker thread; mutations need the context's `request`, and refuse it
+unless same-origin, or a context marked `trusted` by a caller that authenticated the user itself (the MCP server's
+`graphql_mutation`, behind OAuth). The web app's /graphql never marks it.
 """
 
 import base64
@@ -366,12 +368,7 @@ class PageFilterInput:
     events: FT.EventFilterInput | None = strawberry.UNSET
 
 
-class ViewMove(enum.Enum):
-    up = "up"
-    down = "down"
-
-
-strawberry.enum(ViewMove, description="One place up or down the page's views.")
+ViewMove = enum_type(views.Move, "One place up or down the page's views.", name="ViewMove")
 
 
 @strawberry.input
@@ -416,11 +413,7 @@ class DeleteViewPayload:
     id: strawberry.ID
 
 
-@strawberry.type
-class TrackerLinkPayload:
-    listing_key: strawberry.ID
-    row_key: strawberry.ID | None
-    listing: Listing | None = strawberry.field(description="The listing as it reads after the change.")
+TrackerLinkPayload = derive(queries.TrackerLink, "TrackerLinkPayload")
 
 
 # --- helpers --------------------------------------------------------------------------------------------
@@ -452,11 +445,8 @@ def mutation(name: str):
 
 
 def _conds(page: str, given) -> list[F.Cond]:
-    """A filter input's conditions; one that means nothing is refused, saying why."""
-    try:
-        return F.from_tree(FT.tree(given), views.FIELDS[page])
-    except F.FilterError as e:
-        raise Problem(Code.BAD_USER_INPUT, str(e)) from None
+    """A filter input's conditions; one that means nothing is refused (FilterError), saying why."""
+    return F.from_tree(FT.tree(given), views.FIELDS[page])
 
 
 def _chips(conds: list[F.Cond]) -> list[Chip]:
@@ -465,7 +455,7 @@ def _chips(conds: list[F.Cond]) -> list[Chip]:
 
 def _view_id(id: strawberry.ID) -> int:
     if not str(id).isdigit():
-        raise Problem(Code.NOT_FOUND, "No such view")
+        raise models.NotFound("No such view")
     return int(id)
 
 
@@ -514,12 +504,8 @@ def _list(cls, page: str, filter, q, sort, first, after, info, search):
 def _state(st: ViewStateInput) -> views.State:
     """The page's state from the one page set in the input."""
     page, given = next((k, v) for k in views.FIELDS if (v := getattr(st, k)) not in (None, strawberry.UNSET))
-    conds = _conds(page, given.filter)
-    try:
-        return views.State(page, conds, getattr(given, "q", ""), FT.sorts(page, getattr(given, "sort", None))
-                           if page != "events" else (), FT.values_of(given.columns))  # fmt: skip
-    except views.ViewError as e:
-        raise Problem(Code.BAD_USER_INPUT, str(e)) from None
+    return views.make_state(page, FT.tree(given.filter), getattr(given, "q", ""),
+                            FT.sort_pairs(getattr(given, "sort", None)), FT.values_of(given.columns))  # fmt: skip
 
 
 def same_origin(req) -> None:
@@ -530,18 +516,13 @@ def same_origin(req) -> None:
 
 
 def _write(info: strawberry.Info):
-    """The engine for a mutation, after the same-origin check (none for a trusted context)."""
-    if info.context.get("trusted"):
-        return info.context["engine"]
-    req = info.context.get("request")
-    if req is None:
-        raise Problem(Code.FORBIDDEN, "writes need a request")
-    same_origin(req)
-    return info.context["engine"]
-
-
-def _summary(engine, key: str, p) -> queries.ListingSummary | None:
-    return next((x for x in queries.judged(engine, p) if x.key == key), None)
+    """The engine and profile for a mutation, after the same-origin check (none for a trusted context)."""
+    if info.context.get("trusted") is not True:
+        req = info.context.get("request")
+        if req is None:
+            raise Problem(Code.FORBIDDEN, "writes need a request")
+        same_origin(req)
+    return _ctx(info)
 
 
 # --- schema ---------------------------------------------------------------------------------------------
@@ -665,73 +646,47 @@ class Query:
 
 @strawberry.type
 class Mutation:
+    """Thin adapters over views.py and tracker.py; Schema.process_errors gives their refusals a code."""
+
     @mutation("createView")
     def create_view(self, info: strawberry.Info, input: CreateViewInput) -> ViewPayload:
         """Save a view of a page."""
-        engine = _write(info)
-        st = _state(input.state)
-        try:
-            return ViewPayload(view=views.create(engine, st, input.name, input.is_default))
-        except views.ViewError as e:
-            raise Problem(Code.BAD_USER_INPUT, str(e)) from None
+        engine, p = _write(info)
+        return ViewPayload(view=views.create(engine, _state(input.state), input.name, input.is_default, p))
 
     @mutation("changeView")
     def change_view(self, info: strawberry.Info, input: ChangeViewInput) -> ViewPayload:
         """Rename, replace the state, set or clear the default, or move it one place."""
-        engine = _write(info)
-        vid = _view_id(input.id)
-        v = views.get(engine, vid)
-        if v is None:
-            raise Problem(Code.NOT_FOUND, "No such view")
-        kw: dict = {}
-        if input.name is not None:
-            kw["name"] = input.name
-        if input.state is not None:
-            kw["state"] = _state(input.state)
-        if input.is_default is not None:
-            kw["is_default"] = input.is_default
-        if input.move is not None:
-            kw["move"] = -1 if input.move == ViewMove.up else 1
-        try:
-            return ViewPayload(view=views.change(engine, vid, **kw))
-        except views.ViewError as e:
-            raise Problem(Code.BAD_USER_INPUT, str(e)) from None
+        engine, p = _write(info)
+        st = _state(input.state) if input.state is not None else None
+        move = views.MOVES[input.move.value] if input.move else 0
+        return ViewPayload(view=views.change(engine, _view_id(input.id), name=input.name, state=st,
+                                             is_default=input.is_default, move=move, p=p))  # fmt: skip
 
     @mutation("duplicateView")
     def duplicate_view(self, info: strawberry.Info, input: ViewIdInput) -> ViewPayload:
-        """A copy of a view, named "<name> (copy)"."""
-        v = views.duplicate(_write(info), _view_id(input.id))
-        if v is None:
-            raise Problem(Code.NOT_FOUND, "No such view")
-        return ViewPayload(view=v)
+        """A copy of a view, named "<name> (copy)" (the name shortened to fit)."""
+        engine, p = _write(info)
+        return ViewPayload(view=views.duplicate(engine, _view_id(input.id), p))
 
     @mutation("deleteView")
     def delete_view(self, info: strawberry.Info, input: ViewIdInput) -> DeleteViewPayload:
-        if not views.delete(_write(info), _view_id(input.id)):
-            raise Problem(Code.NOT_FOUND, "No such view")
+        views.delete(_write(info)[0], _view_id(input.id))
         return DeleteViewPayload(id=input.id)
 
     @mutation("linkTracker")
     def link_tracker(self, info: strawberry.Info, input: LinkTrackerInput) -> TrackerLinkPayload:
         """Link a listing to a sheet row, or mark it as in no row (row_key null)."""
-        engine, p = _write(info), info.context["profile"]
-        if not input.listing_key or _summary(engine, input.listing_key, p) is None:
-            raise Problem(Code.NOT_FOUND, "No such listing")
-        if input.row_key is not None and input.row_key not in {r.row_key for r in tracker.load(engine)[0]}:
-            raise Problem(Code.NOT_FOUND, "No such tracker row")
-        tracker.set_link(engine, input.listing_key, input.row_key)
-        return TrackerLinkPayload(listing_key=input.listing_key, row_key=input.row_key,
-                                  listing=_summary(engine, input.listing_key, p))  # fmt: skip
+        engine, p = _write(info)
+        tracker.link(engine, input.listing_key, input.row_key)
+        return queries.tracker_link(engine, input.listing_key, p)
 
     @mutation("unlinkTracker")
     def unlink_tracker(self, info: strawberry.Info, input: UnlinkTrackerInput) -> TrackerLinkPayload:
         """Drop a manual link: the listing goes back to automatic matching."""
-        engine = _write(info)
-        if not tracker.clear_link(engine, input.listing_key):
-            raise Problem(Code.NOT_FOUND, "No manual link for that listing")
-        x = _summary(engine, input.listing_key, info.context["profile"])
-        row = tracker.row_key(x.tracker_row) if x and x.tracker_row else None
-        return TrackerLinkPayload(listing_key=input.listing_key, row_key=row, listing=x)
+        engine, p = _write(info)
+        tracker.unlink(engine, input.listing_key)
+        return queries.tracker_link(engine, input.listing_key, p)
 
 
 class Loaders:
@@ -742,11 +697,11 @@ class Loaders:
         self.listing = DataLoader(load_fn=self._listings)
 
     async def _listings(self, keys: list[str]) -> list[queries.ListingSummary | None]:
-        by = await run_in_threadpool(lambda: {x.key: x for x in queries.judged(self.engine, self.profile)})
+        by = await run_in_threadpool(queries.judged_by_key, self.engine, self.profile)
         return [by.get(k) for k in keys]
 
 
-def context(engine, profile, request=None, trusted: bool = False) -> dict:
+def context(engine, profile, request=None, *, trusted: bool = False) -> dict:
     """What resolvers read: the store, the profile, the request (for writes) and the DataLoaders. `trusted`: the
     caller authenticated the user, so writes skip the browser's same-origin check."""
     return {"engine": engine, "profile": profile, "request": request, "trusted": trusted,
@@ -761,6 +716,10 @@ class Schema(strawberry.Schema):
             orig = e.original_error
             if isinstance(orig, Problem):
                 code = orig.code
+            elif isinstance(orig, models.NotFound):
+                code = Code.NOT_FOUND
+            elif isinstance(orig, (views.ViewError, F.FilterError)):
+                code = Code.BAD_USER_INPUT
             elif not e.path:  # not from a resolver: the document or its variables (syntax, validation, limits)
                 code = Code.BAD_USER_INPUT
             else:
