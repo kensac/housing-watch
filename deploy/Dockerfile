@@ -6,7 +6,7 @@ RUN npm ci --no-audit --no-fund
 COPY frontend ./
 RUN npm run build -- --outDir /web/dist
 
-FROM python:3.14-slim@sha256:cf227e683df8f316c4f637f33b1c4cb8fe821e8e1ede8e766096ef19f41f7526
+FROM python:3.14-slim@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1
