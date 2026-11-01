@@ -5,10 +5,11 @@ export PYTHONPATH := src
 sync:   ## install exactly the lockfile into .venv
 	uv sync --frozen
 
-check:  ## everything CI gates on
+check:  ## everything CI gates on, except the frontend
 	ruff check src tests alembic
 	ruff format --check src tests alembic
-	python -m pytest -q
+	python -m housing_watch schema --check schema.graphql
+	python -m pytest -q -n auto
 
 test:
 	python -m pytest -q

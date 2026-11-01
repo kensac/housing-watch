@@ -19,12 +19,13 @@ dependencies = [
     "google-auth[requests]==2.62.0",
     "playwright==1.64.1",
     "fastmcp==4.1.4",
-    "strawberry-graphql==0.336.2",
+    "strawberry-graphql==0.339.1",
 ]
 
 [dependency-groups]
 dev = [
     "pytest==9.2.0",
+    "pytest-xdist==3.8.0",
     "ruff==0.17.3",
 ]
 
