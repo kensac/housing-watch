@@ -7,7 +7,8 @@ its own URL. Its queries are typed from the committed `schema.graphql` (`python 
 GraphQL Code Generator. A filter crosses the API as a typed input object holding the `filters` JSON tree
 (filter_types.py).
 The data is read-only from here; the API writes only `saved_views` and `tracker_links`, and only from
-same-origin requests (tailnet-only and single-user, so no login). GET queries, introspection and GraphiQL stay on.
+same-origin requests (single-user behind authentik, so no login of its own), and every request must carry an
+allowed Host (web/hosts.py). GET queries, introspection and GraphiQL stay on.
 
 The one REST route left is `GET /api/listing/application?key=&n=`, a filled application PDF: a binary download
 does not fit GraphQL, and the app links to it with `<a href download>`.
@@ -27,6 +28,7 @@ from strawberry.fastapi import GraphQLRouter
 
 from .. import applications, queries
 from ..eligibility import PROFILE, Profile
+from .hosts import AllowedHosts
 from .schema import Code, Problem, context, schema
 
 DIST = Path(__file__).parent / "dist"
@@ -34,6 +36,7 @@ DIST = Path(__file__).parent / "dist"
 
 def create_app(engine: Engine, profile: Profile = PROFILE, dist: Path = DIST) -> FastAPI:
     app = FastAPI(title="housing-watch", docs_url=None, redoc_url=None, openapi_url=None)
+    app.add_middleware(AllowedHosts)  # DNS rebinding (hosts.py)
 
     @app.exception_handler(Problem)
     async def problem(req: Request, exc: Problem):

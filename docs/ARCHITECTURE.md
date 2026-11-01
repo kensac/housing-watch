@@ -219,7 +219,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   pages: Listings (a row per listing; its rent and AMI ranges cover the units that fit and match the unit
   filters), Units (a row per unit, so rent sorts exactly; unit and band filters hold on that unit) and
   Events. It is served by the hetzner worker container (`python -m housing_watch serve` = migrate +
-  worker + web, the web started only when `HW_WEB_PORT` is set) on the tailnet only. The tables it
+  worker + web, the web started only when `HW_WEB_PORT` is set), reached only through Traefik. The tables it
   writes are `saved_views` (`views.py`: version 2 JSON, the filter tree + sort pairs + columns per page,
   re-validated against the registries on load) and manual tracker links, through mutations that refuse anything not same-origin.
   Nothing is seeded.

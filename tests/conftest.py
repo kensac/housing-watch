@@ -4,6 +4,7 @@ import os
 os.environ.setdefault("HW_INCOME", "150000")
 os.environ.setdefault("HW_SIZES", "studio,1br")
 os.environ.setdefault("HW_EXCLUDED_BOROUGHS", "Bronx")
+os.environ.setdefault("HW_ALLOWED_HOSTS", "testserver")  # TestClient's Host
 
 import shutil  # noqa: E402
 import uuid  # noqa: E402

@@ -50,6 +50,7 @@ from . import queries, tracker, views
 from .eligibility import PROFILE, Profile
 from .models import NotFound
 from .notify import digest
+from .web.hosts import AllowedHosts
 from .web.schema import context, schema
 
 log = logging.getLogger("housing_watch")
@@ -414,4 +415,6 @@ def auth_from_env():
 
 
 def app(engine: Engine, p: Profile = PROFILE):
-    return build(engine, p, auth_from_env()).http_app(path="/mcp")
+    # FastMCP's own Host/Origin guard compares hostnames only, and its Origin check sees http behind Traefik's TLS,
+    # so it would refuse the browser's https Origin on the OAuth consent POST. web/hosts.py checks the Host alone.
+    return AllowedHosts(build(engine, p, auth_from_env()).http_app(path="/mcp"))
