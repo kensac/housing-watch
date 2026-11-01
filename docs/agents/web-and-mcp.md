@@ -24,7 +24,7 @@ The design of both surfaces is in
   logged with its caller.
 - **Types come from the read model.** A field added to a `queries.py`
   dataclass appears in the API through `web/derive.py`; a new `orm.py` column
-  becomes a filter field through `filters.py`. Do not hand-write a Strawberry
+  becomes a filter field through `filters/`. Do not hand-write a Strawberry
   type for a DTO.
 - `tests/test_mcp.py` holds `tools/list` under 150 KB. Keep schemas sent with
   their `$defs`.
