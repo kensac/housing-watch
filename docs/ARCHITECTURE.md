@@ -1,6 +1,6 @@
 # Architecture
 
-housing-watch is four layers. Each depends only on the layers above it, so they can change independently.
+housing-watch is five layers. Each depends only on the layers above it, so they can change independently.
 
 ```
 adapters/  parse.py  fetch.py      SOURCES   what does each source list right now?  -> models.Result
@@ -52,7 +52,8 @@ everything.
 ## Store (Postgres, SQLAlchemy 2.0, Alembic)
 
 - `orm.py` is the schema: `listings → units → bands`, `snapshots`, `events`, `runs`, `source_state`,
-  `adapter_cache`, `chunk_results`, `fleet_workers`. Alembic owns all DDL, Procrastinate's included (revision 0002 runs
+  `adapter_cache`, `chunk_results`, `fleet_workers`, `saved_views`, `commutes`, `tracker_rows`, `tracker_events`,
+  `tracker_links`. Alembic owns all DDL, Procrastinate's included (revision 0002 runs
   its `SchemaManager.get_schema()`). Workers run `alembic upgrade head` at start under a Postgres
   advisory lock, so any worker can migrate. A Procrastinate upgrade that ships SQL migrations needs a
   new revision that applies them; `tests/test_fleet.py::test_procrastinate_schema_is_current` fails
@@ -132,8 +133,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   Every tool's parameters and result are typed (`mcp_models.py`), so its JSON Schema lists the filter fields,
   operators and enum values; enums there are the data's own strings ("1br"), not GraphQL names. A saved view
   comes back with its state typed by page, in the shape `create_view` takes. Schemas go out with their
-  `$defs` (`dereference_schemas=False`): expanded, the filter schema repeated in every place it is used
-  (325 KB of tools/list; now under 150 KB, which a test bounds). An optional field is not required rather
+  `$defs` (`dereference_schemas=False`): expanded, the filter schema would repeat in every place it is used.
+  A test holds tools/list under 150 KB. An optional field is not required rather
   than nullable, and unset fields are left out of results.
   Its write tools are the web app's mutations (saved views; manual tracker links), annotated as writes. Both
   are thin adapters over the same domain functions (`views.create/change/duplicate/delete`, `tracker.link/
@@ -168,7 +169,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   - Types: one source of truth, the read model's dataclasses. `web/derive.py` turns each into a Strawberry
     type (nested dataclasses, optionals, lists; a field's trailing comment is its description), so a field
     added to a dataclass is in the API with no other change. Fields made with `queries.internal()`
-    (`haystack`, `unit_sizes`, `unit_rents`) stay out. The DTOs, not the tables, are the source because
+    (`haystack`, `unit_sizes`, `unit_rents`, an event's raw `detail`) stay out. The DTOs, not the tables, are the source because
     verdicts, commutes and tracker stages are computed at read time. Closed value sets are `type X =
     Literal[...]` aliases in the domain (Borough, Size, Kind, PublishedStatus, Status, Verdict, EventType,
     StageGroup, Match, Health, JobStatus, Page), and derive() makes each one GraphQL enum; a value that is not
@@ -208,7 +209,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   Events. It is served by the hetzner worker container (`python -m housing_watch serve` = migrate +
   worker + web, the web started only when `HW_WEB_PORT` is set) on the tailnet only. The tables it
   writes are `saved_views` (`views.py`: version 2 JSON, the filter tree + sort pairs + columns per page,
-  re-validated against the registries on load; alembic 0010 converted version 1's `field.op.values` strings) and manual tracker links, through mutations that refuse anything not same-origin.
+  re-validated against the registries on load) and manual tracker links, through mutations that refuse anything not same-origin.
   Nothing is seeded.
 - `commute.py` routes eligible, listed listings to `HW_COMMUTE_TO` by transit (Google Routes API, weekday
   8:30 AM), each origin address once per destination (again after 60 days; a failed one after 10 minutes,
