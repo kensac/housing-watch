@@ -185,8 +185,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
     titles, addresses, notes, set-asides, sources (history keeps retired ones), application stages (unknown
     sheet statuses are kept as written), queue and task names. An event's detail is the `EventDetail` union
     (ListingChange, PageChange, SourceFailure); a failed job's `args` is `JobArgs`, every parameter a task
-    takes. Only envelopes (connections, inputs, payloads, meta) are declared in `schema.py`; filter, sort and
-    column types in `web/filter_types.py`.
+    takes. Only envelopes (connections, inputs, payloads, meta) are declared, in `web/api_types.py` with the
+    derived types; filter, sort and column types in `web/filter_types.py`. `web/schema.py` is the resolvers.
   - `schema.graphql` is the committed SDL (`python -m housing_watch schema`); a test and CI fail when it
     is stale.
   - Lists are Relay connections (`edges { cursor node }`, `page_info`, `first` ≤ 500, opaque `after`
