@@ -12,7 +12,8 @@ queries.py  notify/  web/ frontend/ READ      what changed, what fits           
 
 ## Sources (adapters)
 
-- One module per source in `adapters/`. An adapter is pure input → output: it fetches through
+- One module per source in `adapters/`, or a package when part of a source stands on its own (a
+  page parser, a table-image reader). An adapter is pure input → output: it fetches through
   `fetch.py` and returns `models.Result` (`Listing`s with units and bands, or `Snapshot`s of
   unstructured pages). It never touches the database, the queue or criteria.
 - `fetch.py` is the only network access. It enforces politeness per site and per process: at most
