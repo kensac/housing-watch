@@ -95,10 +95,13 @@ def get(url: str, *, headers: dict | None = None, retries: int = 2, allow_304: b
     raise FetchError(f"GET {url}: {err}")
 
 
-def post_json(url: str, body: dict, *, headers: dict | None = None) -> dict:
+def post_json(
+    url: str, body: dict | None = None, *, data: dict | None = None, headers: dict | None = None, timeout: float = 0
+) -> dict:
+    """POST a JSON body, or form fields as `data`, and return the JSON reply. timeout 0: the client's."""
     try:
         with _slot(url):
-            r = _client.post(url, json=body, headers=headers)
+            r = _client.post(url, json=body, data=data, headers=headers, timeout=timeout or httpx.USE_CLIENT_DEFAULT)
         r.raise_for_status()
         return r.json()
     except (httpx.HTTPError, ValueError) as e:
