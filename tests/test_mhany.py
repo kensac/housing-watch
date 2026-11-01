@@ -20,6 +20,8 @@ def test_building_urls():
         "https://www.mutualhousingny.org/stella-heights-hdfc",
         "https://www.mutualhousingny.org/pe2--700-manida-street",
         "https://www.mutualhousingny.org/1921-cortelyou-road",
+        "https://www.mutualhousingny.org/810-fulton-475-clermont-avenue",
+        "https://www.mutualhousingny.org/ancp-washington-heights-co-op-1st-time-homeowner-opportunity",
     ]
 
 
@@ -51,4 +53,25 @@ def test_cortelyou_closed_brooklyn():
     lst = building("1921-cortelyou-road")
     assert (lst.status, lst.borough) == ("closed", "Brooklyn")
     assert [(u.size, u.rent, u.ami) for u in lst.units] == [("1br", 680.0, 30), ("2br", 1740.0, 60)]
+    assert listing_verdict(lst).verdict == "excluded"
+
+
+def test_fulton_ami_from_headings_and_sizeless_table():
+    """AMI is a heading over each table, rents carry no "$", and the 130% table has no size column."""
+    lst = building("810-fulton-475-clermont-avenue")
+    assert (lst.status, lst.kind, lst.borough, lst.address) == ("open", "re-rental", "Brooklyn", "475 Clermont Avenue")
+    assert [(u.size, u.rent, u.ami) for u in lst.units] == [
+        ("studio", 1261.0, 60),
+        ("1br", 1319.0, 60),
+        ("unknown", 2370.0, 130),
+        ("unknown", 2542.0, 130),
+        ("unknown", 3264.0, 130),
+    ]
+    assert bands(lst.units[3])[2] == (3, 87155, 198510)  # "87,155 - $198,510": the minimum has no "$"
+    assert lst.notes == "Apply: email 810fulton@mutualhousingny.org"  # its download button links to "/"
+
+
+def test_homeowner_page_is_homeownership():
+    lst = building("ancp-washington-heights-co-op-1st-time-homeowner-opportunity")
+    assert lst.kind == "homeownership"
     assert listing_verdict(lst).verdict == "excluded"
