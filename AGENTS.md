@@ -68,7 +68,8 @@ is the design; the topic documents below are the rules for changing it.
 
 ## Commands
 
-- `make check`: ruff lint and format, the schema check, the Python tests.
+- `make check`: exactly CI's `check` job: ruff lint and format, pyright,
+  lint-imports, the schema check, the Python tests (`make test-par`).
   Set `HW_TEST_DATABASE_URL` or the Postgres tests skip (a failure under `CI`).
 - `make show S=<source>`: what one adapter returns now. Needs `HW_INCOME`.
   Stores nothing.
