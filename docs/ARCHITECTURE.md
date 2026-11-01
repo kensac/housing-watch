@@ -10,6 +10,11 @@ fleet/  worker                     FLEET     who fetches what, when, from which 
 queries/  notify/  web/ frontend/  READ      what changed, what fits                (UI, email)
 ```
 
+`lint-imports` (in `make check` and CI) enforces this: the contracts in `pyproject.toml` forbid adapters
+from importing the store, criteria, the fleet or readers; `eligibility/` from the store, network or fleet; the
+store from criteria, the fleet or readers; and web and MCP from the fleet. A module that moves package
+moves in its contract in the same PR.
+
 ## Sources (adapters)
 
 - One module per source in `adapters/`, or a package when part of a source stands on its own (a
