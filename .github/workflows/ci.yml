@@ -15,6 +15,7 @@ jobs:
     env:
       PYTHONPATH: src
       HW_TEST_DATABASE_URL: postgresql+psycopg://postgres:pg@127.0.0.1:5432/postgres
+      OMP_THREAD_LIMIT: 1 # Ubuntu's tesseract is built with OpenMP; its threads crowd out the xdist workers
     services:
       postgres:
         image: postgres:18-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
@@ -35,7 +36,8 @@ jobs:
       - name: schema.graphql matches the schema in code
         run: uv run python -m housing_watch schema --check schema.graphql
       # Offline: adapter tests parse saved fixtures; store/fleet/web tests use the postgres service.
-      - run: uv run python -m pytest -q
+      # -n auto: one worker per core, each with its own throwaway database (conftest.pg_url).
+      - run: nproc && uv run python -m pytest -n auto --durations=25 -p no:randomly
 
   web:
     runs-on: ubuntu-latest

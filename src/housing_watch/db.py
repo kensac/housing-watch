@@ -153,7 +153,9 @@ def record_listings(
         fp = _fp(lst)
         row = rows.get(key)
         if row is None:
-            row = apply_listing(lst, ListingRow(fingerprint=fp, first_seen=now, last_seen=now, last_changed=now))
+            row = apply_listing(
+                lst, ListingRow(fingerprint=fp, first_seen=now, last_seen=now, last_changed=now, updated=now)
+            )
             row.source = source  # the run's source owns the row, as gone detection assumes
             s.add(row)
             _event(s, source, key, "new", lst.title, None, now, baseline)
@@ -177,14 +179,17 @@ def record_listings(
         # chart_year is the one unit field outside the fingerprint: when only it moved, store it without an event
         years = [(u.key(), u.chart_year) for u in stored.units] != [(u.key(), u.chart_year) for u in lst.units]
         apply_listing(lst, row, units=row.fingerprint != fp or years)
-        row.source, row.fingerprint, row.last_seen, row.gone_since = source, fp, now, None
+        row.source, row.fingerprint, row.gone_since = source, fp, None
+        if s.is_modified(row):  # an event, a silent chart_year or title edit; not last_seen alone
+            row.updated = now
+        row.last_seen = now
         if typ:
             row.last_changed = now
             _event(s, source, key, typ, lst.title, detail, now, baseline)
             n += 1
     for key, row in rows.items():
         if key not in seen and row.gone_since is None:
-            row.gone_since = now
+            row.gone_since = row.updated = now
             _event(s, source, key, "gone", row.title, None, now, baseline)
             n += 1
     return n
@@ -283,7 +288,7 @@ def finish_run(
     if every_hours is not None:
         st.next_due = now + timedelta(hours=every_hours) - DUE_SLACK
     if ok:
-        if st.failing_since:
+        if (st.consecutive_failures or 0) >= 2:  # only a failure that was reported recovers
             _event(s, source, None, "source_recovered", source, None, now)
         st.last_ok, st.failing_since, st.consecutive_failures = now, None, 0
         return

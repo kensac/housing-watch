@@ -71,7 +71,7 @@ tables), so the same input always gives the same output.
 
 ```bash
 uv sync
-make check                                   # ruff + tests; set HW_TEST_DATABASE_URL for the Postgres ones
+make check                                   # CI's Python checks; set HW_TEST_DATABASE_URL for the Postgres tests
 HW_INCOME=90000 make show S=pronto           # what one adapter sees now; stores nothing
 python -m housing_watch migrate              # alembic upgrade head
 python -m housing_watch run --source pronto  # one run now, inline, no queue

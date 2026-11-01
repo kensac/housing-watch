@@ -32,7 +32,9 @@ queries.py  digest.py  web/ frontend/  READ      what changed, what fits        
   merged Result is still the whole source. The plan travels in `cache[PLAN]` (never saved). Every page,
   and every SANEL official document (`doc:<key>`), is its own top-level cache key, so chunk deltas
   never overlap. A cold Reside run is 4 chunks of ~530 pages; a run with few changed pages is one chunk,
-  recorded inline.
+  recorded inline. SANEL's sitemap drops and re-adds pages between reads (it keeps two records for some
+  buildings), so a page missing from it is served from the cache until it has been missing for `MAX_AGE_H`
+  (the cache entry's `absent`), and only then goes.
 - Reside's unit pages are often stale (no status label at all, or "Open Market" on a unit nobody can
   apply for), so its application form decides: `chunks()` reads the form's "Add unit" picker with a
   headless browser (`fetch.browser()`, Playwright; `NeedsByparr` sends planning to hetzner) into
@@ -107,8 +109,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
     `cleanup` (daily): drops finished jobs (successes after 2 days, failures after a week).
 - **Failures:** an adapter error is a failed run (recorded, not retried); Procrastinate retries only
   infrastructure trouble and chunk errors. A failed run increments `source_state.consecutive_failures`
-  and emits `source_failed` on the 2nd and 10th consecutive failure; the next success emits
-  `source_recovered`.
+  and emits `source_failed` on the 2nd and 10th consecutive failure; the success after a reported
+  failure emits `source_recovered`.
 - **Metrics** (`metrics.py`, `:9091`, `HW_METRICS_PORT`): `hw_source_run_seconds` and
   `hw_source_failures_total` are per worker; `hw_jobs{task,status}`,
   `hw_source_last_success_timestamp_seconds` and `hw_source_consecutive_failures` are read from the
@@ -120,7 +122,9 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   unit search (one row per unit), listing detail with units/bands/events, the per-source health table,
   event feed, overview counts.
   It attaches verdicts by calling `criteria` at read time.
-  Every listing is judged once per store version and cached in memory, so pages filter in Python.
+  Every listing is judged once per store version and cached in memory, so pages filter in Python. The version is
+  the sum of `listings.updated` (set by `record_listings` whenever a stored field moves, with or without an
+  event; never by a scrape that only moves `last_seen`) plus the commute and tracker tables' counts and newest rows.
 - `changes.py` turns a `changed` event's `before`/`after` into lines (status, deadline, units relabeled,
   added or removed, rent, availability, income limits) and flags noise: a status moving to "unknown", or
   back from it to what it was, with nothing else changed. `db.py` stores both in the event's detail.
@@ -208,7 +212,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   re-validated against the registries on load) and manual tracker links, through mutations that refuse anything not same-origin.
   Nothing is seeded.
 - `commute.py` routes eligible, listed listings to `HW_COMMUTE_TO` by transit (Google Routes API, weekday
-  8:30 AM), each origin address once per destination (again after 60 days), into `commutes`; a periodic
+  8:30 AM), each origin address once per destination (again after 60 days; a failed one after 10 minutes,
+  doubling with each failure in a row up to ~21 h), into `commutes`; a periodic
   `commute` task on the digest worker does it. queries.py attaches the minutes and lines at read time
   (`commute` filter field, sort and column).
 - `tracker.py` copies the owner's application tracker sheet (the source of truth for application status
