@@ -288,7 +288,7 @@ def test_fleet(pg, monkeypatch):
     f = gql(TestClient(create_app(pg)), q)["data"]["fleet"]
     assert f["available"] and {"queue": "sources", "status": "failed", "count": 1} in f["queues"] and f["hosts"]
     assert f["failures"] == [{"id": "2", "args": {"source": "b", "key": None, "run_id": None, "timestamp": None}}]
-    monkeypatch.setattr(queries, "JOBS_TABLE", "procrastinate_missing")
+    monkeypatch.setattr(queries._fleet, "JOBS_TABLE", "procrastinate_missing")
     assert gql(TestClient(create_app(pg)), q)["data"]["fleet"]["available"] is False
 
 

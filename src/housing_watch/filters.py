@@ -10,7 +10,7 @@ tools' parameter (mcp_server.py derives pydantic models from it) and what a save
 listings/units/bands (and events) columns, so a new column in orm.py is filterable with no other change; a column
 with `info={"values": <Literal alias>}` is an enum; LABELS and HIDDEN only rename or hide. Unit fields match a
 listing when one unit matches all unit conditions together; band conditions (`units.bands`) must hold on one band
-of that same unit. Computed fields (verdict, reason, unit counts) are judged at read time, so queries.py applies
+of that same unit. Computed fields (verdict, reason, unit counts) are judged at read time, so queries/ applies
 them in Python.
 """
 
