@@ -246,12 +246,17 @@ def test_writes_are_logged(pg, caplog, monkeypatch):
         with pytest.raises(ToolError):
             call(pg, "delete_view", id=999)
         call(pg, "graphql_mutation", query=f"mutation {{ deleteView(input: {{ id: {v['id']} }}) {{ id }} }}")
+        hidden = "mutation { ...on Mutation { deleteView(input: { id: 998 }) { id } } ...F } "
+        hidden += 'fragment F on Mutation { unlinkTracker(input: { listing_key: "a:1" }) { row_key } }'
+        call(pg, "graphql_mutation", query=hidden)  # fragments do not hide a write from the log
         call(pg, "find_listings")
     lines = [r.getMessage() for r in caplog.records if r.getMessage().startswith("mcp write")]
     assert lines == [
         "mcp write create_view by u1 <me@example.org>: name='Mine' state={listings} is_default=False",
         "mcp write delete_view by u1 <me@example.org>: id=999 refused: No such view",
         "mcp write graphql_mutation by u1 <me@example.org>: mutations=deleteView variables={}",
+        "mcp write graphql_mutation by u1 <me@example.org>: mutations=deleteView,unlinkTracker variables={} "
+        "errors: NOT_FOUND",
     ]  # reads are not logged
 
 
