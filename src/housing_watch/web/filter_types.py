@@ -1,4 +1,4 @@
-"""GraphQL filter, sort and column types, derived from filters.py's field registry and queries/'s sort registries.
+"""GraphQL filter, sort and column types, derived from the `filters` field registry and queries/'s sort registries.
 
 Every filterable field is a field of `ListingFilterInput` (or `EventFilterInput`), typed by its kind: text, a
 closed set (its own enum), number, time or bool. Unit fields sit under `units`, band fields under `units.bands`,
@@ -6,7 +6,7 @@ and an event's listing under `listing`; each holds that field's operators. A col
 in `schema.graphql` and in the generated client with no other change. Each input has an output twin without the
 suffix (`ListingFilter`), which saved views return.
 
-Values go to filters.py as its JSON tree (`tree()`), the one shape the API, the MCP tools and saved views share.
+Values go to `filters` as its JSON tree (`tree()`), the one shape the API, the MCP tools and saved views share.
 """
 
 import enum
@@ -174,7 +174,7 @@ FieldType = enum_type(F.FieldType, "Which operators a field takes.", name="Field
 
 
 def tree(obj):
-    """A Strawberry input value as filters.py's JSON tree: GraphQL field names, enum members as their values."""
+    """A Strawberry input value as the `filters` JSON tree: GraphQL field names, enum members as their values."""
     if obj is None:
         return None
     if isinstance(obj, enum.Enum):

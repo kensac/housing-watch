@@ -6,7 +6,7 @@ who may sign in. It never starts without that: there is no unauthenticated mode.
 upstream tokens are kept encrypted under FASTMCP_HOME; losing them means reconnecting, nothing else.
 
 `search` and `fetch` have the shapes ChatGPT's connectors and deep research expect; the other tools take typed
-filters (the JSON tree of filters.py, as pydantic models in mcp_models.py) and return the same fields as the web
+filters (the JSON tree of `filters`, as pydantic models in mcp_models.py) and return the same fields as the web
 API, minus the applicant's PDFs; every tool's parameters and output have a JSON Schema, sent with its `$defs` (not
 expanded, which would repeat the filter schema in every place it is used). The write tools are the web app's
 mutations, thin adapters over the same views.py / tracker.py functions: saved views (create, change, duplicate,

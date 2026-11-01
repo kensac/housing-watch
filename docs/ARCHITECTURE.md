@@ -156,7 +156,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 - `notify/digest.py` builds the email from `queries/`: `send(engine, dry_run)` and `urgent(engine)` (an open,
   eligible listing has a pending new/reopened/changed event). Events with `detail.baseline = true` come from
   a source's first run; they collapse into one summary line and only their eligible listings are listed.
-- `filters.py` is the generic filter layer: fields are read off the listings/units/bands (and events)
+- `filters/` is the generic filter layer (`fields.py` the field registry, `tree.py` conditions and their JSON
+  tree, `evaluate.py` SQL and Python matching): fields are read off the listings/units/bands (and events)
   columns in `orm.py`, so a new column is filterable with no other change (a column with
   `info={"values": <Literal alias>}` is an enum field). A filter is a JSON tree with a key per field holding
   its operators, all of which must hold: `{"borough": {"in": ["Queens"]}, "units": {"rent": {"le": 3000},

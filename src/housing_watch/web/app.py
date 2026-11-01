@@ -4,7 +4,7 @@ app that uses it.
 The app lives in `frontend/` and is built into `web/dist/` by the image (`npm run build`); every other path
 serves its index.html, and the app keeps all list state (filters, search, sort, columns, view, open listing) in
 its own URL. Its queries are typed from the committed `schema.graphql` (`python -m housing_watch schema`) by
-GraphQL Code Generator. A filter crosses the API as a typed input object holding filters.py's JSON tree
+GraphQL Code Generator. A filter crosses the API as a typed input object holding the `filters` JSON tree
 (filter_types.py).
 The data is read-only from here; the API writes only `saved_views` and `tracker_links`, and only from
 same-origin requests (tailnet-only and single-user, so no login). GET queries, introspection and GraphiQL stay on.
