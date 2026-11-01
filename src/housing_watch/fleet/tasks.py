@@ -29,10 +29,11 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from . import commute, db, metrics, runner, tracker
-from .adapters import load_all
-from .fetch import NeedsByparr
-from .orm import FleetWorkerRow
+from .. import commute, db, tracker
+from ..adapters import load_all
+from ..fetch import NeedsByparr
+from ..orm import FleetWorkerRow
+from . import metrics, runner
 
 log = logging.getLogger("housing_watch")
 
@@ -219,7 +220,7 @@ def source_merge(source: str, run_id: int) -> str:
 @app.task(name="digest", queue=DIGEST, retry=Retry(retries=3, wait=300))
 def digest(scheduled: bool = False) -> str:
     """The scheduled digest, or (scheduled=False, queued after a run recorded events) mail now if urgent."""
-    from . import digest as dg
+    from .. import digest as dg
 
     eng = engine()
     if not scheduled and not dg.urgent(eng):

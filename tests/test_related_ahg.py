@@ -6,7 +6,7 @@ import httpx
 from housing_watch import fetch
 from housing_watch.adapters import related_ahg
 from housing_watch.adapters.related_ahg import RelatedAHG, home_entries, parse_listing
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "related_ahg"

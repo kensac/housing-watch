@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from housing_watch.adapters import affordablehousing_com as ah
-from housing_watch.criteria import Profile, listing_verdict, unit_verdict
+from housing_watch.eligibility import Profile, listing_verdict, unit_verdict
 
 F = Path(__file__).parent / "fixtures" / "affordablehousing_com"
 NO_BRONX = Profile(household=1, income=150000, sizes=frozenset({"studio", "1br"}), excluded_boroughs=frozenset())

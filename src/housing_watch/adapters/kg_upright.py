@@ -16,7 +16,8 @@ import subprocess
 import tempfile
 from urllib.parse import urljoin
 
-from .. import ami, fetch, parse
+from .. import fetch, parse
+from ..eligibility import ami
 from ..models import Listing, Result, Snapshot, Unit
 from . import by_content, prune
 from ._page import COMMON_IGNORE, DOC_RE, PageAdapter

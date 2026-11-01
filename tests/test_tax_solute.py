@@ -5,7 +5,7 @@ import pytest
 from helpers import bands
 from housing_watch.adapters import tax_solute
 from housing_watch.adapters.tax_solute import TaxSolute, parse_page
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "tax_solute"
 

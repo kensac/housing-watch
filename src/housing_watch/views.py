@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from . import filters as F
 from . import queries
-from .criteria import PROFILE, Profile
+from .eligibility import PROFILE, Profile
 from .models import NotFound, Serial
 from .orm import SavedViewRow
 
