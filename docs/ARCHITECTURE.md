@@ -6,7 +6,7 @@ housing-watch is five layers. Each depends only on the layers above it, so they 
 adapters/  parse.py  fetch.py      SOURCES   what does each source list right now?  -> models.Result
 criteria.py                        RULES     is a unit eligible for the profile?    (pure, read time)
 orm.py  db.py  alembic/            STORE     raw facts + change events in Postgres  (no verdicts)
-tasks.py  worker                   FLEET     who fetches what, when, from which IP  (Procrastinate)
+fleet/  worker                     FLEET     who fetches what, when, from which IP  (Procrastinate)
 queries.py  digest.py  web/ frontend/  READ      what changed, what fits                (UI, email)
 ```
 
@@ -66,7 +66,7 @@ everything.
   adapter set none; a unit whose chart year alone moved is rewritten without an event.
 - Events from a source's first successful run carry `detail.baseline = true`: they describe what was
   already listed, not a change, and the digest collapses them.
-- `runner.py` records one run in one transaction: listings, snapshots, cache, `runs` and `source_state`
+- `fleet/runner.py` records one run in one transaction: listings, snapshots, cache, `runs` and `source_state`
   land together or not at all.
 - One database: `housing-watch-db` on hetzner, reachable over the tailnet. `HW_DATABASE_URL`
   (`postgresql+psycopg://...`) everywhere.
@@ -77,6 +77,9 @@ The job queue is [Procrastinate](https://procrastinate.readthedocs.io/) on the s
 provides `SKIP LOCKED` claiming, LISTEN/NOTIFY, periodic tasks, `queueing_lock` dedupe, `lock`
 serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are not in `orm.py`.
 
+- **Code:** the `fleet/` package. `fleet/__init__.py` is its public surface (`work`, `run_inline`,
+  `fetch_all`); `tasks.py` is the Procrastinate app and its tasks, `runner.py` runs and records one source,
+  `metrics.py` is the exporter. `__main__.py` is only the CLI: one short function per subcommand.
 - **Workers** are the same image on every host: `python -m housing_watch worker`. `HW_WORKER_NAME`
   names the worker (the host); each worker upserts itself into `fleet_workers` every 30s, because
   Procrastinate's own workers table has no name. Each worker runs `HW_WORKER_CONCURRENCY` threads; politeness is in
@@ -111,7 +114,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   infrastructure trouble and chunk errors. A failed run increments `source_state.consecutive_failures`
   and emits `source_failed` on the 2nd and 10th consecutive failure; the success after a reported
   failure emits `source_recovered`.
-- **Metrics** (`metrics.py`, `:9091`, `HW_METRICS_PORT`): `hw_source_run_seconds` and
+- **Metrics** (`fleet/metrics.py`, `:9091`, `HW_METRICS_PORT`): `hw_source_run_seconds` and
   `hw_source_failures_total` are per worker; `hw_jobs{task,status}`,
   `hw_source_last_success_timestamp_seconds` and `hw_source_consecutive_failures` are read from the
   database at scrape time, so every worker reports the same values (aggregate with `max`).
