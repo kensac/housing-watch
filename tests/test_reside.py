@@ -6,7 +6,7 @@ from helpers import bands
 from housing_watch import adapters
 from housing_watch.adapters import PLAN, reside
 from housing_watch.adapters.reside import Reside, parse_page
-from housing_watch.criteria import listing_verdict, unit_verdict
+from housing_watch.eligibility import listing_verdict, unit_verdict
 from housing_watch.fleet import runner
 
 F = Path(__file__).parent / "fixtures" / "reside"

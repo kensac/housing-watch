@@ -2,8 +2,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from helpers import T
-from housing_watch import changes, db, digest
+from housing_watch import db
 from housing_watch.models import Band, Listing, Unit
+from housing_watch.notify import changes, digest
 from housing_watch.orm import EventRow
 
 

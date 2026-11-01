@@ -5,7 +5,7 @@ import pytest
 
 from housing_watch.adapters import stuytown
 from housing_watch.adapters.stuytown import StuyTown, parse_api, parse_eligibility
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "stuytown"

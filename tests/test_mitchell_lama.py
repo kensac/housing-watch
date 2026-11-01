@@ -2,7 +2,7 @@ from pathlib import Path
 
 from housing_watch import db
 from housing_watch.adapters.mitchell_lama import income_limits, parse_open_lists, pdf_snapshot
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "mitchell_lama"
 TEXT = (F / "open-lists.txt").read_text()
