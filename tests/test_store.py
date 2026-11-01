@@ -39,6 +39,16 @@ def test_closed_and_reopened(pg):
         assert [e.type for e in events(s)] == ["new", "closed", "reopened"]
 
 
+def test_gone_listing_back_as_closed_is_closed_not_reopened(pg):
+    with Session(pg) as s, s.begin():
+        db.record_listings(s, "t", [L()])
+        db.record_listings(s, "t", [])
+        db.record_listings(s, "t", [L(status="closed")])
+        db.record_listings(s, "t", [])
+        db.record_listings(s, "t", [L()])
+        assert [e.type for e in events(s)] == ["new", "gone", "closed", "gone", "reopened"]
+
+
 def test_unit_rows_untouched_when_nothing_moved(pg):
     from housing_watch.orm import UnitRow
 

@@ -159,7 +159,9 @@ def record_listings(
             n += 1
             continue
         typ = None
-        if row.gone_since is not None or (row.status == "closed" and lst.status != "closed"):
+        if row.gone_since is not None:  # listed again: reopened, unless it comes back closed
+            typ = "closed" if lst.status == "closed" else "reopened"
+        elif row.status == "closed" and lst.status != "closed":
             typ = "reopened"
         elif row.fingerprint != fp:
             typ = "closed" if lst.status == "closed" and row.status != "closed" else "changed"
