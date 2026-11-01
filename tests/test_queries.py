@@ -153,7 +153,7 @@ def test_events(db):
 
 
 def test_fleet_without_procrastinate(db, monkeypatch):
-    monkeypatch.setattr(Q, "JOBS_TABLE", "procrastinate_missing")
+    monkeypatch.setattr(Q._fleet, "JOBS_TABLE", "procrastinate_missing")
     f = Q.fleet(db)
     assert not f.available and {h.name for h in f.hosts} == {"oci", "hetzner"}
 
@@ -234,4 +234,6 @@ def test_a_listings_sizes_follow_the_size_order():
     lst = Listing("t", "1", "T", "u", units=[Unit("unknown"), Unit("6br"), Unit("5br"), Unit("studio")])
     t = datetime(2026, 11, 1, tzinfo=UTC)
     row = ListingRow(key=lst.key(), source="t", first_seen=t, last_changed=t)
-    assert Q._summary(row, lst, Q.PROFILE).sizes == ["studio", "5br", "6br", "unknown"]
+    from housing_watch.criteria import PROFILE
+
+    assert Q._judging._summary(row, lst, PROFILE).sizes == ["studio", "5br", "6br", "unknown"]

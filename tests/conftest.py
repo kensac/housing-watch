@@ -50,7 +50,8 @@ def pg(pg_url):
     from housing_watch import queries
     from housing_watch.orm import Base
 
-    queries._cache.clear()  # keyed by the database URL, which every test shares; seeds reuse the same timestamps
+    # keyed by the database URL, which every test shares; seeds reuse the same timestamps
+    queries._judging._cache.clear()
 
     eng = create_engine(pg_url)
     with eng.begin() as c:

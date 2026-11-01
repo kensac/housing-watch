@@ -1,4 +1,4 @@
-"""The GraphQL schema (Strawberry) over queries.py, views.py and tracker.py: what the web app reads and writes.
+"""The GraphQL schema (Strawberry) over queries/, views.py and tracker.py: what the web app reads and writes.
 
 Object types are derived from the read model's dataclasses (derive.py), never written out: a field added to
 a dataclass is in the schema, and in `schema.graphql`, with no other change. Only API envelopes (connections,
