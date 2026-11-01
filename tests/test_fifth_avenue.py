@@ -2,7 +2,7 @@ from pathlib import Path
 
 from housing_watch.adapters import fifth_avenue
 from housing_watch.adapters.fifth_avenue import FifthAvenue, parse_page
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "fifth_avenue"

@@ -3,7 +3,7 @@ from pathlib import Path
 
 from housing_watch.adapters import housing_connect
 from housing_watch.adapters.housing_connect import HousingConnect, parse_ad
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "housing_connect"

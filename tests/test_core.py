@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from helpers import T
 from housing_watch import db, parse
-from housing_watch.criteria import ELIGIBLE, EXCLUDED, POSSIBLE, listing_verdict, unit_verdict
+from housing_watch.eligibility import ELIGIBLE, EXCLUDED, POSSIBLE, listing_verdict, unit_verdict
 from housing_watch.models import Band, Listing, Snapshot, Unit
 from housing_watch.orm import EventRow
 
@@ -78,7 +78,7 @@ def test_snapshot_changes(pg):
 
 
 def test_digest_builds(pg):
-    from housing_watch import digest
+    from housing_watch.notify import digest
 
     with Session(pg) as s, s.begin():
         db.record_listings(s, "t", [L([Unit("studio", 2400, 130, bands=[Band(1, 82557, 154440)])], borough="Queens")])

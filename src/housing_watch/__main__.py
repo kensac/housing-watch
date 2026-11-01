@@ -20,7 +20,7 @@ import sys
 import threading
 from dataclasses import asdict
 
-from . import db, runner
+from . import db, fleet
 from .adapters import load_all
 from .criteria import PROFILE, listing_verdict
 
@@ -36,23 +36,56 @@ def _serve_in_thread(name: str, asgi_app, port: int) -> None:
     log.info("%s on :%d", name, port)
 
 
-def _worker(eng) -> None:
-    from . import metrics, tasks
+def _serve(a: argparse.Namespace) -> None:
+    eng = db.engine()
+    db.migrate(eng)  # before the web starts reading
+    if web_port := int(os.environ.get("HW_WEB_PORT") or 0):
+        from .web.app import create_app
 
-    tasks.set_engine(eng)
-    metrics.serve(tasks.engine)
-    name = runner.WORKER
-    concurrency = int(os.environ.get("HW_WORKER_CONCURRENCY", "4"))
-    queues = tasks.queues()
-    log.info("worker %s: queues %s, concurrency %d", name, queues, concurrency)
-    tasks.run_worker(name, concurrency, queues)
+        _serve_in_thread("web", create_app(eng), web_port)
+    if mcp_port := int(os.environ.get("HW_MCP_PORT") or 0):
+        from .mcp_server import app as mcp_app
+
+        _serve_in_thread("mcp", mcp_app(eng), mcp_port)
+    fleet.work(eng)
 
 
-def _list(eng) -> None:
+def _worker(a: argparse.Namespace) -> None:
+    eng = db.engine()
+    db.migrate(eng)
+    fleet.work(eng)
+
+
+def _migrate(a: argparse.Namespace) -> None:
+    db.migrate(db.engine())
+
+
+def _run(a: argparse.Namespace) -> None:
+    eng = db.engine()
+    for name in a.source:
+        print(f"{name}: {fleet.run_inline(eng, name)}")
+
+
+def _digest(a: argparse.Namespace) -> None:
+    from . import digest
+
+    print(digest.send(db.engine(), dry_run=a.dry_run))
+
+
+def _show(a: argparse.Namespace) -> None:
+    res, _ = fleet.fetch_all(load_all()[a.name]())
+    for lst in res.listings:
+        v = listing_verdict(lst)
+        print(json.dumps({"verdict": v.verdict, "reason": v.reason, **asdict(lst)}, default=str))
+    for snap in res.snapshots:
+        print(json.dumps({"snapshot": snap.url, "links": snap.links, "text": snap.text[:500]}))
+
+
+def _list(a: argparse.Namespace) -> None:
     """One line per adapter: cadence, last success, failure streak, next due."""
     from sqlalchemy.orm import Session
 
-    with Session(eng) as s:
+    with Session(db.engine()) as s:
         states = db.source_states(s)
     for name, cls in sorted(load_all().items()):
         st = states.get(name)
@@ -65,20 +98,32 @@ def _list(eng) -> None:
         print(line)
 
 
-def _schema(path: str, check: bool) -> int:
+def _schema(a: argparse.Namespace) -> int:
     """The web API's SDL, as frontend/codegen.ts reads it."""
     from pathlib import Path
 
     from .web.schema import schema
 
-    sdl, f = schema.as_str() + "\n", Path(path)
-    if not check:
+    sdl, f = schema.as_str() + "\n", Path(a.path)
+    if not a.check:
         f.write_text(sdl)
         return 0
     if f.is_file() and f.read_text() == sdl:
         return 0
-    print(f"{path} is stale: run `python -m housing_watch schema {path}` and commit it", file=sys.stderr)
+    print(f"{a.path} is stale: run `python -m housing_watch schema {a.path}` and commit it", file=sys.stderr)
     return 1
+
+
+COMMANDS = {
+    "serve": _serve,
+    "worker": _worker,
+    "migrate": _migrate,
+    "run": _run,
+    "digest": _digest,
+    "list": _list,
+    "show": _show,
+    "schema": _schema,
+}
 
 
 def main(argv=None) -> int:
@@ -101,47 +146,9 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.cmd in ("show", "digest", "serve") and PROFILE.income <= 0:
         ap.error("set HW_INCOME (annual household income); see criteria.Profile for the other HW_* vars")
-
-    if a.cmd == "show":
-        res, _ = runner.fetch_all(load_all()[a.name]())
-        for lst in res.listings:
-            v = listing_verdict(lst)
-            print(json.dumps({"verdict": v.verdict, "reason": v.reason, **asdict(lst)}, default=str))
-        for snap in res.snapshots:
-            print(json.dumps({"snapshot": snap.url, "links": snap.links, "text": snap.text[:500]}))
-        return 0
-    if a.cmd == "schema":
-        return _schema(a.path, a.check)
-    eng = db.engine()
-    if a.cmd == "migrate":
-        db.migrate(eng)
-    elif a.cmd == "worker":
-        db.migrate(eng)
-        _worker(eng)
-    elif a.cmd == "serve":
-        db.migrate(eng)  # before the web starts reading
-        if web_port := int(os.environ.get("HW_WEB_PORT") or 0):
-            from .web.app import create_app
-
-            _serve_in_thread("web", create_app(eng), web_port)
-        if mcp_port := int(os.environ.get("HW_MCP_PORT") or 0):
-            from .mcp_server import app as mcp_app
-
-            _serve_in_thread("mcp", mcp_app(eng), mcp_port)
-        _worker(eng)
-    elif a.cmd == "list":
-        _list(eng)
-    elif a.cmd == "run":
-        unknown = set(a.source) - set(load_all())
-        if unknown:
-            ap.error(f"unknown source(s): {', '.join(sorted(unknown))}")
-        for name in a.source:
-            print(f"{name}: {runner.run_inline(eng, name)}")
-    elif a.cmd == "digest":
-        from . import digest
-
-        print(digest.send(eng, dry_run=a.dry_run))
-    return 0
+    if a.cmd == "run" and (unknown := set(a.source) - set(load_all())):
+        ap.error(f"unknown source(s): {', '.join(sorted(unknown))}")
+    return COMMANDS[a.cmd](a) or 0
 
 
 if __name__ == "__main__":

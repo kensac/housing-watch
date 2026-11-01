@@ -181,8 +181,8 @@ def test_result_json_roundtrip():
 def test_digest_collapses_baseline(pg):
     from sqlalchemy.orm import Session
 
-    from housing_watch import digest
     from housing_watch.models import Band, Listing, Unit
+    from housing_watch.notify import digest
 
     good = Listing(
         "t", "a", "Good", "u", borough="Queens", units=[Unit("studio", 2400, 130, bands=[Band(1, 82557, 154440)])]
