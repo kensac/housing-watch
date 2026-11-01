@@ -1,8 +1,8 @@
 """Transit commute time from eligible listings to HW_COMMUTE_TO, by Google's Routes API (GOOGLE_MAPS_API_KEY).
 
 The API is paid, so only eligible, still-listed listings are routed, each origin address once per destination
-(again after STALE). Routes are for a weekday 8:30 AM New York departure. Results are stored raw in `commutes`;
-queries.py attaches them to listings at read time.
+(again after STALE; a failed one after a backoff). Routes are for a weekday 8:30 AM New York departure. Results
+are stored raw in `commutes`; queries.py attaches them to listings at read time.
 """
 
 from __future__ import annotations
@@ -35,6 +35,7 @@ NY = ZoneInfo("America/New_York")
 DEPART = (8, 30)  # weekday, New York time
 STALE = timedelta(days=60)  # timetables change; re-route after this
 BATCH = 100  # routes per refresh
+RETRY = timedelta(minutes=10)  # a failed route waits this, doubled per failure in a row (up to 2**7, ~21 h)
 
 
 @dataclass
@@ -125,15 +126,15 @@ def refresh(engine: Engine, now: datetime | None = None, limit: int = BATCH) -> 
         return 0
     now = now or datetime.now(NY)
     with Session(engine) as s:
-        fresh = set(
-            s.scalars(
-                select(CommuteRow.origin).where(
-                    CommuteRow.destination == DESTINATION,
-                    CommuteRow.status != "failed",
-                    CommuteRow.computed > now - STALE,
-                )
+        rows = s.execute(
+            select(CommuteRow.origin, CommuteRow.status, CommuteRow.route, CommuteRow.computed).where(
+                CommuteRow.destination == DESTINATION, CommuteRow.computed > now - STALE
             )
-        )
+        ).all()
+    fails = {r.origin: (r.route or {}).get("fails", 1) for r in rows if r.status == "failed"}
+    fresh = {
+        r.origin for r in rows if r.origin not in fails or r.computed > now - RETRY * 2 ** min(fails[r.origin] - 1, 7)
+    }
     todo = sorted(wanted(engine) - fresh)[:limit]
     depart = departure(now)
     for src in todo:
@@ -142,7 +143,7 @@ def refresh(engine: Engine, now: datetime | None = None, limit: int = BATCH) -> 
             status = "ok" if minutes is not None else "no_route"
         except fetch.FetchError as e:
             log.warning("commute: %s: %s", src, e)
-            minutes, info, status = None, {"error": str(e)[:300]}, "failed"
+            minutes, info, status = None, {"error": str(e)[:300], "fails": fails.get(src, 0) + 1}, "failed"
         stmt = pg_insert(CommuteRow).values(origin=src, destination=DESTINATION, minutes=minutes, status=status,
                                             route=info, depart=depart, computed=now)  # fmt: skip
         stmt = stmt.on_conflict_do_update(
