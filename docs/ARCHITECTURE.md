@@ -32,7 +32,9 @@ queries.py  digest.py  web/ frontend/  READ      what changed, what fits        
   merged Result is still the whole source. The plan travels in `cache[PLAN]` (never saved). Every page,
   and every SANEL official document (`doc:<key>`), is its own top-level cache key, so chunk deltas
   never overlap. A cold Reside run is 4 chunks of ~530 pages; a run with few changed pages is one chunk,
-  recorded inline.
+  recorded inline. SANEL's sitemap drops and re-adds pages between reads (it keeps two records for some
+  buildings), so a page missing from it is served from the cache until it has been missing for `MAX_AGE_H`
+  (the cache entry's `absent`), and only then goes.
 - Reside's unit pages are often stale (no status label at all, or "Open Market" on a unit nobody can
   apply for), so its application form decides: `chunks()` reads the form's "Add unit" picker with a
   headless browser (`fetch.browser()`, Playwright; `NeedsByparr` sends planning to hetzner) into

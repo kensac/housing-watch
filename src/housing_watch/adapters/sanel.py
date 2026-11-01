@@ -1,16 +1,17 @@
 """SANEL (sanel.nyc): an aggregator of ~27 NYC sources, used here as the safety net.
 
-Every listing page is in the sitemap as /affordable-housing/<borough>/<slug>. The sitemap has no lastmod, so
-pages are cached by url and re-read on a rolling schedule: new urls at once, then the stalest pages, so each
-page is refreshed at least every MAX_AGE_H. The pages due are spread over chunks on different workers; every
-page and document is its own top-level cache key, so chunks' deltas never overlap. A page carries JSON-LD
-RealEstateListing (name, official source in `isBasedOn`, address), a facts block (Rent, Bedrooms, AMI,
-Household, Income, Deadline), links to the official page or flyer and, when the source publishes one, a tier
+Every listing page is in the sitemap as /affordable-housing/<borough>/<slug>. The sitemap has no lastmod, so pages
+are cached by url and re-read on a rolling schedule: new urls at once, then the stalest pages, so each page is
+refreshed at least every MAX_AGE_H. A page missing from the sitemap keeps its last copy until it has been missing
+for MAX_AGE_H too, since the sitemap drops and re-adds pages between reads. The pages due are spread over chunks on
+different workers; every page and document is its own top-level cache key, so chunks' deltas never overlap. A page
+carries JSON-LD RealEstateListing (name, official source in `isBasedOn`, address), a facts block (Rent, Bedrooms,
+AMI, Household, Income, Deadline), links to the official page or flyer and, when the source publishes one, a tier
 table with one row per household size. Without a tier table the facts block only summarises every tier, so the
-official data is read where it is public (Housing Connect's API, HDC's flyer PDF, Pronto's API, HPD's
-Mitchell-Lama list, Reside's unit page or its building table's row at the unit's rent, SHF's re-rental form,
-Tax Solute's page, St. Nicks' senior-housing list, HCR Housing Search), cached per document for DOC_TTL_H;
-otherwise `notes` says what the source does not publish. Applying is never through SANEL.
+official data is read where it is public (Housing Connect's API, HDC's flyer PDF, Pronto's API, HPD's Mitchell-Lama
+list, Reside's unit page or its building table's row at the unit's rent, SHF's re-rental form, Tax Solute's page,
+St. Nicks' senior-housing list, HCR Housing Search), cached per document for DOC_TTL_H; otherwise `notes` says what
+the source does not publish. Applying is never through SANEL.
 """
 
 from __future__ import annotations
@@ -481,7 +482,8 @@ class Sanel(Adapter):
         return lst
 
     def chunks(self) -> list[str]:
-        """Read the sitemap and plan: new pages, then anything older than MAX_AGE_H, then the stalest share."""
+        """Read the sitemap and plan: new pages, then anything older than MAX_AGE_H, then the stalest share. Pages
+        missing from the sitemap for less than MAX_AGE_H are served from the cache."""
         xml = fetch.html(SITEMAP)
         urls = [u for u in dict.fromkeys(re.findall(r"<loc>([^<]+)</loc>", xml)) if PAGE_RE.match(u)]
         if len(urls) < self.min_listings:
@@ -493,18 +495,21 @@ class Sanel(Adapter):
             c.setdefault(f"doc:{k}", e)
         live = set(urls)
         for k in list(c):
-            if (
-                k.startswith("http")
-                and k not in live
-                or k.startswith("doc:")
-                and now - c[k]["fetched"] > DOC_DROP_H * 3600
-            ):
-                del c[k]  # pages gone from the sitemap, documents no listing has needed for a week
+            if k.startswith("http") and k not in live:
+                # the sitemap drops and re-adds pages between reads (SANEL keeps two records for some buildings), so a
+                # page is gone only once it has been missing for a whole re-read cycle; until then its copy stands
+                if now - c[k].setdefault("absent", now) > MAX_AGE_H * 3600:
+                    del c[k]
+            elif k.startswith("doc:") and now - c[k]["fetched"] > DOC_DROP_H * 3600:
+                del c[k]  # documents no listing has needed for a week
+            elif k in live:
+                c[k].pop("absent", None)
+        absent = [k for k in c if k.startswith("http") and k not in live]
         missing = [u for u in urls if u not in c]
         cached = sorted((u for u in urls if u in c), key=lambda u: c[u]["fetched"])
         stale = [u for u in cached if now - c[u]["fetched"] > MAX_AGE_H * 3600]
         todo = set(missing) | set(cached[: max(len(urls) // REFRESH_SHARE, len(stale))])
-        c[PLAN] = spread([u for u in urls if u in todo], [u for u in urls if u not in todo], self.parallel)
+        c[PLAN] = spread([u for u in urls if u in todo], [u for u in urls if u not in todo] + absent, self.parallel)
         return list(c[PLAN])
 
     def fetch_chunk(self, key: str) -> Result:
