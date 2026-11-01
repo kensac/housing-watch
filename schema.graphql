@@ -1049,6 +1049,8 @@ type Overview {
   eligible_now: [Listing!]!
   recent: [Event!]!
   total: Int!
+
+  """Every source, as the Sources page lists them, with listings or not"""
   n_sources: Int!
   digest: Digest
 }
