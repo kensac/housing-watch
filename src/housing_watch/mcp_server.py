@@ -18,6 +18,7 @@ skip the browser's same-origin check. The web app's /graphql never sets it.
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import inspect
 import json
@@ -35,7 +36,6 @@ from graphql import (
     GraphQLSyntaxError,
     InlineFragmentNode,
     OperationDefinitionNode,
-    OperationType,
     parse,
 )
 from pydantic import Field
@@ -60,6 +60,12 @@ FILTERS = (
     '{"verdict": {"in": ["eligible"]}, "borough": {"in": ["Brooklyn", "Queens"]}, "units": {"rent": {"le": 3000}, '
     '"size": {"in": ["studio", "1br"]}}, "commute": {"le": 45}, "last_changed": {"last": {"amount": 7, "unit": '
     '"days"}}}. Unit conditions hold together on one unit. `filter_fields` lists every field and its operators.'
+)
+GQL = (
+    "Lists are Relay connections: `{ listings(filter: { verdict: { in: [eligible] }, units: { rent: { le: 3000 } } "
+    "}, first: 20) { total edges { node { key title } } page_info { has_next_page end_cursor } } }`, the next page "
+    "with `after: <end_cursor>`. Enum values are GraphQL names (`Staten_Island`, `_1br`, `re_rental`). The result "
+    "is free-form: whatever the query selects. Errors carry `extensions.code`."
 )
 
 
@@ -120,21 +126,19 @@ def _parse(query: str):
     return doc, None
 
 
-def _only(doc, allowed: OperationType, other: str) -> None:
-    ops = {d.operation for d in doc.definitions if isinstance(d, OperationDefinitionNode)}
-    if ops - {allowed}:
+async def _execute(query: str, variables: dict | None, allowed: Op, other: str, ctx: dict) -> dict:
+    """The document run against the web schema, when it has only `allowed` operations; `other` says where the rest
+    go. A syntax error comes back as a result, like any GraphQL error."""
+    doc, bad = _parse(query)
+    if bad:
+        return bad
+    if {d.operation.value for d in doc.definitions if isinstance(d, OperationDefinitionNode)} - {allowed.value}:
         raise ToolError(f"this tool runs {allowed.value} operations only; {other}", log_level=logging.INFO)
+    res = await schema.execute(query, variables, context_value=ctx, allowed_operation_types={allowed})
+    return {"data": res.data, "errors": [e.formatted for e in res.errors or []]}
 
 
-GQL = (
-    "Lists are Relay connections: `{ listings(filter: { verdict: { in: [eligible] }, units: { rent: { le: 3000 } } "
-    "}, first: 20) { total edges { node { key title } } page_info { has_next_page end_cursor } } }`, the next page "
-    "with `after: <end_cursor>`. Enum values are GraphQL names (`Staten_Island`, `_1br`, `re_rental`). The result "
-    "is free-form: whatever the query selects. Errors carry `extensions.code`."
-)
-
-
-def _fields(bound: dict) -> str:
+def _mutations_run(bound: dict) -> str:
     """The mutations a document runs, for the audit log: its operations' root fields, through fragments."""
     doc, _ = _parse(bound["query"])
     defs = doc.definitions if doc else []
@@ -171,28 +175,28 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
                     said = args(bound) if args else " ".join(f"{k}={brief(v)}" for k, v in bound.items())
                     log.info("mcp write %s by %s: %s%s", fn.__name__, caller(), said, outcome)
 
-            def refused(kw: dict, e: Exception):
-                audit(kw, f" refused: {e}")
-                return ToolError(str(e), log_level=logging.INFO)  # the caller's to fix: not an error here
+            @contextlib.contextmanager
+            def refusals(kw: dict):
+                try:
+                    yield
+                except REFUSALS as e:
+                    audit(kw, f" refused: {e}")
+                    raise ToolError(str(e), log_level=logging.INFO) from None  # the caller's to fix: not an error
 
             if inspect.iscoroutinefunction(fn):
 
                 @functools.wraps(fn)
                 async def run(**kw):
-                    try:
+                    with refusals(kw):
                         out = await fn(**kw)
-                    except REFUSALS as e:
-                        raise refused(kw, e) from None
                     audit(kw, _errors(out))
                     return out
             else:
 
                 @functools.wraps(fn)
                 def run(**kw):
-                    try:
+                    with refusals(kw):
                         out = fn(**kw)
-                    except REFUSALS as e:
-                        raise refused(kw, e) from None
                     audit(kw, _errors(out))
                     return out
 
@@ -373,26 +377,16 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     async def graphql(query: str, variables: dict | None = None) -> dict:
         """Run a read-only GraphQL query against the web app's schema (mutations: `graphql_mutation`). Introspect
         it first: `{ __schema { queryType { fields { name description } } } }`."""
-        doc, bad = _parse(query)
-        if bad:
-            return bad
-        _only(doc, OperationType.QUERY, "use graphql_mutation for mutations")
-        res = await schema.execute(query, variables, context_value=context(engine, p),
-                                   allowed_operation_types={Op.QUERY})  # fmt: skip
-        return {"data": res.data, "errors": [e.formatted for e in res.errors or []]}
+        return await _execute(query, variables, Op.QUERY, "use graphql_mutation for mutations",
+                              context(engine, p))  # fmt: skip
 
-    @tool(DELETE, args=_fields, more=GQL)
+    @tool(DELETE, args=_mutations_run, more=GQL)
     async def graphql_mutation(query: str, variables: dict | None = None) -> dict:
         """Run a GraphQL mutation against the web app's schema: createView, changeView, duplicateView, deleteView,
         linkTracker, unlinkTracker (the same writes as the other tools). Introspect it with `graphql`:
         `{ __schema { mutationType { fields { name description } } } }`."""
-        doc, bad = _parse(query)
-        if bad:
-            return bad
-        _only(doc, OperationType.MUTATION, "use graphql for queries")
-        res = await schema.execute(query, variables, context_value=context(engine, p, trusted=True),
-                                   allowed_operation_types={Op.MUTATION})  # fmt: skip
-        return {"data": res.data, "errors": [e.formatted for e in res.errors or []]}
+        return await _execute(query, variables, Op.MUTATION, "use graphql for queries",
+                              context(engine, p, trusted=True))  # fmt: skip
 
     return mcp
 
