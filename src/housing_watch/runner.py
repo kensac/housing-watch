@@ -25,10 +25,6 @@ log = logging.getLogger("housing_watch")
 WORKER = os.environ.get("HW_WORKER_NAME") or socket.gethostname()
 
 
-def adapter_cls(name: str) -> type[Adapter]:
-    return load_all()[name]
-
-
 def cache_delta(before: dict, after: dict) -> dict:
     """Top-level cache keys a chunk added or changed: what it hands back to the run's merge_cache()."""
     return {k: v for k, v in after.items() if k not in before or before[k] != v}
@@ -47,7 +43,7 @@ def fetch_all(adapter: Adapter) -> tuple[Result, dict]:
     return res, adapter.merge_cache(deltas)
 
 
-def _err(e: BaseException) -> str:
+def error_text(e: BaseException) -> str:
     return f"{type(e).__name__}: {e}"
 
 
@@ -58,7 +54,7 @@ def start(eng: Engine, name: str, job_id: int | None = None, worker: str = WORKE
 
 def record(eng: Engine, run_id: int, name: str, res: Result, cache: dict, workers: list[str]) -> tuple[str, int]:
     """Check and record a source's complete Result; raises when it is implausibly small."""
-    cls = adapter_cls(name)
+    cls = load_all()[name]
     if len(res.listings) + len(res.snapshots) < cls.min_listings:
         raise RuntimeError(
             f"only {len(res.listings)} listings / {len(res.snapshots)} pages, expected >= {cls.min_listings}"
@@ -89,7 +85,7 @@ def run_inline(eng: Engine, name: str) -> str:
     run_id = start(eng, name)
     try:
         with Session(eng) as s:
-            adapter = adapter_cls(name)(db.load_cache(s, name))
+            adapter = load_all()[name](db.load_cache(s, name))
         res, cache = fetch_all(adapter)
         return record(eng, run_id, name, res, cache, [WORKER])[0]
     except NeedsByparr as e:
@@ -97,8 +93,8 @@ def run_inline(eng: Engine, name: str) -> str:
             db.discard_run(s, run_id)
         return f"SKIP {e} (set BYPARR_URL)"
     except Exception as e:  # noqa: BLE001 - one broken source must not stop the others
-        log.warning("%s failed: %s\n%s", name, _err(e), traceback.format_exc(limit=3))
-        return fail(eng, run_id, name, _err(e), [WORKER])
+        log.warning("%s failed: %s\n%s", name, error_text(e), traceback.format_exc(limit=3))
+        return fail(eng, run_id, name, error_text(e), [WORKER])
 
 
 def merge(eng: Engine, run_id: int, name: str) -> tuple[str, int] | None:
@@ -107,6 +103,7 @@ def merge(eng: Engine, run_id: int, name: str) -> tuple[str, int] | None:
         plan = db.open_plan(s, run_id)
         if plan is None:
             return None
+        _, planned_cache = plan
         parts = db.chunk_results(s, run_id)  # loaded rows stay readable after the session closes
     workers = [p.worker for p in parts if p.worker]
     bad = next((p for p in parts if not p.ok), None)
@@ -116,8 +113,8 @@ def merge(eng: Engine, run_id: int, name: str) -> tuple[str, int] | None:
         res = Result()
         for p in parts:
             res.extend(Result.from_json(p.result))
-        cache = adapter_cls(name)(plan[1]).merge_cache([p.cache or {} for p in parts])
+        cache = load_all()[name](planned_cache).merge_cache([p.cache or {} for p in parts])
         return record(eng, run_id, name, res, cache, workers)
     except Exception as e:  # noqa: BLE001 - recorded as a failed run
-        log.warning("%s merge failed: %s\n%s", name, _err(e), traceback.format_exc(limit=3))
-        return fail(eng, run_id, name, _err(e), workers), 0
+        log.warning("%s merge failed: %s\n%s", name, error_text(e), traceback.format_exc(limit=3))
+        return fail(eng, run_id, name, error_text(e), workers), 0

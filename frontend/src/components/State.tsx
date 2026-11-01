@@ -1,6 +1,8 @@
 import { Button, Group, Paper, Skeleton, Stack, Text, VisuallyHidden } from '@mantine/core'
 import { IconAlertCircle, IconRefresh } from '@tabler/icons-react'
 
+import { errorMessage } from '../api'
+
 // the widths of one skeleton row, shaped like a list row: a title cell, then a few short values
 const ROW = ['28%', '8%', '10%', '8%', '12%']
 
@@ -19,14 +21,13 @@ export function Loading({ rows = 6, label = 'Loading…' }: { rows?: number; lab
 
 /** A failed request: what failed, the server's reason, and a way to try again. */
 export function LoadError({ what, error, retry }: { what: string; error: unknown; retry?: () => void }) {
-  const reason = error instanceof Error ? error.message : String(error)
   return (
     <Paper withBorder p="md" role="alert" maw={560}>
       <Group align="flex-start" gap="sm" wrap="nowrap">
         <IconAlertCircle size={18} color="var(--mantine-color-red-7)" style={{ flex: 'none', marginTop: 1 }} aria-hidden />
         <Stack gap={4}>
           <Text size="sm" fw={600}>Couldn’t load {what}</Text>
-          <Text size="xs" c="dimmed" ff="monospace" translate="no">{reason}</Text>
+          <Text size="xs" c="dimmed" ff="monospace" translate="no">{errorMessage(error)}</Text>
           <Text size="sm" c="dimmed">Check that the housing-watch server is running and reachable, then try again.</Text>
           {retry && (
             <Group mt="xs">
