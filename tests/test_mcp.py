@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from housing_watch import mcp_server
+from housing_watch import mcp_server, queries
 from housing_watch import tracker as T
 from housing_watch.orm import TrackerRow
 from seed import Session, seed
@@ -128,7 +128,7 @@ def test_schemas_share_definitions(pg):
     assert max(len(json.dumps(x.input_schema)) for x in t.values()) < 16_000
 
 
-def test_graphql_tools(pg):
+def test_graphql_tools(pg, monkeypatch):
     from fastmcp.exceptions import ToolError
 
     seed(pg)
@@ -156,6 +156,10 @@ def test_graphql_tools(pg):
         assert bad["data"] is None and "Syntax Error" in bad["errors"][0]["message"]
     missing = call(pg, "graphql", query="query($k: ID!) { listing(key: $k) { ext_id } }", variables={"k": "x"})
     assert missing["errors"][0]["extensions"]["code"] == "NOT_FOUND"
+    monkeypatch.setattr(queries, "sources", lambda *a: 1 / 0)
+    bug = call(pg, "graphql", query="{ sources { source } }")["errors"][0]
+    assert bug == {"message": "Internal error", "locations": bug["locations"], "path": ["sources"],
+                   "extensions": {"code": "INTERNAL"}}  # fmt: skip
     t = tools(pg)
     assert t["graphql"].annotations.read_only_hint and not t["graphql"].annotations.destructive_hint
     m = t["graphql_mutation"].annotations
@@ -232,6 +236,19 @@ def test_tracker_tools(pg):
     assert un["row_key"] is None and un["listing"]["application"] is None
     with pytest.raises(ToolError, match="No manual link"):
         call(pg, "unlink_tracker", listing_key="a:1")
+
+
+def test_tool_errors_hide_bugs_not_refusals(pg, monkeypatch, caplog):
+    from fastmcp.exceptions import ToolError
+
+    seed(pg)
+    with pytest.raises(ToolError, match="No such listing: nope"):
+        call(pg, "fetch", id="nope")
+    monkeypatch.setattr(queries, "listing_detail", lambda *a: 1 / 0)
+    with pytest.raises(ToolError) as e:
+        call(pg, "fetch", id="a:1")
+    assert str(e.value) == "Error calling tool 'fetch'"
+    assert any(r.exc_info and "division by zero" in str(r.exc_info[1]) for r in caplog.records)  # the log has it
 
 
 def test_writes_are_logged(pg, caplog, monkeypatch):
