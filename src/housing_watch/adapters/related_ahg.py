@@ -159,30 +159,15 @@ class RelatedAHG(Adapter):
     min_listings = 1  # a listing per ad, or a snapshot of the home page when it names none
 
     def _pdf(self, url: str) -> dict:
-        """{'text', 'uris'} for a PDF, re-downloaded only when its ETag/Last-Modified moved."""
+        """{'text', 'uris'} for a PDF, re-downloaded only when its ETag/Last-Modified moved, re-read only when
+        its bytes did."""
         cache = self.cache.setdefault("pdfs", {})
-        hit = cache.get(url)
-        hdrs = {}
-        if hit and hit.get("etag"):
-            hdrs["If-None-Match"] = hit["etag"]
-        if hit and hit.get("modified"):
-            hdrs["If-Modified-Since"] = hit["modified"]
-        if hdrs:
-            fetch._polite(url)
-            try:
-                r = fetch._client.get(url, headers=hdrs)
-                if r.status_code == 304:
-                    return hit
-            except Exception:  # noqa: BLE001 - fall through to a plain fetch
-                pass
-        r = fetch.get(url)
-        data = r.content
-        sha = hashlib.sha256(data).hexdigest()
-        if hit and hit.get("sha") == sha:
-            ent = {**hit, "etag": r.headers.get("etag"), "modified": r.headers.get("last-modified")}
-        else:
-            ent = {"sha": sha, "text": _pdftotext(data), "uris": pdf_uris(data)}
-            ent.update(etag=r.headers.get("etag"), modified=r.headers.get("last-modified"))
+        ent = dict(cache.get(url, {}))
+        data, changed = fetch.conditional(url, ent)
+        if changed:
+            sha = hashlib.sha256(data).hexdigest()
+            if ent.get("sha") != sha:
+                ent.update(sha=sha, text=_pdftotext(data), uris=pdf_uris(data))
         cache[url] = ent
         return ent
 

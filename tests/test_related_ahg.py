@@ -1,5 +1,9 @@
 from pathlib import Path
+from urllib.parse import urlparse
 
+import httpx
+
+from housing_watch import fetch
 from housing_watch.adapters import related_ahg
 from housing_watch.adapters.related_ahg import RelatedAHG, home_entries, parse_listing
 from housing_watch.criteria import listing_verdict
@@ -57,26 +61,34 @@ def test_accessibility_waitlist_is_set_aside():
     assert listing_verdict(lst).verdict == "excluded"
 
 
-class _Resp:
-    def __init__(self, content, status=200, headers=None):
-        self.content, self.status_code, self.headers = content, status, headers or {}
-
-
 def test_fetch_caches_pdfs_and_snapshots_empty_home(monkeypatch):
+    """PDFs go through fetch.get: one request each time, under the host lock, 304 reuses the parse."""
     home = (F / "home.html").read_text()
-    calls = []
+    pdf = {"etag": '"v1"', "body": b"%PDF v1"}
+    calls, reads = [], []
+
+    def server(url, headers=None):  # stands in for the network under fetch.get
+        calls.append(fetch._host_locks[urlparse(url).netloc].locked())
+        req = httpx.Request("GET", url)
+        if (headers or {}).get("If-None-Match") == pdf["etag"]:
+            return httpx.Response(304, request=req)
+        return httpx.Response(200, content=pdf["body"], headers={"etag": pdf["etag"]}, request=req)
+
+    monkeypatch.setattr(fetch, "_MIN_GAP", 0)
+    monkeypatch.setattr(fetch._client, "get", server)
     monkeypatch.setattr(related_ahg.fetch, "html", lambda url: home if url == related_ahg.HOME else "")
     monkeypatch.setattr(
-        related_ahg.fetch, "get", lambda url: calls.append(url) or _Resp(b"%PDF", headers={"etag": '"x"'})
+        related_ahg, "_pdftotext", lambda data: reads.append(data) or (F / "westportad.txt").read_text()
     )
-    monkeypatch.setattr(related_ahg, "_pdftotext", lambda data: (F / "westportad.txt").read_text())
-    monkeypatch.setattr(related_ahg.fetch, "_polite", lambda url: None)
-    monkeypatch.setattr(related_ahg.fetch._client, "get", lambda url, headers=None: _Resp(b"", 304))
     a = RelatedAHG()
     assert [x.ext_id for x in a.fetch().listings] == ["westportad"]
-    assert len(calls) == 1
+    assert len(calls) == 1 and len(reads) == 1
     assert RelatedAHG(a.cache).fetch().listings[0].units[0].rent == 3702.0
-    assert len(calls) == 1  # 304: cached parse reused
+    assert len(calls) == 2 and len(reads) == 1  # 304: cached parse reused
+    pdf.update(etag='"v2"', body=b"%PDF v2")
+    RelatedAHG(a.cache).fetch()
+    assert len(calls) == 3 and reads[-1] == b"%PDF v2"  # changed: one download, re-read
+    assert all(calls)  # every request held the host's slot
 
     monkeypatch.setattr(related_ahg.fetch, "html", lambda url: "<p>Affordable Housing Group</p><p>No vacancies.</p>")
     res = RelatedAHG().fetch()
