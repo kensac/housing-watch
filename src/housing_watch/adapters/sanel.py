@@ -449,14 +449,20 @@ class Sanel(Adapter):
     def _reside_urls(self) -> list[str]:
         return [u for sm in reside.SITEMAPS for u in re.findall(r"<loc>([^<]+)</loc>", fetch.html(sm))]
 
-    def enrich(self, lst: Listing, html: str) -> Listing:
-        """A listing SANEL only summarises (no tier table) -> the official source's units, or a note why not."""
+    def enrich(self, lst: Listing, html: str, prev: dict | None = None) -> Listing:
+        """A listing SANEL only summarises (no tier table) -> the official source's units, or a note why not.
+        `prev` is the page's cached listing: when the official source cannot be read, its units and note stand
+        (SANEL's summary units round rents and drop unit numbers, so swapping to them would flap every run)."""
         if lst.status == "closed" or lst.kind == "homeownership" or _tiers(parse.soup(html)):
             return lst
         try:
             units, note = self._official_units(lst, doc_links(html))
         except (FetchError, RuntimeError, ValueError, KeyError, OSError) as e:
             log.warning("sanel: official source for %s: %s", lst.url, e)
+            if prev:
+                kept = _from_dict(prev)
+                lst.units, lst.notes = kept.units, kept.notes
+                return lst
             units, note = None, "Official source unreadable this run; units are SANEL's summary."
         if units:
             old = _old_chart(lst.units)
@@ -526,7 +532,7 @@ class Sanel(Adapter):
             if lst is None:  # the sitemap lists some pages that 404
                 c[url] = {"fetched": now, "listing": None}
                 continue
-            lst = self.enrich(lst, body)
+            lst = self.enrich(lst, body, hit.get("listing") if hit else None)
             c[url] = {"fetched": now, "listing": asdict(lst)}
             out.append(lst)
         if len(failed) > MAX_FAILED // int(key.split("/")[1]):  # the run's allowance, shared by its chunks

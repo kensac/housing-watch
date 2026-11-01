@@ -197,6 +197,30 @@ def test_hdc_flyer_replaces_summary(monkeypatch):
     assert any(k.startswith("doc:hdc:") for k in a.cache)  # cached: the next run does not re-read it
 
 
+def test_unreadable_official_source_keeps_cached_units(monkeypatch):
+    """A failed official read keeps the last enriched units, not SANEL's summary (which flapped the listing)."""
+    name = "queens__apex-place-apartments-lsp339"
+    monkeypatch.setattr(sanel.fetch, "html", lambda u, **kw: f"<url><loc>{url(name)}</loc></url>")
+    monkeypatch.setattr(sanel.fetch, "pdf_text", lambda u, **kw: doc("hdc-apex-flyer.txt"))
+    monkeypatch.setattr(sanel, "_get", lambda u: (F / f"{name}.html").read_text())
+    monkeypatch.setattr(sanel, "GAP_S", 0)
+    monkeypatch.setattr(sanel, "MAX_AGE_H", -1)  # every run re-reads the page
+    monkeypatch.setattr(Sanel, "min_listings", 1)
+    a = Sanel()
+    (good,) = a.fetch().listings
+    assert [(u.size, u.rent) for u in good.units] == [("1br", 2206), ("2br", 2550), ("1br", 2618)]
+
+    def down(u, **kw):
+        raise FetchError("down")
+
+    monkeypatch.setattr(sanel.fetch, "pdf_text", down)
+    cache = {k: v for k, v in a.cache.items() if not k.startswith("doc:")}  # the flyer must be re-read
+    (again,) = Sanel(cache).fetch().listings
+    assert (again.units, again.notes) == (good.units, good.notes)
+    (first,) = Sanel().fetch().listings  # nothing cached yet: SANEL's summary, said so
+    assert first.units == page(name).units and "unreadable this run" in first.notes
+
+
 def test_housing_connect_ad_replaces_summary(monkeypatch):
     lst, _ = enriched(
         "brooklyn__1832-fulton-street-apartments-121mtv", monkeypatch, GetLotteryAdvertisement="hc-7643.json"
