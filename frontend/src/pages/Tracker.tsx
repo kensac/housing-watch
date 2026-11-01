@@ -58,7 +58,7 @@ export function TrackerPage() {
   return (
     <Stack gap="lg">
       <PageHeader title="Tracker" description={t.configured
-        ? <>Your Apartment Search Tracker sheet, read-only, synced every 5 minutes (last <span title={when(t.synced)}>{ago(t.synced)}</span>) · {num(t.rows.length)} rows by stage, longest waiting first · {num(yours)} your move · {num(theirs)} their move · {num(unmatched)} not matched to a listing</>
+        ? <>Your Apartment Search Tracker sheet, read-only, synced every 5 minutes (last changed <span title={when(t.synced)}>{ago(t.synced)}</span>) · {num(t.rows.length)} rows by stage, longest waiting first · {num(yours)} your move · {num(theirs)} their move · {num(unmatched)} not matched to a listing</>
         : 'The tracker sheet isn’t connected (HW_TRACKER_SHEET).'} />
       <Table.ScrollContainer minWidth={1000}>
         <Table highlightOnHover fz="sm" aria-label="Tracker rows">
