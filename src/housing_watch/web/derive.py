@@ -75,8 +75,7 @@ def derive(dc: type, name: str | None = None, *, types: dict | None = None, prop
         ns[p] = strawberry.field(resolver=_getter(p, t), description=inspect.getdoc(fget))
     ns.update(extra or {})
     ns["__annotations__"] = anns
-    doc = dc.__doc__ if dc.__doc__ and not dc.__doc__.startswith(f"{dc.__name__}(") else None
-    out = strawberry.type(type(name, (), ns), name=name, description=description or doc)
+    out = strawberry.type(type(name, (), ns), name=name, description=description or own_doc(dc))
     _DERIVED.setdefault(dc, out)
     return out
 
@@ -131,6 +130,11 @@ def _getter(attr: str, t):
 
     get.__annotations__ = {"root": strawberry.Parent[object], "return": t}
     return get
+
+
+def own_doc(dc: type) -> str | None:
+    """The dataclass's docstring, unless it is the signature @dataclass writes when there is none."""
+    return dc.__doc__ if dc.__doc__ and not dc.__doc__.startswith(f"{dc.__name__}(") else None
 
 
 def comments(dc: type) -> dict[str, str]:
