@@ -14,7 +14,7 @@ from urllib.parse import urljoin
 from .. import fetch, parse
 from ..models import Band, Listing, Result, Unit
 from ._page import PageAdapter
-from .sois import _pdf_text, deadline_iso, mail_to, parse_hpd_ad, past, prune_pdf_cache
+from .sois import deadline_iso, mail_to, parse_hpd_ad, past, pdf_cached, prune_pdf_cache
 
 URL = "https://www.langsampropertyservices.com/affordable-rental-opportunities"
 _HH = re.compile(r"^(\d)\s*(?:persons?|people)$", re.I)
@@ -139,6 +139,6 @@ class Langsam(PageAdapter):
         snaps = super().fetch().snapshots
         page = parse_page(fetch.html(URL))
         urls = {u for d in page["docs"].values() for u in d.values()}
-        pdfs = {u: _pdf_text(self.cache, u) for u in sorted(urls)}
+        pdfs = {u: pdf_cached(self.cache, u) for u in sorted(urls)}
         prune_pdf_cache(self.cache, urls)
         return Result(listings=build_listings(page, pdfs), snapshots=snaps)

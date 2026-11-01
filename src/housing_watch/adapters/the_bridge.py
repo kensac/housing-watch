@@ -13,7 +13,7 @@ import re
 from .. import fetch, parse
 from ..models import Band, Listing, Result, Unit
 from ._page import PageAdapter
-from .sois import _pdf_text, mail_to, prune_pdf_cache
+from .sois import mail_to, pdf_cached, prune_pdf_cache
 
 URL = "https://www.thebridgeny.org/news-and-media"
 CARD_RE = re.compile(r"Affordable Housing Re-Rental", re.I)
@@ -149,10 +149,10 @@ class TheBridge(PageAdapter):
             ft = at = None
             if card["flyer"]:
                 seen.add(card["flyer"])
-                ft = _pdf_text(self.cache, card["flyer"])
+                ft = pdf_cached(self.cache, card["flyer"])
             if card["app"]:
                 seen.add(card["app"])
-                at = _pdf_text(self.cache, card["app"])
+                at = pdf_cached(self.cache, card["app"])
             out.append(build_listing(card, ft or "", at))
         prune_pdf_cache(self.cache, seen)
         return Result(listings=out, snapshots=snaps)

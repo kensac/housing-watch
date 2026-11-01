@@ -8,17 +8,13 @@ application's "Mail ... completed application to:" block says how to submit. PDF
 
 from __future__ import annotations
 
-import hashlib
-import os
 import re
-import shutil
-import subprocess
-import tempfile
 from urllib.parse import urljoin
 
 from .. import fetch, parse
 from ..models import Band, Listing, Result, Unit
 from ._page import PageAdapter
+from .sois import pdf_cached
 
 INDEX = "https://wavecrestrentals.com/opportunities.php"
 OFFICE = re.compile(r"87-14\s*116\s*(?:th)?\s*Street,?\s*(?:\n\s*)?Richmond Hill,?\s*NY\s*11418", re.I)
@@ -28,27 +24,6 @@ HH_ROW = re.compile(
 )
 RENT = re.compile(r"\$(\d,\d{3}|\d{3,4})(?:\.\d\d)?(?![\d,])")
 OUTSIDE_NYC = re.compile(r"\b(Hempstead|Mt\.? Vernon|Mount Vernon|Yonkers|White Plains|New Rochelle)\b", re.I)
-
-
-def _pdf_text(data: bytes) -> str:
-    with tempfile.TemporaryDirectory() as d:
-        p = os.path.join(d, "f.pdf")
-        with open(p, "wb") as f:
-            f.write(data)
-        out = subprocess.run(["pdftotext", "-layout", p, "-"], capture_output=True, text=True, timeout=120).stdout
-        if len(out.strip()) < 80 and shutil.which("pdftoppm") and shutil.which("tesseract"):
-            subprocess.run(["pdftoppm", "-r", "200", "-png", "-l", "4", p, os.path.join(d, "pg")], timeout=180)
-            out = "\n".join(fetch._ocr_file(os.path.join(d, x)) for x in sorted(os.listdir(d)) if x.startswith("pg"))
-        return out
-
-
-def pdf_cached(cache: dict, url: str) -> str:
-    data = fetch.get(url).content
-    h = hashlib.sha256(data).hexdigest()
-    store = cache.setdefault("pdf", {})
-    if store.get(url, {}).get("sha") != h:
-        store[url] = {"sha": h, "text": _pdf_text(data)}
-    return store[url]["text"]
 
 
 def index_links(html: str) -> list[tuple[str, str, str]]:

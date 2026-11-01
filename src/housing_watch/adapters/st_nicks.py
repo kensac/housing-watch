@@ -8,7 +8,6 @@ page 1 says where to mail it. PDF text is cached by URL + sha256 so unchanged fl
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import shutil
 import subprocess
@@ -23,21 +22,16 @@ INDEX = "https://stnicksalliance.org/get-help-affordable-housing/"
 
 
 def _pdf_extract(data: bytes) -> dict:
-    with tempfile.TemporaryDirectory() as d:
-        p = os.path.join(d, "f.pdf")
-        with open(p, "wb") as f:
+    links: list[str] = []
+    if shutil.which("pdftohtml"):
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
             f.write(data)
-        txt = subprocess.run(["pdftotext", "-layout", p, "-"], capture_output=True, text=True, timeout=120).stdout
-        if len(txt.strip()) < 80 and shutil.which("pdftoppm") and shutil.which("tesseract"):
-            subprocess.run(["pdftoppm", "-r", "200", "-png", "-l", "4", p, os.path.join(d, "pg")], timeout=180)
-            txt = "\n".join(fetch._ocr_file(os.path.join(d, x)) for x in sorted(os.listdir(d)) if x.startswith("pg"))
-        links: list[str] = []
-        if shutil.which("pdftohtml"):
+            f.flush()
             xml = subprocess.run(
-                ["pdftohtml", "-xml", "-stdout", "-i", "-q", p], capture_output=True, text=True, timeout=120
+                ["pdftohtml", "-xml", "-stdout", "-i", "-q", f.name], capture_output=True, text=True, timeout=120
             ).stdout
-            links = list(dict.fromkeys(re.findall(r'href="(https?://[^"]+)"', xml)))
-    return {"text": txt, "links": links}
+        links = list(dict.fromkeys(re.findall(r'href="(https?://[^"]+)"', xml)))
+    return {"text": fetch.pdf_bytes_text(data), "links": links}
 
 
 def pdf_cached(cache: dict, url: str) -> dict:
