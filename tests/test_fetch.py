@@ -96,3 +96,18 @@ def test_render_retries_until_expected_text(monkeypatch):
     pages = iter(["<html>shell</html>"] * 3)
     with pytest.raises(fetch.FetchError, match="missing after 3 renders"):
         fetch.rendered("https://t.example/", expect="Available Re-Rentals")
+
+
+@pytest.mark.parametrize(("status", "calls"), [(404, 1), (403, 1), (429, 3), (500, 3), (503, 3)])
+def test_get_retries_only_what_can_change(monkeypatch, status, calls):
+    seen = []
+
+    def get(url, headers=None):
+        seen.append(url)
+        return fetch.httpx.Response(status, request=fetch.httpx.Request("GET", url))
+
+    monkeypatch.setattr(fetch._client, "get", get)
+    monkeypatch.setattr(fetch.time, "sleep", lambda s: None)
+    with pytest.raises(fetch.FetchError, match=str(status)):
+        fetch.get("https://a.example/x")
+    assert len(seen) == calls

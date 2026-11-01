@@ -170,6 +170,23 @@ def test_fetch_caches_and_skips_404(monkeypatch):
     assert sorted(x.title for x in Sanel(a.cache).fetch().listings) == ["Aura", "DOMI"]
 
 
+def test_page_missing_from_one_sitemap_read_is_kept(monkeypatch):
+    # SANEL's sitemap drops and re-adds a page between reads; it is gone only after MAX_AGE_H missing
+    names = ["queens__domi-1224sz", "queens__aura-1bpj4o"]
+    sitemap = {"xml": "".join(f"<url><loc>{url(n)}</loc></url>" for n in names)}
+    monkeypatch.setattr(sanel.fetch, "html", lambda u, **kw: sitemap["xml"])
+    monkeypatch.setattr(sanel.fetch, "json", lambda u, **kw: doc("pronto-12030.json"))
+    monkeypatch.setattr(sanel, "_get", lambda u: (F / (u.removeprefix(BASE).replace("/", "__") + ".html")).read_text())
+    monkeypatch.setattr(sanel, "GAP_S", 0)
+    monkeypatch.setattr(Sanel, "min_listings", 1)
+    a = Sanel()
+    a.fetch()
+    sitemap["xml"] = f"<url><loc>{url(names[0])}</loc></url>"
+    assert sorted(x.title for x in Sanel(a.cache).fetch().listings) == ["Aura", "DOMI"]
+    a.cache[url(names[1])]["absent"] -= sanel.MAX_AGE_H * 3600 + 1
+    assert [x.title for x in Sanel(a.cache).fetch().listings] == ["DOMI"] and url(names[1]) not in a.cache
+
+
 def doc(name):
     t = (F / name).read_text()
     return json.loads(t) if name.endswith(".json") else t
