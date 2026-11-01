@@ -150,7 +150,7 @@ def _name(name: str) -> str:
     return name
 
 
-def _get(s: Session, view_id: int) -> SavedViewRow:
+def _row(s: Session, view_id: int) -> SavedViewRow:
     if (r := s.get(SavedViewRow, view_id)) is None:
         raise NotFound("No such view")
     return r
@@ -161,6 +161,16 @@ def _set_default(s: Session, page: str, view_id: int, on: bool) -> None:
         s.execute(update(SavedViewRow).where(SavedViewRow.page == page).values(is_default=False))
         s.flush()
     s.execute(update(SavedViewRow).where(SavedViewRow.id == view_id).values(is_default=on))
+
+
+def _move(s: Session, page: str, view_id: int, places: int) -> None:
+    """Move the view `places` along its page's views (stopping at either end), renumbering them all."""
+    ids = list(s.scalars(select(SavedViewRow.id).where(SavedViewRow.page == page)
+                         .order_by(SavedViewRow.position, SavedViewRow.id)))  # fmt: skip
+    i = ids.index(view_id)
+    ids.insert(max(0, min(len(ids) - 1, i + places)), ids.pop(i))
+    for pos, vid in enumerate(ids):
+        s.execute(update(SavedViewRow).where(SavedViewRow.id == vid).values(position=pos))
 
 
 def create(engine: Engine, state: State, name: str, is_default: bool = False, p: Profile = PROFILE) -> View:
@@ -181,7 +191,7 @@ def change(engine: Engine, view_id: int, *, name: str | None = None, state: Stat
            is_default: bool | None = None, move: int = 0, p: Profile = PROFILE) -> View:  # fmt: skip
     """Rename it, replace its state, set or clear it as its page's default, or move it `move` places."""
     with Session(engine) as s, s.begin():
-        r = _get(s, view_id)
+        r = _row(s, view_id)
         vals: dict = {"updated": func.now()}
         if name is not None:
             vals["name"] = _name(name)
@@ -193,13 +203,7 @@ def change(engine: Engine, view_id: int, *, name: str | None = None, state: Stat
         if is_default is not None:
             _set_default(s, r.page, view_id, is_default)
         if move:
-            ids = list(s.scalars(select(SavedViewRow.id).where(SavedViewRow.page == r.page)
-                                 .order_by(SavedViewRow.position, SavedViewRow.id)))  # fmt: skip
-            i = ids.index(view_id)
-            j = max(0, min(len(ids) - 1, i + move))
-            ids.insert(j, ids.pop(i))
-            for pos, vid in enumerate(ids):
-                s.execute(update(SavedViewRow).where(SavedViewRow.id == vid).values(position=pos))
+            _move(s, r.page, view_id, move)
     return counted(engine, get(engine, view_id), p)
 
 
@@ -216,7 +220,7 @@ def duplicate(engine: Engine, view_id: int, p: Profile = PROFILE) -> View:
 
 def delete(engine: Engine, view_id: int) -> None:
     with Session(engine) as s, s.begin():
-        s.delete(_get(s, view_id))
+        s.delete(_row(s, view_id))
 
 
 def matches(engine: Engine, st: State, p: Profile = PROFILE) -> int:
