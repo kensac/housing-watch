@@ -86,7 +86,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 - **Tasks:**
   - `tick` (periodic, every minute; Procrastinate defers it once per minute fleet-wide): claims sources
     whose `source_state.next_due` has passed (pushing it a full cycle ahead) and defers `source_run` for
-    each; fails runs left unfinished for `HW_RUN_TIMEOUT_HOURS` (6); re-queues merges that were never
+    each; fails runs left unfinished for `HW_RUN_TIMEOUT_HOURS` (6) (when a newer run of the source has
+    finished, as after a retried job, only the old run's row changes, not `source_state`); re-queues merges that were never
     deferred; defers `digest(scheduled=True)` at minute 0 of each `HW_DIGEST_HOURS` hour.
   - `source_run(source)` (`queueing_lock` `run:<source>`, `lock` `source:<source>`): plans chunks with
     `Adapter.chunks()`. With one chunk it fetches and records inline. Otherwise it writes the plan
@@ -106,8 +107,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 - **Failures:** an adapter error is a failed run (recorded, not retried); Procrastinate retries only
   infrastructure trouble and chunk errors. A failed run increments `source_state.consecutive_failures`
   and emits `source_failed` on the 2nd and 10th consecutive failure; the next success emits
-  `source_recovered`. A run that finishes after a newer run of its source (one abandoned after its retried job
-  succeeded) closes only its own row: the newer run already set `source_state`.
+  `source_recovered`.
 - **Metrics** (`metrics.py`, `:9091`, `HW_METRICS_PORT`): `hw_source_run_seconds` and
   `hw_source_failures_total` are per worker; `hw_jobs{task,status}`,
   `hw_source_last_success_timestamp_seconds` and `hw_source_consecutive_failures` are read from the
