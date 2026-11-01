@@ -235,10 +235,3 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   signs and dates the applicant's line; never the SSN). The drawer checks a listing's linked PDFs lazily; a download is built
   per request and never stored.
 - `scripts/load_sqlite_dev.py` (dev only) copies an old SQLite store into Postgres to run the UI on real data.
-
-## Tests
-
-- Adapter tests are offline against `tests/fixtures/`.
-- Store, fleet and web tests need Postgres: they use the `pg` fixture (tests/conftest.py), which runs
-  migrations into a throwaway database at `HW_TEST_DATABASE_URL` and is skipped when that is unset.
-  CI provides it as a service container.
