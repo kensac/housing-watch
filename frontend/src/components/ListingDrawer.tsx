@@ -3,8 +3,9 @@ import { IconDownload, IconExternalLink } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 
-import { BOROUGH, changes, KIND, qs, request } from '../api'
+import { BOROUGH, changes, KIND, request } from '../api'
 import { graphql } from '../gql'
+import type { ListingQuery } from '../gql/graphql'
 import { commute, date, money, pct, when } from '../format'
 import { useMotion } from '../hooks'
 import { EventBadge, SizeBadge, StatusBadge, VerdictBadge } from './Badges'
@@ -41,6 +42,37 @@ function Section({ title, right, children }: { title: ReactNode; right?: ReactNo
   )
 }
 
+type DrawerUnit = NonNullable<ListingQuery['listing']>['units'][number]
+
+/** One unit: size and tags, rent, AMI, the income band for each household size (yours in bold), and its verdict. */
+function UnitRow({ u, household }: { u: DrawerUnit; household: number }) {
+  // the ad prints an older HUD chart, so the verdict was taken on the current one; criteria.py words that reason
+  // "eligible on 2026 limits (ad prints 2025 limits: ...)", and no other unit reason says "limits"
+  const rechecked = u.reason.includes('limits')
+  return (
+    <Table.Tr opacity={u.verdict === 'excluded' ? 0.55 : 1}>
+      <Table.Td>
+        <Group gap={4}>
+          <SizeBadge s={u.size} />{u.unit_no && <Text size="sm">#{u.unit_no}</Text>}
+          {u.set_aside && <Badge color="orange">{u.set_aside}</Badge>}
+          {u.available === false && <Badge variant="default" c="dimmed">Rented</Badge>}
+          {u.chart_year && <Badge variant={rechecked ? 'light' : 'default'} color="orange" c={rechecked ? undefined : 'dimmed'}>{u.chart_year} chart</Badge>}
+        </Group>
+      </Table.Td>
+      <Table.Td ta="right">{money(u.rent)}</Table.Td>
+      <Table.Td ta="right">{u.ami ? pct(u.ami) : '—'}</Table.Td>
+      <Table.Td>
+        {u.bands.length ? u.bands.map(({ household: h, income_min: lo, income_max: hi }) => (
+          <Text key={h} size="xs" fw={h === household ? 600 : 400} c={h === household ? undefined : 'dimmed'}>
+            {h}p {lo == null ? '?' : money(lo)}–{hi == null ? '?' : money(hi)}{h === household ? ' (you)' : ''}
+          </Text>
+        )) : <Text size="xs" c="dimmed">No income table</Text>}
+      </Table.Td>
+      <Table.Td><Group gap={6} wrap="nowrap"><VerdictBadge v={u.verdict} />{(u.verdict !== 'eligible' || rechecked) && <Text size="xs" c="dimmed">{u.reason}</Text>}</Group></Table.Td>
+    </Table.Tr>
+  )
+}
+
 function ApplicationsPanel({ k }: { k: string }) {
   const q = useQuery({ queryKey: ['applications', k], queryFn: () => request(ApplicationsDoc, { key: k }).then((d) => d.listingApplications) })
   if (q.isLoading) return <Group gap="xs" role="status"><Loader size="xs" /><Text size="sm" c="dimmed">Checking the application PDF…</Text></Group>
@@ -56,7 +88,7 @@ function ApplicationsPanel({ k }: { k: string }) {
           <Group gap="xs" wrap="nowrap">
             <Button size="xs" variant="default" component="a" href={p.url} target="_blank" rel="noopener noreferrer">Open Blank PDF</Button>
             {p.form && q.data.ready && (
-              <Button size="xs" component="a" href={`/api/listing/application${qs({ key: k, n: p.n })}`} download
+              <Button size="xs" component="a" href={`/api/listing/application?${new URLSearchParams({ key: k, n: String(p.n) })}`} download
                 leftSection={<IconDownload size={14} aria-hidden />}>
                 Download Filled PDF
               </Button>
@@ -120,28 +152,7 @@ export function ListingDrawer({ k, onClose }: { k: string | null; onClose: () =>
                     <Table.Tr><Table.Th>Unit</Table.Th><Table.Th ta="right">Rent</Table.Th><Table.Th ta="right">AMI</Table.Th><Table.Th>Income Band</Table.Th><Table.Th>Verdict</Table.Th></Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
-                    {d.units.map((u, i) => (
-                      <Table.Tr key={i} opacity={u.verdict === 'excluded' ? 0.55 : 1}>
-                        <Table.Td>
-                          <Group gap={4}>
-                            <SizeBadge s={u.size} />{u.unit_no && <Text size="sm">#{u.unit_no}</Text>}
-                            {u.set_aside && <Badge color="orange">{u.set_aside}</Badge>}
-                            {u.available === false && <Badge variant="default" c="dimmed">Rented</Badge>}
-                            {u.chart_year && <Badge variant={u.reason.includes('limits') ? 'light' : 'default'} color="orange" c={u.reason.includes('limits') ? undefined : 'dimmed'}>{u.chart_year} chart</Badge>}
-                          </Group>
-                        </Table.Td>
-                        <Table.Td ta="right">{money(u.rent)}</Table.Td>
-                        <Table.Td ta="right">{u.ami ? pct(u.ami) : '—'}</Table.Td>
-                        <Table.Td>
-                          {u.bands.length ? u.bands.map(({ household: h, income_min: lo, income_max: hi }) => (
-                            <Text key={h} size="xs" fw={h === d.household ? 600 : 400} c={h === d.household ? undefined : 'dimmed'}>
-                              {h}p {lo == null ? '?' : money(lo)}–{hi == null ? '?' : money(hi)}{h === d.household ? ' (you)' : ''}
-                            </Text>
-                          )) : <Text size="xs" c="dimmed">No income table</Text>}
-                        </Table.Td>
-                        <Table.Td><Group gap={6} wrap="nowrap"><VerdictBadge v={u.verdict} />{(u.verdict !== 'eligible' || u.reason.includes('limits')) && <Text size="xs" c="dimmed">{u.reason}</Text>}</Group></Table.Td>
-                      </Table.Tr>
-                    ))}
+                    {d.units.map((u, i) => <UnitRow key={i} u={u} household={d.household} />)}
                   </Table.Tbody>
                 </Table>
               </Table.ScrollContainer>

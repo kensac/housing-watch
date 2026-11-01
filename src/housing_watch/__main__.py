@@ -27,42 +27,18 @@ from .criteria import PROFILE, listing_verdict
 log = logging.getLogger("housing_watch")
 
 
-def _web(eng) -> None:
-    """The read-only UI in a thread of this process, on HW_WEB_HOST:HW_WEB_PORT."""
-    port = int(os.environ.get("HW_WEB_PORT") or 0)
-    if not port:
-        return
-    try:
-        from .web.app import create_app
-    except ImportError as e:
-        log.warning("web: not available (%s); continuing without it", e)
-        return
+def _serve_in_thread(name: str, asgi_app, port: int) -> None:
+    """An ASGI app on HW_WEB_HOST:port in a daemon thread of this process."""
     import uvicorn
 
-    server = uvicorn.Server(uvicorn.Config(create_app(eng), host=os.environ.get("HW_WEB_HOST", "0.0.0.0"), port=port))
-    threading.Thread(target=server.run, name="web", daemon=True).start()
-    log.info("web on :%d", port)
+    server = uvicorn.Server(uvicorn.Config(asgi_app, host=os.environ.get("HW_WEB_HOST", "0.0.0.0"), port=port))
+    threading.Thread(target=server.run, name=name, daemon=True).start()
+    log.info("%s on :%d", name, port)
 
 
-def _mcp(eng) -> None:
-    """The MCP server (mcp_server.py) in a thread of this process, on HW_WEB_HOST:HW_MCP_PORT."""
-    port = int(os.environ.get("HW_MCP_PORT") or 0)
-    if not port:
-        return
-    import uvicorn
-
-    from .mcp_server import app
-
-    server = uvicorn.Server(uvicorn.Config(app(eng), host=os.environ.get("HW_WEB_HOST", "0.0.0.0"), port=port))
-    threading.Thread(target=server.run, name="mcp", daemon=True).start()
-    log.info("mcp on :%d", port)
-
-
-def _worker(eng, migrate: bool = True) -> None:
+def _worker(eng) -> None:
     from . import metrics, tasks
 
-    if migrate:
-        db.migrate(eng)
     tasks.set_engine(eng)
     metrics.serve(tasks.engine)
     name = runner.WORKER
@@ -70,6 +46,23 @@ def _worker(eng, migrate: bool = True) -> None:
     queues = tasks.queues()
     log.info("worker %s: queues %s, concurrency %d", name, queues, concurrency)
     tasks.run_worker(name, concurrency, queues)
+
+
+def _list(eng) -> None:
+    """One line per adapter: cadence, last success, failure streak, next due."""
+    from sqlalchemy.orm import Session
+
+    with Session(eng) as s:
+        states = db.source_states(s)
+    for name, cls in sorted(load_all().items()):
+        st = states.get(name)
+        line = f"{name:28} every {cls.every_hours:>4}h  "
+        line += f"last ok {st.last_ok:%Y-%m-%d %H:%M}" if st and st.last_ok else "never ok"
+        if st and st.consecutive_failures:
+            line += f", {st.consecutive_failures} failing"
+        if st and st.next_due:
+            line += f", due {st.next_due:%Y-%m-%d %H:%M}"
+        print(line)
 
 
 def _schema(path: str, check: bool) -> int:
@@ -123,24 +116,21 @@ def main(argv=None) -> int:
     if a.cmd == "migrate":
         db.migrate(eng)
     elif a.cmd == "worker":
+        db.migrate(eng)
         _worker(eng)
     elif a.cmd == "serve":
         db.migrate(eng)  # before the web starts reading
-        _web(eng)
-        _mcp(eng)
-        _worker(eng, migrate=False)
-    elif a.cmd == "list":
-        from sqlalchemy.orm import Session
+        if web_port := int(os.environ.get("HW_WEB_PORT") or 0):
+            from .web.app import create_app
 
-        with Session(eng) as ses:
-            states = db.source_states(ses)
-        for name, cls in sorted(load_all().items()):
-            st = states.get(name)
-            info = (f"last ok {st.last_ok:%Y-%m-%d %H:%M}" if st and st.last_ok else "never ok") + (
-                f", {st.consecutive_failures} failing" if st and st.consecutive_failures else ""
-            )
-            due = f", due {st.next_due:%Y-%m-%d %H:%M}" if st and st.next_due else ""
-            print(f"{name:28} every {cls.every_hours:>4}h  {info}{due}")
+            _serve_in_thread("web", create_app(eng), web_port)
+        if mcp_port := int(os.environ.get("HW_MCP_PORT") or 0):
+            from .mcp_server import app as mcp_app
+
+            _serve_in_thread("mcp", mcp_app(eng), mcp_port)
+        _worker(eng)
+    elif a.cmd == "list":
+        _list(eng)
     elif a.cmd == "run":
         unknown = set(a.source) - set(load_all())
         if unknown:
