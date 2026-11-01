@@ -20,7 +20,7 @@ The schema and write path are described in
   one only with the owner's agreement.
 - **Change detection lives only in `db.py`.** Event types are
   `models.EventType`. Do not emit events anywhere else.
-- **Store raw facts, no verdicts.** Eligibility is `criteria.py` at read time,
+- **Store raw facts, no verdicts.** Eligibility is `eligibility/` at read time,
   so a profile change re-judges everything without a write.
 - **One run, one transaction.** `fleet.runner.record` writes listings, snapshots,
   cache, `runs` and `source_state` together. `db.py` functions take a

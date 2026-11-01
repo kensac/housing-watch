@@ -41,19 +41,21 @@ is the design; the topic documents below are the rules for changing it.
   `Adapter` subclass on import.
 - `src/housing_watch/fetch.py`: all network access: HTTP, byparr renders,
   the headless browser, PDF text, OCR.
-- `src/housing_watch/criteria.py`: the verdict, computed at read time.
+- `src/housing_watch/eligibility/`: the verdict, computed at read time
+  (`criteria.py`), and the HUD income charts (`ami.py`).
 - `src/housing_watch/models.py`, `orm.py`, `mapping.py`, `db.py`: domain
   types, the schema, the one translation between them, and the write path
   with change detection.
 - `src/housing_watch/fleet/`: the Procrastinate app and tasks (`tasks.py`),
   one run in one transaction (`runner.py`), the exporter (`metrics.py`).
   `fleet/__init__.py` is its public surface.
-- `src/housing_watch/queries.py`, `filters/`, `views.py`, `changes.py`,
-  `digest.py`: the read model, the filter registry, saved views, change lines,
-  the email.
-- `src/housing_watch/tracker.py`, `commute.py`, `applications.py`, `ami.py`,
+- `src/housing_watch/queries/`, `filters/`, `views.py`: the read model, the
+  filters (`filters/fields.py` is the field registry), saved views.
+- `src/housing_watch/notify/`: change lines (`changes.py`) and the email
+  (`digest.py`).
+- `src/housing_watch/tracker.py`, `commute.py`, `applications.py`,
   `parse.py`: the tracker sheet sync, transit commutes, application PDF
-  filling, HUD charts, shared parsing helpers.
+  filling, shared parsing helpers.
 - `src/housing_watch/web/`: FastAPI app and Strawberry schema.
 - `src/housing_watch/mcp_server.py`, `mcp_models.py`: the MCP server.
 - `src/housing_watch/__main__.py`: the CLI (`serve`, `worker`, `migrate`,
@@ -67,7 +69,7 @@ is the design; the topic documents below are the rules for changing it.
 ## Commands
 
 - `make check`: ruff lint and format, the schema check, the Python tests.
-  Set `HW_TEST_DATABASE_URL` or the Postgres tests skip.
+  Set `HW_TEST_DATABASE_URL` or the Postgres tests skip (a failure under `CI`).
 - `make show S=<source>`: what one adapter returns now. Needs `HW_INCOME`.
   Stores nothing.
 - `python -m housing_watch schema`: rewrite `schema.graphql`.
