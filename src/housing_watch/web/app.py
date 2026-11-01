@@ -17,10 +17,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, WebSocketException, status
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.engine import Engine
+from starlette.requests import HTTPConnection
 from strawberry.fastapi import GraphQLRouter
 
 from .. import applications, queries
@@ -41,10 +42,13 @@ def create_app(engine: Engine, profile: Profile = PROFILE, dist: Path = DIST) ->
     async def boom(req: Request, exc: Exception):  # the store is down or a query broke: say so, as JSON
         return JSONResponse({"error": f"{type(exc).__name__}: {exc}"}, status_code=500)
 
-    async def ctx(request: Request) -> dict:
+    async def ctx(request: HTTPConnection) -> dict:
+        if request.scope["type"] != "http":  # WebSockets skip CORS: any site could read through one
+            raise WebSocketException(status.WS_1008_POLICY_VIOLATION, "GraphQL over WebSocket is not served")
         return context(engine, profile, request)
 
-    app.include_router(GraphQLRouter(schema, context_getter=ctx), prefix="/graphql")
+    # No subscriptions in the schema, so no subscription protocols either.
+    app.include_router(GraphQLRouter(schema, context_getter=ctx, subscription_protocols=()), prefix="/graphql")
 
     @app.get("/api/listing/application")
     def listing_application(key: str, n: int = 0):

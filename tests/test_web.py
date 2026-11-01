@@ -329,6 +329,15 @@ def test_view_writes_need_same_origin(client):
     assert gql_code(gql(client, "mutation { deleteView(input: { id: 1 }) { id } }")) == "FORBIDDEN"
 
 
+def test_graphql_over_websocket_is_refused(client):
+    from starlette.websockets import WebSocketDisconnect
+
+    for protocols in (["graphql-transport-ws"], ["graphql-ws"], []):  # any site's page could open one: no reads
+        with pytest.raises(WebSocketDisconnect) as e, client.websocket_connect("/graphql", protocols, headers=SAME):
+            pass
+        assert (e.value.code, e.value.reason) == (1008, "GraphQL over WebSocket is not served")
+
+
 def test_http_never_marks_the_context_trusted(client, pg, monkeypatch):
     from housing_watch.web import app as web_app
 
