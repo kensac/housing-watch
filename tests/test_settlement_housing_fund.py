@@ -91,6 +91,25 @@ def test_read_blocks_fixes_misread_dollar_sign():
     assert [(b.household, b.income_min, b.income_max) for b in row["bands"]] == [(1, 80229, 154440), (2, 80229, 176410)]
 
 
+def test_read_blocks_live_shapes():
+    """OCR of the 2026-11-01 tables: a "$" read as "5", a blank rent cell beside a unit number, a building with
+    no house number."""
+    blocks = [
+        [["7/23/26"], ['280 West 24" Street'], ["Unit 2D\n(Mobility set-aside unit)"], ["130% 2-Bed"], ["53,857"],
+         ["2 people", "3 people"], ["$140,229 - $176,410", "$140,229 - $198,510"]],
+        [["8/4/26"], ["146 Pierrepont Street"], ["Unit 6D\n(Mobility set-aside unit)"], ["40% Studio"], ["\u2014"],
+         ["1 person", "2 people"], ["925,989 - $47,520", "$25,989 - $54,280"]],
+        [["10/28/26"], ["The Biltmore"], ["Unit 15K"], ["130% Studia"], ["53,049"], ["1 person", "2 people"],
+         ["$107,829 - $154,440", "$107,829 - $176,410"]],
+    ]  # fmt: skip
+    rows = read_blocks(blocks, 130)
+    assert [(r["key"], r["rent"]) for r in rows] == [("280 24", 3857), ("146 pierrepont", None), ("the biltmore", 3049)]
+    assert [(b.household, b.income_min, b.income_max) for b in rows[2]["bands"]] == [
+        (1, 107829, 154440),
+        (2, 107829, 176410),
+    ]
+
+
 def test_pronto_waterside():
     lst = parse_pronto(json.loads((F / "pronto-7409.json").read_text()), "https://bit.ly/WatersidePlazaListings")
     assert (lst.borough, lst.deadline, len(lst.units)) == ("Manhattan", "2027-08-10", 11)

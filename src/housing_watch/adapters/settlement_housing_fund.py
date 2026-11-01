@@ -212,13 +212,13 @@ def _cols(b: list[list[str]]) -> dict[str, int | None] | None:
 
     hh = first(lambda t: re.search(r"person|people", t, re.I))
     inc = first(lambda t: len(re.findall(r"\d{1,3},\d{3}", t)) >= 2)
-    proj = first(lambda t: re.match(r"\d+\s+[A-Za-z]", t) and not re.search(r"%|\bunit\b", t, re.I))
-    if hh is None or inc is None or proj is None:
+    units = first(lambda t: re.match(r"\s*unit\b", t, re.I))  # the project is the column before ("The Biltmore")
+    if hh is None or inc is None or not units:
         return None
     rent = next(
-        (i for i in range(hh - 1, proj, -1) if re.search(r"\d", " ".join(b[i])) and "%" not in " ".join(b[i])), None
+        (i for i in range(hh - 1, units, -1) if re.search(r"\d", " ".join(b[i])) and "%" not in " ".join(b[i])), None
     )
-    return {"project": proj, "units": proj + 1, "rent": rent, "household": hh, "income": inc}
+    return {"project": units - 1, "units": units, "rent": rent, "household": hh, "income": inc}
 
 
 def read_blocks(blocks: list[list[list[str]]], ami_pct: int | None) -> list[dict]:
@@ -230,7 +230,10 @@ def read_blocks(blocks: list[list[list[str]]], ami_pct: int | None) -> list[dict
             continue
         proj = " ".join(b[idx["project"]])
         rent_txt = " ".join(b[idx["rent"]]) if idx["rent"] is not None else ""
-        rent = parse.money(re.sub(r"^[^\d]*", "", rent_txt) or None)
+        rent_txt = re.sub(r"^[^\d]*", "", rent_txt)
+        rent = parse.money(rent_txt or None)
+        if rent and rent >= 10_000:
+            rent = parse.money(rent_txt[1:])  # a "$" read as a digit: "53,857"
         hhs, incs = b[idx["household"]], b[idx["income"]]
         if len(hhs) != len(incs):
             continue
