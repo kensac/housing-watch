@@ -38,8 +38,8 @@ def create_app(engine: Engine, profile: Profile = PROFILE, dist: Path = DIST) ->
         return JSONResponse({"error": exc.message, "code": exc.code}, status_code=exc.status)
 
     @app.exception_handler(Exception)
-    async def boom(req: Request, exc: Exception):  # the store is down or a query broke: say so, as JSON
-        return JSONResponse({"error": f"{type(exc).__name__}: {exc}"}, status_code=500)
+    async def boom(req: Request, exc: Exception):  # a bug or the store is down; Starlette re-raises, so it is logged
+        return JSONResponse({"error": "Internal error", "code": str(Code.INTERNAL)}, status_code=500)
 
     async def ctx(request: Request) -> dict:
         return context(engine, profile, request)

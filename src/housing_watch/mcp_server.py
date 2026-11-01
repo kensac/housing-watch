@@ -170,6 +170,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
             "tracker tools or `graphql_mutation`. " + FILTERS
         ),
         auth=auth,
+        mask_error_details=True,  # a bug's text stays in the log; refusals and bad arguments still say what
         dereference_schemas=False,  # $defs once per tool; expanded, the filter schema repeats in every use
     )
 
@@ -185,7 +186,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         """One listing by id (a `search` result or listing key): units, verdict, commute, tracker stage, history."""
         d = queries.listing_detail(engine, id, p)
         if d is None:
-            raise ValueError(f"no listing {id!r}")
+            raise NotFound(f"No such listing: {id}")
         body = asdict(d) | {"summary": _summary(d.summary).model_dump(mode="json"),
                             "events": [_event(e).model_dump(mode="json") for e in d.events]}  # fmt: skip
         return M.Document(id=id, title=d.summary.title, url=d.summary.url, text=json.dumps(body, default=str),
