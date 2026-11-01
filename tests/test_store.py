@@ -106,6 +106,19 @@ def test_failures_report_on_2nd_and_10th_then_recover(pg):
         assert st.consecutive_failures == 0 and st.failing_since is None and st.last_ok is not None
 
 
+def test_a_run_finishing_after_a_newer_one_leaves_the_source_state_alone(pg):
+    with Session(pg) as s, s.begin():
+        lost = db.start_run(s, "t")  # its worker died mid-run; the retried job recorded a new run
+        finish(s, "t", True, every_hours=1)
+        st = s.get(SourceStateRow, "t")
+        due = st.next_due
+        db.finish_run(s, lost, "t", False, error="abandoned", every_hours=1)  # tick, hours later
+        assert s.get(RunRow, lost).ok is False
+        assert (st.consecutive_failures, st.failing_since, st.next_due) == (0, None, due)
+        finish(s, "t", True, every_hours=1)
+        assert events(s, type="source_recovered") == []
+
+
 def test_run_bookkeeping(pg):
     with Session(pg) as s, s.begin():
         run_id = db.start_run(s, "t", job_id=7, worker="oci")

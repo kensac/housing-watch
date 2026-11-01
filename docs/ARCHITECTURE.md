@@ -106,7 +106,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 - **Failures:** an adapter error is a failed run (recorded, not retried); Procrastinate retries only
   infrastructure trouble and chunk errors. A failed run increments `source_state.consecutive_failures`
   and emits `source_failed` on the 2nd and 10th consecutive failure; the next success emits
-  `source_recovered`.
+  `source_recovered`. A run that finishes after a newer run of its source (one abandoned after its retried job
+  succeeded) closes only its own row: the newer run already set `source_state`.
 - **Metrics** (`metrics.py`, `:9091`, `HW_METRICS_PORT`): `hw_source_run_seconds` and
   `hw_source_failures_total` are per worker; `hw_jobs{task,status}`,
   `hw_source_last_success_timestamp_seconds` and `hw_source_consecutive_failures` are read from the
