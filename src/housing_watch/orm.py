@@ -4,7 +4,7 @@ Storage holds raw facts only: listings -> units -> bands as each source publishe
 and change events. The task queue is Procrastinate's own tables (procrastinate_*), not modelled here.
 No eligibility verdict is stored: criteria.py judges at read time, so a profile change re-judges all
 history without re-scraping.
-The domain dataclasses adapters return live in models.py; db.py maps between the two.
+The domain dataclasses adapters return live in models.py; mapping.py translates between the two.
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ class SnapshotRow(Base):
 
 
 class EventRow(Base):
-    """new | changed | closed | gone | reopened | page_changed | source_failed | source_recovered."""
+    """A change to a listing, a watched page or a source (models.EventType lists the types)."""
 
     __tablename__ = "events"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -123,7 +123,7 @@ class EventRow(Base):
 
 
 class RunRow(Base):
-    """One completed source run (all chunks of one cycle), for health and the UI."""
+    """One source run (all chunks of one cycle), from start to finish, for health and the UI."""
 
     __tablename__ = "runs"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -187,9 +187,8 @@ class SavedViewRow(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     page: Mapped[str] = mapped_column(Text)  # listings | units | events
     name: Mapped[str] = mapped_column(Text)
-    query: Mapped[dict] = mapped_column(
-        JSONB
-    )  # views.State.to_json(): {"filter": <filter tree>, "q", "sort", "columns"}
+    # views.State.to_json(): {"filter": <filter tree>, "q", "sort", "columns"}
+    query: Mapped[dict] = mapped_column(JSONB)
     position: Mapped[int] = mapped_column(Integer, default=0)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
     created: Mapped[datetime] = mapped_column(TS, server_default=func.now())
@@ -247,9 +246,7 @@ class TrackerEventRow(Base):
     row_key: Mapped[str] = mapped_column(Text, index=True)
     status_from: Mapped[str | None] = mapped_column(Text)  # None on a row's first event
     status_to: Mapped[str | None] = mapped_column(Text)
-    baseline: Mapped[bool] = mapped_column(
-        Boolean, default=False
-    )  # the row predates tracking: its real start is earlier
+    baseline: Mapped[bool] = mapped_column(Boolean, default=False)  # the row predates tracking: it started earlier
     at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
 
 

@@ -118,18 +118,7 @@ def main() -> None:
 
 
 def fake_fleet(eng, runs) -> None:
-    """Procrastinate's schema plus a few workers and jobs; links each run to a job on its worker."""
-    from procrastinate import SyncPsycopgConnector
-    from procrastinate.schema import SchemaManager
-
-    with eng.begin() as c:
-        exists = c.execute(text("SELECT to_regclass('procrastinate_jobs')")).scalar()
-    if not exists:
-        url = eng.url.set(drivername="postgresql").render_as_string(hide_password=False)
-        conn = SyncPsycopgConnector(conninfo=url)
-        conn.open()
-        SchemaManager(conn).apply_schema()
-        conn.close()
+    """A few Procrastinate workers and jobs (main() migrated, so their tables exist); links each run to a job."""
     now = datetime.now(UTC)
     with eng.begin() as c:
         c.execute(text("TRUNCATE procrastinate_jobs, procrastinate_workers RESTART IDENTITY CASCADE"))

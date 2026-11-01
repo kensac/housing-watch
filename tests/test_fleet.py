@@ -114,13 +114,19 @@ def pending(pg, queues) -> int:
         ).scalar()
 
 
-def drain(app, pg, queues=("sources",), name="w1", concurrency=4):
-    """Run a worker until the given queues are empty (a wait=False worker stops at the first empty fetch)."""
+def drain(app, pg, queues=("sources",), names=("w1",), concurrency=4):
+    """Run one worker per name, side by side, until the given queues are empty (a wait=False worker stops at the
+    first empty fetch)."""
 
     async def once():
         async with app.open_async():
-            await app.run_worker_async(
-                queues=list(queues), wait=False, concurrency=concurrency, name=name, install_signal_handlers=False
+            await asyncio.gather(
+                *(
+                    app.run_worker_async(
+                        queues=list(queues), wait=False, concurrency=concurrency, name=n, install_signal_handlers=False
+                    )
+                    for n in names
+                )
             )
 
     for _ in range(20):
@@ -171,7 +177,7 @@ def test_needs_byparr_moves_the_job_to_the_byparr_queue(fleet, pg, monkeypatch):
     with Session(pg) as s:
         assert s.get(SourceStateRow, "t_rendered").queue == "byparr"  # tick queues it there from now on
     monkeypatch.setattr(fetch, "rendered", lambda url, **kw: "rendered-page")
-    drain(fleet, pg, queues=("sources", "byparr"), name="hetzner")
+    drain(fleet, pg, queues=("sources", "byparr"), names=("hetzner",))
     run = run_of(pg, "t_rendered")
     assert run.ok and run.workers == ["hetzner"]
     with Session(pg) as s:
@@ -194,23 +200,7 @@ def test_chunks_fan_out_merge_and_respect_parallel(fleet, pg):
 
 def test_chunks_from_several_workers_are_recorded(fleet, pg):
     tasks.source_run.defer(source="t_chunky")
-
-    async def two():
-        async with fleet.open_async():
-            await asyncio.gather(
-                *(
-                    fleet.run_worker_async(
-                        queues=["sources"], wait=False, concurrency=1, name=n, install_signal_handlers=False
-                    )
-                    for n in ("oci", "gcp")
-                )
-            )
-
-    for _ in range(20):
-        asyncio.run(two())
-        if not pending(pg, ["sources"]):
-            break
-    fleet.open()
+    drain(fleet, pg, names=("oci", "gcp"), concurrency=1)
     run = run_of(pg, "t_chunky")
     assert run.ok and set(run.workers) <= {"oci", "gcp"} and run.workers
 

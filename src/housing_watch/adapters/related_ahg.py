@@ -18,7 +18,7 @@ from urllib.parse import urljoin, urlparse
 
 from .. import fetch, parse
 from ..models import Band, Listing, Result, Snapshot, Unit
-from . import Adapter
+from . import Adapter, prune
 
 HOME = "https://ahgleasing.com/"
 _HH_ROW = re.compile(r"(?:^|\s)([1-8])\s*(?:persons?|people)?\s+(\$[\d,]+\s*[-–]\s*\$[\d,]+)\s*$", re.I)
@@ -191,10 +191,7 @@ class RelatedAHG(Adapter):
                 seen.add(ad)
                 pdf = self._pdf(ad)
                 out.append(parse_listing(title, href, ad, pdf["text"], pdf["uris"], section, note))
-        live = seen
-        cache = self.cache.get("pdfs", {})
-        for u in [u for u in cache if u not in live]:
-            del cache[u]
+        prune(self.cache.get("pdfs", {}), seen)
         if out:
             return Result(listings=out)
         txt = "\n".join(ln for ln in parse.text(home).splitlines() if not re.fullmatch(r"\w+ \d{1,2}, \d{4}", ln))

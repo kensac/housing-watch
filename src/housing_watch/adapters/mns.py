@@ -16,7 +16,7 @@ from urllib.parse import unquote_plus, urljoin
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Snapshot, Unit
-from . import Adapter, cached_listing
+from . import Adapter, cached_listing, prune
 
 URL = "https://www.mns.com/affordable_units"
 OFFICE = "718-222-0211"
@@ -132,8 +132,7 @@ class MNS(Adapter):
             cache[r["url"]] = {"fp": fp, "listing": asdict(lst)}
             out.append(lst)
         live = {r["url"] for r in rows}
-        for u in [u for u in cache if u not in live]:
-            del cache[u]
+        prune(cache, live)
         snap = Snapshot(source=self.name, ext_id=URL, url=URL, text=table_text(body), links=sorted(live))
         return Result(listings=out, snapshots=[snap])
 

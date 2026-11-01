@@ -7,35 +7,18 @@ not the presence of the PDF. The ad's unit/income table is read from `pdftotext 
 
 from __future__ import annotations
 
-import hashlib
 import re
 from datetime import date, datetime
 from urllib.parse import urljoin
 
 from .. import fetch, parse
 from ..models import Band, Listing, Result, Unit
+from . import pdf_cached, prune
 from ._page import PageAdapter
 
 URL = "https://soisrealestateconsulting.com/current-projects-1"
 
-# --- shared PDF + HPD ad helpers -------------------------------------------------------------------------------
-
-
-def pdf_cached(cache: dict, url: str) -> str:
-    """PDF text, re-extracted only when the file's bytes change (cache: url -> {sha, text})."""
-    data = fetch.get(url).content
-    h = hashlib.sha256(data).hexdigest()
-    store = cache.setdefault("pdf", {})
-    if store.get(url, {}).get("sha") != h:
-        store[url] = {"sha": h, "text": fetch.pdf_bytes_text(data)}
-    return store[url]["text"]
-
-
-def prune_pdf_cache(cache: dict, seen: set[str]) -> None:
-    store = cache.get("pdf", {})
-    for u in [u for u in store if u not in seen]:
-        del store[u]
-
+# --- shared HPD ad helpers ------------------------------------------------------------------------------------
 
 _MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december"
 _DATE_RE = re.compile(rf"\b({_MONTHS})\s+(\d{{1,2}})(?:st|nd|rd|th)?,?\s+(\d{{4}})", re.I)
@@ -243,5 +226,5 @@ class Sois(PageAdapter):
                 seen.add(card["pdf"])
                 txt = pdf_cached(self.cache, card["pdf"])
             out.append(build_listing(card, txt))
-        prune_pdf_cache(self.cache, seen)
+        prune(self.cache.get("pdf", {}), seen)
         return Result(listings=out, snapshots=snaps)
