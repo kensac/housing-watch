@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 
-import { LinkTrackerDoc, ListingsDoc, request, STAGE_GROUP, type TrackerRow } from '../api'
+import { errorMessage, LinkTrackerDoc, ListingsDoc, request, STAGE_GROUP, type TrackerRow } from '../api'
 import { ApplicationBadge, VerdictBadge } from '../components/Badges'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { PageHeader } from '../components/PageHeader'
@@ -32,7 +32,7 @@ function LinkListing({ row }: { row: TrackerRow }) {
       await refresh()
       notifications.show({ message: `Linked to “${row.property}”` })
     } catch (e) {
-      notifications.show({ color: 'red', title: 'Couldn’t link the listing', message: e instanceof Error ? e.message : String(e) })
+      notifications.show({ color: 'red', title: 'Couldn’t link the listing', message: errorMessage(e) })
     }
   }
   return (
