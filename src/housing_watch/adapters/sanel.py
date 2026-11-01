@@ -457,7 +457,7 @@ class Sanel(Adapter):
         except (FetchError, RuntimeError, ValueError, KeyError, OSError) as e:
             log.warning("sanel: official source for %s: %s", lst.url, e)
             if prev:
-                kept = _from_dict(prev)
+                kept = cached_listing(prev)
                 lst.units, lst.notes = kept.units, kept.notes
                 return lst
             units, note = None, "Official source unreadable this run; units are SANEL's summary."
