@@ -287,20 +287,18 @@ def index_links(html: str) -> tuple[str | None, list[tuple[str, str, str]]]:
         (a["href"] for a in s.find_all("a", href=True) if re.search(r"forms\.(office|cloud\.microsoft)", a["href"])),
         None,
     )
-    out = []
+    out, seen = [], set()
     for a in s.find_all("a", href=re.compile(r"bit\.ly/")):
+        if a["href"] in seen:
+            continue
+        seen.add(a["href"])
         par = a.find_parent(["p", "li", "div"])
         line = re.sub(r"\s+", " ", par.get_text(" ") if par else "")
         line = line[: line.find(a["href"])] if a["href"] in line else line
         name, _, addr = line.partition(":")
         addr = re.sub(r"^\s*[^:]*:\s*", "", addr) if addr.count(":") else addr
         out.append((name.strip(), addr.strip(" |"), a["href"]))
-    seen, uniq = set(), []
-    for t in out:
-        if t[2] not in seen:
-            seen.add(t[2])
-            uniq.append(t)
-    return form, uniq
+    return form, out
 
 
 def registration_listing(name: str, addr: str, link: str, target: str, cfg: dict | None = None) -> Listing:
@@ -325,6 +323,25 @@ def registration_listing(name: str, addr: str, link: str, target: str, cfg: dict
         + (f" Form: {intro}" if intro else "")
         + f" Questions: {cfg.get('property_email') or 'marketinginfo@shfinc.org'}",
     )
+
+
+def follow(link: str) -> tuple[int | None, str]:
+    """A bit.ly link -> (the Pronto property id it lands on or None, the registration page or final url)."""
+    if (pid := KNOWN_PRONTO.get(link.rstrip("/").split("/")[-1])) is not None:
+        return pid, link
+    r = fetch.get(link)
+    chain = [str(x.url) for x in r.history] + [str(r.url)]
+    m = next((re.search(r"/listings/property/(\d+)", u) for u in chain if "/listings/property/" in u), None)
+    return (int(m.group(1)) if m else None), next((u for u in chain if "registration" in u), chain[-1])
+
+
+def registration_config(target: str) -> dict | None:
+    """The Pronto registration form's config JSON, or None when it does not load."""
+    m = re.search(r"/registration/([0-9a-f-]{36})", target)
+    try:
+        return fetch.json(PRONTO_REG.format(uuid=m.group(1))) if m else None
+    except fetch.FetchError:
+        return None  # the listing still stands on the link alone
 
 
 def read_form(form_url: str, table) -> tuple[list[Listing], set[str]]:
@@ -359,21 +376,9 @@ class SettlementHousingFund(PageAdapter):
             listings += found
         prune(self.cache.get("ocr", {}), imgs)
         for name, addr, link in links:
-            pid = KNOWN_PRONTO.get(link.rstrip("/").split("/")[-1])
-            target = link
-            if pid is None:
-                r = fetch.get(link)
-                chain = [str(x.url) for x in r.history] + [str(r.url)]
-                m = next((re.search(r"/listings/property/(\d+)", u) for u in chain if "/listings/property/" in u), None)
-                pid = int(m.group(1)) if m else None
-                target = next((u for u in chain if "registration" in u), chain[-1])
+            pid, target = follow(link)
             if pid:
                 listings.append(parse_pronto(fetch.json(PRONTO_API.format(id=pid)), link))
             else:
-                m = re.search(r"/registration/([0-9a-f-]{36})", target)
-                try:
-                    cfg = fetch.json(PRONTO_REG.format(uuid=m.group(1))) if m else None
-                except fetch.FetchError:
-                    cfg = None  # the listing still stands on the link alone
-                listings.append(registration_listing(name, addr, link, target, cfg))
+                listings.append(registration_listing(name, addr, link, target, registration_config(target)))
         return Result(listings=listings, snapshots=snaps)
