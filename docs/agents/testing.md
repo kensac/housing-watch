@@ -11,9 +11,10 @@
   each test, and drops the database after the session. With `-n auto` each
   xdist worker gets its own database.
 
-**Without `HW_TEST_DATABASE_URL` the Postgres tests skip, and the run still
-looks green.** A local run that skipped them verified only the adapters. Any
-disposable Postgres 18 works:
+**Without `HW_TEST_DATABASE_URL` the Postgres tests skip.** The run prints a
+red SKIPPED line naming them and passes locally; under `CI` any skip fails the
+run (`pytest_sessionfinish` in `tests/conftest.py`). A local run that skipped
+them verified only the adapters. Any disposable Postgres 18 works:
 
 ```bash
 docker run -d --name hw-test-pg -e POSTGRES_PASSWORD=pg -p 5432:5432 postgres:18-alpine
@@ -25,9 +26,9 @@ Never point it at production. The fixture truncates tables.
 ## Other requirements
 
 - `pdftotext` (poppler) for the PDF adapters, and `tesseract` for the OCR
-  ones. The OCR tests skip without tesseract, which also looks green.
+  ones. The OCR tests skip without tesseract, the same way.
 - `conftest.py` sets an example profile (`HW_INCOME=150000`, studio and 1BR,
-  Bronx excluded) before `criteria` is imported. Tests assert verdicts against
+  Bronx excluded) before `eligibility` is imported. Tests assert verdicts against
   it.
 - `tests/helpers.py` holds the shared `bands` and `T` helpers;
   `tests/seed.py` builds store rows for read-side tests. Reuse them.

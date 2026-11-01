@@ -13,9 +13,7 @@ design, including chunking and the Reside and SANEL specifics, is in
 - **Network only through `fetch.py`** (`get`, `html`, `json`, `post_json`,
   `conditional`, `rendered`, `browser`, `pdf_text`). It enforces one request in
   flight per host per worker, a `HW_HOST_GAP` gap between request starts, and
-  one render at a time. A direct `httpx` call skips all of that. One exception
-  exists today: `nys_housing_search.py` posts with `httpx` directly. Do not add
-  another; route it through `fetch.py` instead.
+  one render at a time. A direct `httpx` call skips all of that.
 - **Deterministic.** No AI, no model calls, no randomness. Parse the source's
   own JSON, HTML, PDF text (`pdftotext`) or OCR (`tesseract`).
 - **Fail loudly.** Raise on anything unexpected: a missing header, a count
