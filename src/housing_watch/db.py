@@ -275,6 +275,9 @@ def finish_run(
     )  # fmt: skip
     if workers is not None:
         run.workers = sorted(set(workers))
+    newer = select(RunRow.id).where(RunRow.source == source, RunRow.id > run_id, RunRow.finished.is_not(None))
+    if s.scalar(newer.limit(1)) is not None:
+        return  # e.g. abandoned after its retry succeeded: the newer run already set the source's state
     st = _state(s, source)
     st.last_attempt = now
     if every_hours is not None:
