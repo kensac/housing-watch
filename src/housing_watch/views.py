@@ -2,8 +2,7 @@
 
 Stored as State.to_json() (the filter as its JSON tree, the sort as field/direction pairs) and re-validated
 against today's registries on every load: a view that names a dropped field, sort or column still opens, minus
-that part, with a warning. Nothing is seeded; views exist only once the user saves one. This is the only table
-the web UI writes.
+that part, with a warning. Nothing is seeded; views exist only once the user saves one.
 """
 
 from __future__ import annotations
@@ -99,16 +98,17 @@ def make_state(page: Page, filter: dict | None = None, q: str = "", sort=(), col
     return State(page, conds, q, sorts(page, sort) if page != "events" else (), tuple(columns))
 
 
-def state_from_json(page: Page, q: dict) -> tuple[State, list[str]]:
-    conds, warnings = F.from_saved(q.get("filter"), FIELDS[page])
-    sort = [queries.Sort(s.get("field", ""), s.get("direction", "asc")) for s in q.get("sort") or []]
+def state_from_json(page: Page, saved: dict) -> tuple[State, list[str]]:
+    """A stored State.to_json(), minus what today's registries no longer have, and a warning for each part dropped."""
+    conds, warnings = F.from_saved(saved.get("filter"), FIELDS[page])
+    sort = [queries.Sort(s.get("field", ""), s.get("direction", "asc")) for s in saved.get("sort") or []]
     if dropped := [s.field for s in sort if s.field not in SORTS[page] or s.direction not in ("asc", "desc")]:
         warnings.append(f"Sort by {', '.join(dropped)} no longer exists and was dropped.")
-    cols = tuple(q.get("columns") or ())
+    cols = tuple(saved.get("columns") or ())
     if gone := [c for c in cols if c not in COLUMNS[page]]:
         warnings.append(f"Column(s) {', '.join(gone)} no longer exist and were dropped.")
     sort = [s for s in sort if s.field not in dropped]
-    return State(page, conds, q.get("q") or "", tuple(sort), tuple(c for c in cols if c not in gone)), warnings
+    return State(page, conds, saved.get("q") or "", tuple(sort), tuple(c for c in cols if c not in gone)), warnings
 
 
 @dataclass
