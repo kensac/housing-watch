@@ -367,6 +367,7 @@ def save_chunk(
     run = s.get(RunRow, run_id, with_for_update=True)  # serializes the completion check across workers
     if run is None or run.finished is not None:
         return False
+    assert run.plan is not None and run.chunks is not None, "record_chunk on a run plan_run never planned"
     vals = dict(
         pos=run.plan["keys"].index(key), ok=ok, result=result, cache=_jsonable(cache), worker=worker, error=error
     )
@@ -375,7 +376,7 @@ def save_chunk(
         .values(run_id=run_id, key=key, **vals)
         .on_conflict_do_update(index_elements=["run_id", "key"], set_={**vals, "finished": func.now()})
     )
-    done = s.scalar(select(func.count()).select_from(ChunkResultRow).where(ChunkResultRow.run_id == run_id))
+    done = s.scalar(select(func.count()).select_from(ChunkResultRow).where(ChunkResultRow.run_id == run_id)) or 0
     return done >= run.chunks
 
 
@@ -418,11 +419,11 @@ def load_cache(s: Session, source: str) -> dict:
 
 
 def save_cache(s: Session, source: str, value: dict) -> None:
-    value = _jsonable(value)
+    stored = _jsonable(value)
     s.execute(
         insert(AdapterCacheRow)
-        .values(source=source, value=value, updated=func.now())
-        .on_conflict_do_update(index_elements=["source"], set_={"value": value, "updated": func.now()})
+        .values(source=source, value=stored, updated=func.now())
+        .on_conflict_do_update(index_elements=["source"], set_={"value": stored, "updated": func.now()})
     )
 
 

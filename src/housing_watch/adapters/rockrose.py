@@ -196,7 +196,7 @@ class Rockrose(Adapter):
             lst = parse_detail(url, html, charts)
             for name, pdf in buttons:
                 if _matches(name, lst.title, url):
-                    lst.notes += f" Application PDF: {pdf}"
+                    lst.notes = (lst.notes or "") + f" Application PDF: {pdf}"
             out.append(lst)
         for name, pdf in buttons:
             if any(_matches(name, lst.title, lst.url) for lst in out):

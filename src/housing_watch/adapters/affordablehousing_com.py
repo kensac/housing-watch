@@ -65,7 +65,7 @@ def parse_search(html: str) -> tuple[int, list[dict]]:
     for chunk in re.findall(r"<article\b.*?</article>", html, re.S):
         a = parse.soup(chunk).find("article")
         link = a.select_one("a.listing-card--stretched-link[href]") if a is not None else None
-        if link is None or not a.get("data-communityid"):
+        if a is None or link is None or not a.get("data-communityid"):
             continue
 
         def g(sel, a=a):
@@ -150,8 +150,8 @@ def parse_detail(card: dict, html: str) -> Listing | None:
         mid = re.search(r"ShowViewModel\((\d+)\)", str(row))
         modal = s.select_one(f"div.unitmodel_{mid.group(1)}") if mid else None
         mtext = _tx(modal.select_one(".unit--info--desc--text")) if modal else ""
-        rent_col = next((c for c in cols if "rent--range--col" in c.get("class", [])), None)
-        avail_col = next((c for c in cols if "avl--col" in c.get("class", [])), None)
+        rent_col = next((c for c in cols if "rent--range--col" in c.get_attribute_list("class")), None)
+        avail_col = next((c for c in cols if "avl--col" in c.get_attribute_list("class")), None)
         size = parse.size(model)
         if size == "unknown":
             size = parse.size(row.get("data-bedroomcount"))

@@ -59,8 +59,8 @@ def _noise(r: EventRow) -> bool:
 
 
 def _names(xs: set[str], n: int = 6) -> str:
-    xs = sorted(xs)
-    return ", ".join(xs[:n]) + (f" and {len(xs) - n} more" if len(xs) > n else "")
+    ys = sorted(xs)
+    return ", ".join(ys[:n]) + (f" and {len(ys) - n} more" if len(ys) > n else "")
 
 
 def urgent(engine: Engine, p: Profile = PROFILE) -> bool:

@@ -294,7 +294,8 @@ def index_links(html: str) -> tuple[str | None, list[tuple[str, str, str]]]:
         seen.add(a["href"])
         par = a.find_parent(["p", "li", "div"])
         line = re.sub(r"\s+", " ", par.get_text(" ") if par else "")
-        line = line[: line.find(a["href"])] if a["href"] in line else line
+        href = str(a["href"])
+        line = line[: line.find(href)] if href in line else line
         name, _, addr = line.partition(":")
         addr = re.sub(r"^\s*[^:]*:\s*", "", addr) if addr.count(":") else addr
         out.append((name.strip(), addr.strip(" |"), a["href"]))

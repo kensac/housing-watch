@@ -31,7 +31,7 @@ def _badge(el) -> str | None:
 
 def parse_page(html: str) -> list[Listing]:
     s = parse.soup(html)
-    out: list[Listing] = []
+    out: list[dict] = []
     cur: dict | None = None
     badge: str | None = None
     for el in s.find_all(["div", "span", "h2", "h3", "h4", "p", "table", "a"]):
@@ -47,7 +47,7 @@ def parse_page(html: str) -> list[Listing]:
             nxt = el.find_next_sibling("p")
             cur = {"title": title, "addr": nxt.get_text(" ", strip=True) if nxt else title, "badge": badge}
             cur.update(units=[], ami=None, unit_no=None, apply=None)
-            out.append(cur)  # type: ignore[arg-type]
+            out.append(cur)
             badge = None
             continue
         if cur is None:

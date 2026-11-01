@@ -48,7 +48,7 @@ def _stream(html: str) -> list[tuple[str, str]]:
         t.decompose()
     out: list[tuple[str, str]] = []
     for el in s.find_all(True):
-        if el.name == "a" and "forms.clickup.com" in el.get("href", ""):
+        if el.name == "a" and "forms.clickup.com" in str(el.get("href", "")):
             out.append(("a", el["href"]))
         elif el.name in _BLOCKS and not el.find(list(_BLOCKS)):
             t = re.sub(r"\s+", " ", el.get_text("")).replace("​", "").strip()

@@ -1,3 +1,5 @@
+# pyright: reportInvalidTypeForm=false
+# Annotations here name types built at import time from the registries, which a static checker cannot see.
 """The GraphQL schema's types: enums, object types, connections, inputs and payloads. schema.py resolves them.
 
 Object types are derived from the read model's dataclasses (derive.py), never written out: a field added to

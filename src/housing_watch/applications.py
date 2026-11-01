@@ -265,17 +265,17 @@ def fill(pdf: bytes, a: dict) -> bytes | None:
         return None
     w = PdfWriter(clone_from=PdfReader(io.BytesIO(pdf)))
     values = form.values(a)
-    signing = form.sign and a.get("sign", True)
-    if signing:
-        values[form.sign[1]] = datetime.now(NY).strftime("%m/%d/%Y")
+    sign = form.sign if a.get("sign", True) else None
+    if sign:
+        values[sign[1]] = datetime.now(NY).strftime("%m/%d/%Y")
     values |= {k: str(v) for k, v in (a.get("fields") or {}).items()}  # raw overrides last
     fields = w.get_fields() or {}
     text = {k: v for k, v in values.items() if k in fields and fields[k].get("/FT") != "/Btn"}
     for page in w.pages:
         w.update_page_form_field_values(page, text, auto_regenerate=False)
         _press(page, {k: v for k, v in values.items() if k in fields and fields[k].get("/FT") == "/Btn"})
-        if signing:
-            _sign(page, form.sign[0], a)
+        if sign:
+            _sign(page, sign[0], a)
     w.set_need_appearances_writer(True)
     out = io.BytesIO()
     w.write(out)

@@ -26,7 +26,7 @@ OPS: dict[str, tuple[Op, ...]] = {
     "time": ("after", "before", "between", "since", "until", "last", "empty"),
     "bool": ("is", "empty"),
 }
-SYMBOL = {"eq": "=", "ne": "≠", "lt": "<", "le": "≤", "gt": ">", "ge": "≥"}
+SYMBOL: dict[Op, str] = {"eq": "=", "ne": "≠", "lt": "<", "le": "≤", "gt": ">", "ge": "≥"}
 OP_LABEL: dict[Op, str] = {
     "in": "is", "not_in": "is not", "contains": "contains", "not_contains": "does not contain", "empty": "is empty",
     "between": "between", "after": "after", "before": "before", "since": "since", "until": "until",

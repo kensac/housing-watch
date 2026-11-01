@@ -1,6 +1,6 @@
 export PYTHONPATH := src
 
-.PHONY: sync check test lint fmt show run
+.PHONY: sync check test lint fmt types show run
 
 sync:   ## install exactly the lockfile into .venv
 	uv sync --frozen
@@ -8,6 +8,7 @@ sync:   ## install exactly the lockfile into .venv
 check:  ## everything CI gates on, except the frontend
 	ruff check src tests alembic
 	ruff format --check src tests alembic
+	pyright
 	python -m housing_watch schema --check schema.graphql
 	python -m pytest -q -n auto
 
@@ -19,6 +20,9 @@ lint:
 
 fmt:
 	ruff format src tests alembic
+
+types:  ## type-check src and tests (pyrightconfig.json)
+	pyright
 
 show:   ## make show S=reside  (what one adapter returns right now; nothing stored)
 	python -m housing_watch show $(S)

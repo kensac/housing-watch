@@ -145,7 +145,7 @@ def jobs(pg):
         ).all()
 
 
-def run_of(pg, source) -> RunRow:
+def run_of(pg, source) -> RunRow | None:
     with Session(pg) as s:
         return s.scalars(select(RunRow).where(RunRow.source == source).order_by(RunRow.id.desc())).first()
 

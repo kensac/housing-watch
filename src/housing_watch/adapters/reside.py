@@ -78,7 +78,7 @@ def _bands(hh_text: str | None, inc: str, a: int | None, lo_col: str | None = No
             return ami.bands(hhs, *caps[0], a, sizes=hhs[::-1], tol=60)
     hhs = [_persons(w) for w, _ in lab] or _hh(hh_text)
     if len(hhs) != len(caps):  # unlabeled 'Maximum Income' list: the first cap names its household
-        m = a and caps and ami.match(caps[0][1], ami=a)
+        m = ami.match(caps[0][1], ami=a) if a and caps else None
         start = m[1] if m and m[2] == a else 1
         hhs = list(range(start, start + len(caps)))
     bands = [Band(h, lo, hi) for h, (lo, hi) in zip(hhs, caps, strict=True)]
@@ -205,7 +205,7 @@ def parse_page(url: str, html: str) -> Listing:
     flat = re.sub(r"\s+", " ", parse.text(s))
     # WordPress terms on the property's <article>: property-status-*, property-city-* (borough or neighborhood)
     art = s.find(class_=re.compile(r"^property-(status|city)-"))
-    terms = art.get("class", []) if art else []
+    terms = art.get_attribute_list("class") if art else []
     # header facts every page prints: Rent/ Month, Available Units, Household Size, Required Income
     box = {}
     for b in s.select(".elementor-icon-box-content"):

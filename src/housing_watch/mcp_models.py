@@ -1,3 +1,5 @@
+# pyright: reportInvalidTypeForm=false
+# Annotations here name types built at import time from the registries, which a static checker cannot see.
 """Pydantic models for the MCP tools, derived like the GraphQL types: filters from the `filters` registry, sorts from
 queries/'s, results from the read-model dataclasses (minus `internal()` fields). They give every tool a typed
 JSON Schema for its parameters and its output, and never restate a field.

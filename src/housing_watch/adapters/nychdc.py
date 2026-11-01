@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 from .. import fetch, parse
 from ..eligibility import ami
@@ -38,7 +39,7 @@ _MONTHS = "january february march april may june july august september october n
 class _Tok:
     line: int
     x: int
-    val: object
+    val: Any  # (lo, hi) income, [households], a rent or a size label
 
 
 @dataclass

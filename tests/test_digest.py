@@ -13,7 +13,7 @@ from seed import L, add_listing, event, seed
 
 def pending(eng) -> int:
     with Session(eng) as s:
-        return s.scalar(select(func.count()).where(EventRow.notified.is_(None)))
+        return s.scalar(select(func.count()).where(EventRow.notified.is_(None))) or 0
 
 
 @pytest.fixture

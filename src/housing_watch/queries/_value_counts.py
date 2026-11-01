@@ -32,7 +32,7 @@ def is_enum(engine: Engine, fld: F.Field, p: Profile = PROFILE) -> bool:
         n = len({COMPUTED[_name(fld)](x) for x in judged(engine, p)})
     else:
         with Session(engine) as s:
-            n = s.scalar(select(func.count(fld.column.distinct())))
+            n = s.scalar(select(func.count(fld.column.distinct()))) or 0
     _distinct[ck] = (time.monotonic(), n)
     return n <= ENUM_MAX
 
@@ -63,8 +63,8 @@ def value_counts(
         return _sorted_counts(fld, _unit_value_counts(engine, fld, others, q, p, hides_gone(conds)))
     with Session(engine) as s:
         if target == "events" and fld.scope == "event":
-            q = select(fld.column, func.count()).where(*event_where(engine, others, p)).group_by(fld.column)
-            counts = dict(s.execute(q).all())
+            stmt = select(fld.column, func.count()).where(*event_where(engine, others, p)).group_by(fld.column)
+            counts = dict(s.execute(stmt).all())
         else:
             if target == "events":
                 w = select(EventRow.key, func.count()).where(*event_where(engine, others, p), EventRow.key.isnot(None))
