@@ -26,8 +26,21 @@ import os
 from dataclasses import asdict
 from typing import Annotated
 
+from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+from fastmcp.server.auth.oidc_proxy import OIDCProxy
+from graphql import (
+    FieldNode,
+    FragmentDefinitionNode,
+    GraphQLSyntaxError,
+    InlineFragmentNode,
+    OperationDefinitionNode,
+    OperationType,
+    parse,
+)
 from pydantic import Field
 from sqlalchemy.engine import Engine
+from strawberry.types.graphql import OperationType as Op
 
 from . import filters as F
 from . import mcp_models as M
@@ -35,6 +48,7 @@ from . import queries, tracker, views
 from .criteria import PROFILE, Profile
 from .models import NotFound
 from .notify import digest
+from .web.schema import context, schema
 
 log = logging.getLogger("housing_watch")
 REFUSALS = (NotFound, views.ViewError, F.FilterError)  # the domain's refusals: the caller's to fix, not bugs
@@ -97,22 +111,53 @@ def _event(e: queries.EventView) -> M.Change:
     return M.Change(**out)
 
 
+def _parse(query: str):
+    """(the document, None), or (None, the syntax error as a result)."""
+    try:
+        doc = parse(query)
+    except GraphQLSyntaxError as e:
+        return None, {"data": None, "errors": [e.formatted]}
+    return doc, None
+
+
+def _only(doc, allowed: OperationType, other: str) -> None:
+    ops = {d.operation for d in doc.definitions if isinstance(d, OperationDefinitionNode)}
+    if ops - {allowed}:
+        raise ToolError(f"this tool runs {allowed.value} operations only; {other}", log_level=logging.INFO)
+
+
+GQL = (
+    "Lists are Relay connections: `{ listings(filter: { verdict: { in: [eligible] }, units: { rent: { le: 3000 } } "
+    "}, first: 20) { total edges { node { key title } } page_info { has_next_page end_cursor } } }`, the next page "
+    "with `after: <end_cursor>`. Enum values are GraphQL names (`Staten_Island`, `_1br`, `re_rental`). The result "
+    "is free-form: whatever the query selects. Errors carry `extensions.code`."
+)
+
+
+def _fields(bound: dict) -> str:
+    """The mutations a document runs, for the audit log: its operations' root fields, through fragments."""
+    doc, _ = _parse(bound["query"])
+    defs = doc.definitions if doc else []
+    frags = {d.name.value: d for d in defs if isinstance(d, FragmentDefinitionNode)}
+    names, seen = [], set()
+
+    def walk(sel) -> None:
+        for f in sel.selections:
+            if isinstance(f, FieldNode):
+                names.append(f.name.value)
+            elif isinstance(f, InlineFragmentNode):
+                walk(f.selection_set)
+            elif f.name.value in frags and f.name.value not in seen:  # seen: a fragment cycle never ends
+                seen.add(f.name.value)
+                walk(frags[f.name.value].selection_set)
+
+    for d in defs:
+        if isinstance(d, OperationDefinitionNode):
+            walk(d.selection_set)
+    return f"mutations={','.join(names) or '?'} variables={brief(bound.get('variables') or {})}"
+
+
 def build(engine: Engine, p: Profile = PROFILE, auth=None):
-    from fastmcp import FastMCP
-    from fastmcp.exceptions import ToolError
-    from graphql import (
-        FieldNode,
-        FragmentDefinitionNode,
-        GraphQLSyntaxError,
-        InlineFragmentNode,
-        OperationDefinitionNode,
-        OperationType,
-        parse,
-    )
-    from strawberry.types.graphql import OperationType as Op
-
-    from .web.schema import context, schema
-
     def tool(annotations: dict, args=None, more: str = ""):
         """mcp.tool, with the domain's refusals as clean tool errors, and every write logged with its caller.
         `args` summarizes the arguments for the log (default: brief() of each); `more` extends the docstring."""
@@ -324,26 +369,6 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         tracker.unlink(engine, listing_key)
         return M.TrackerLinkModel.model_validate(asdict(queries.tracker_link(engine, listing_key, p)))
 
-    def _parse(query: str):
-        """(the document, None), or (None, the syntax error as a result)."""
-        try:
-            doc = parse(query)
-        except GraphQLSyntaxError as e:
-            return None, {"data": None, "errors": [e.formatted]}
-        return doc, None
-
-    def _only(doc, allowed: OperationType, other: str) -> None:
-        ops = {d.operation for d in doc.definitions if isinstance(d, OperationDefinitionNode)}
-        if ops - {allowed}:
-            raise ToolError(f"this tool runs {allowed.value} operations only; {other}", log_level=logging.INFO)
-
-    GQL = (
-        "Lists are Relay connections: `{ listings(filter: { verdict: { in: [eligible] }, units: { rent: { le: 3000 } } "
-        "}, first: 20) { total edges { node { key title } } page_info { has_next_page end_cursor } } }`, the next page "
-        "with `after: <end_cursor>`. Enum values are GraphQL names (`Staten_Island`, `_1br`, `re_rental`). The result "
-        "is free-form: whatever the query selects. Errors carry `extensions.code`."
-    )
-
     @tool(READ, more=GQL)
     async def graphql(query: str, variables: dict | None = None) -> dict:
         """Run a read-only GraphQL query against the web app's schema (mutations: `graphql_mutation`). Introspect
@@ -355,28 +380,6 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         res = await schema.execute(query, variables, context_value=context(engine, p),
                                    allowed_operation_types={Op.QUERY})  # fmt: skip
         return {"data": res.data, "errors": [e.formatted for e in res.errors or []]}
-
-    def _fields(bound: dict) -> str:
-        """The mutations a document runs, for the audit log: its operations' root fields, through fragments."""
-        doc, _ = _parse(bound["query"])
-        defs = doc.definitions if doc else []
-        frags = {d.name.value: d for d in defs if isinstance(d, FragmentDefinitionNode)}
-        names, seen = [], set()
-
-        def walk(sel) -> None:
-            for f in sel.selections:
-                if isinstance(f, FieldNode):
-                    names.append(f.name.value)
-                elif isinstance(f, InlineFragmentNode):
-                    walk(f.selection_set)
-                elif f.name.value in frags and f.name.value not in seen:  # seen: a fragment cycle never ends
-                    seen.add(f.name.value)
-                    walk(frags[f.name.value].selection_set)
-
-        for d in defs:
-            if isinstance(d, OperationDefinitionNode):
-                walk(d.selection_set)
-        return f"mutations={','.join(names) or '?'} variables={brief(bound.get('variables') or {})}"
 
     @tool(DELETE, args=_fields, more=GQL)
     async def graphql_mutation(query: str, variables: dict | None = None) -> dict:
@@ -396,8 +399,6 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
 
 def auth_from_env():
     """The OIDC proxy from HW_MCP_* settings; raises when any is missing, so the server never runs open."""
-    from fastmcp.server.auth.oidc_proxy import OIDCProxy
-
     need = ("HW_MCP_BASE_URL", "HW_MCP_OIDC_CONFIG_URL", "HW_MCP_CLIENT_ID", "HW_MCP_CLIENT_SECRET", "HW_MCP_JWT_KEY")
     missing = [k for k in need if not os.environ.get(k)]
     if missing:
