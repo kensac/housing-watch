@@ -1,6 +1,6 @@
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
 from housing_watch import db
@@ -127,14 +127,17 @@ def test_a_run_finishing_after_a_newer_one_leaves_the_source_state_alone(pg):
         assert events(s, type="source_recovered") == []
 
 
-def test_run_bookkeeping(pg):
+def test_run_bookkeeping(pg, monkeypatch):
+    monkeypatch.setattr(db, "utcnow", lambda: datetime(2026, 11, 1, 5, 30, tzinfo=UTC))  # 01:30 EDT; EST from 06:00
     with Session(pg) as s, s.begin():
+        s.execute(text("SET TIME ZONE 'America/New_York'"))  # rows load in this zone: a DST day in local time
         run_id = db.start_run(s, "t", job_id=7, worker="oci")
         db.finish_run(s, run_id, "t", True, listings=3, events=2, every_hours=24, workers=["oci", "gcp", "oci"])
         run = s.get(RunRow, run_id)
         assert (run.ok, run.listings, run.events, run.job_id, run.workers) == (True, 3, 2, 7, ["gcp", "oci"])
         st = s.get(SourceStateRow, "t")
-        assert timedelta(hours=23) < st.next_due - st.last_attempt <= timedelta(hours=24)
+        due, last = st.next_due.astimezone(UTC), st.last_attempt.astimezone(UTC)  # same-zone subtraction is wall time
+        assert timedelta(hours=23) < due - last <= timedelta(hours=24)
 
 
 def test_claim_due(pg):
