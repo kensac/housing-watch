@@ -17,6 +17,8 @@ export type {
 export type Listing = ListingFieldsFragment
 export type Unit = UnitFieldsFragment
 export type Event = EventFieldsFragment
+/** What a changed event changed, in words ("Rent: 1BR #8L $2,900 → $2,750"); empty for other events. */
+export const changes = (e: Event) => (e.detail && 'changes' in e.detail ? e.detail.changes : [])
 export type Chip = ChipFieldsFragment
 export type SavedView = ViewFieldsFragment
 export type Meta = MetaQuery['meta']
@@ -96,7 +98,7 @@ export const UnitFieldsDoc = graphql(`
 `)
 
 export const EventFieldsDoc = graphql(`
-  fragment EventFields on Event { id at source key type summary notified baseline title verdict }
+  fragment EventFields on Event { id at source key type summary notified baseline title verdict detail { ... on ListingChange { changes } } }
 `)
 
 // Every operator of every filter type: a saved view's filter comes back whole (filters.ts checks the selections

@@ -3,7 +3,7 @@ import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
-import { request, type Event, type EventColumn } from '../api'
+import { changes, request, type Event, type EventColumn } from '../api'
 import { graphql } from '../gql'
 import { EventBadge, VerdictBadge } from '../components/Badges'
 import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, type Cells } from '../components/ListPage'
@@ -32,6 +32,7 @@ const rowKey = (e: Event) => e.id
 const openKey = (e: Event) => e.key
 const lead = (e: Event, to: string | null) => {
   const what = e.title ?? e.summary ?? e.source
+  const changed = changes(e).join(' · ')
   return (
     <>
       <Table.Td style={{ whiteSpace: 'nowrap' }} c="dimmed" title={when(e.at)}>{ago(e.at)}</Table.Td>
@@ -40,6 +41,7 @@ const lead = (e: Event, to: string | null) => {
         {to
           ? <Anchor component={Link} to={to} c="inherit" size="sm" fw={500} lineClamp={1}>{what}</Anchor>
           : <Text size="sm" lineClamp={1}>{what}</Text>}
+        {changed && <Text size="xs" c="dimmed" lineClamp={1} title={changed}>{changed}</Text>}
       </LeadTd>
     </>
   )
