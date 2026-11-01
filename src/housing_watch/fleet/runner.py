@@ -16,10 +16,10 @@ import traceback
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from . import db
-from .adapters import PLAN, Adapter, load_all
-from .fetch import NeedsByparr
-from .models import Result
+from .. import db
+from ..adapters import PLAN, Adapter, load_all
+from ..fetch import NeedsByparr
+from ..models import Result
 
 log = logging.getLogger("housing_watch")
 WORKER = os.environ.get("HW_WORKER_NAME") or socket.gethostname()

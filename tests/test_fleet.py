@@ -15,8 +15,9 @@ from sqlalchemy import create_engine, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from housing_watch import db, fetch, metrics, runner, tasks
+from housing_watch import db, fetch
 from housing_watch.adapters import Adapter
+from housing_watch.fleet import metrics, runner, tasks
 from housing_watch.models import Listing, Result, Unit
 from housing_watch.orm import ChunkResultRow, EventRow, ListingRow, RunRow, SourceStateRow
 

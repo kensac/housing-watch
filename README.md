@@ -18,7 +18,7 @@ tables), so the same input always gives the same output.
 - `db.py` stores everything and records `new` / `changed` / `closed` / `gone` /
   `reopened` / `page_changed` events. It stores raw data only; nothing is
   filtered at storage time. A source's first run is flagged as a baseline.
-- `tasks.py` is the fleet: a per-minute `tick` queues due sources, any worker
+- `fleet/` is the worker fleet: a per-minute `tick` queues due sources, any worker
   runs them, and big sources split into chunks that run on several workers.
 - `criteria.py` labels each listing **eligible**, **possible** or **excluded**
   when it is read, and gives a reason. An open or waitlisted listing it cannot
