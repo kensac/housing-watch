@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Literal
 
@@ -131,8 +131,7 @@ def listing_fields(listings: Table = ListingRow.__table__, prefix: str = "") -> 
     fs = _columns(listings, prefix, "listing", HIDDEN["listings"])
     fs += _columns(UnitRow.__table__, prefix + "units.", "unit", HIDDEN["units"])
     fs += _columns(BandRow.__table__, prefix + "units.bands.", "band", HIDDEN["bands"])
-    computed = [Field(prefix + f.name, f.label, f.group, f.type, f.scope, values=f.values, order=f.order)
-                for f in COMPUTED]  # fmt: skip
+    computed = [replace(f, name=prefix + f.name) for f in COMPUTED]
     return {f.name: f for f in fs + computed}
 
 
