@@ -201,7 +201,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   re-validated against the registries on load; alembic 0010 converted version 1's `field.op.values` strings) and manual tracker links, through mutations that refuse anything not same-origin.
   Nothing is seeded.
 - `commute.py` routes eligible, listed listings to `HW_COMMUTE_TO` by transit (Google Routes API, weekday
-  8:30 AM), each origin address once per destination (again after 60 days), into `commutes`; a periodic
+  8:30 AM), each origin address once per destination (again after 60 days; a failed one after 10 minutes,
+  doubling with each failure in a row up to ~21 h), into `commutes`; a periodic
   `commute` task on the digest worker does it. queries.py attaches the minutes and lines at read time
   (`commute` filter field, sort and column).
 - `tracker.py` copies the owner's application tracker sheet (the source of truth for application status
