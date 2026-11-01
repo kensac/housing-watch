@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter, cached_listing
+from . import Adapter, cached_listing, prune
 
 BASE = "https://www.affordablehousing.com"
 COUNTIES = ["new-york-county-ny", "kings-county-ny", "queens-county-ny", "bronx-county-ny", "richmond-county-ny"]
@@ -254,6 +254,5 @@ class AffordableHousingCom(Adapter):
                 cache[cid] = {"stamp": stamp, "fetched": now.isoformat(), "listing": asdict(lst) if lst else None}
             if lst:
                 out.append(lst)
-        for cid in [c for c in cache if c not in cards]:
-            del cache[cid]
+        prune(cache, cards)
         return Result(listings=out)

@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json as _json
 import os
 import re
@@ -27,6 +26,7 @@ from collections import Counter
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
+from . import by_content, prune
 from ._page import PageAdapter
 
 URL = "https://www.settlementhousingfund.org/find-housing/"
@@ -470,14 +470,7 @@ class SettlementHousingFund(PageAdapter):
     min_listings = 1
 
     def _table(self, img: str) -> list[list[list[str]]]:
-        data = fetch.get(img).content
-        h = hashlib.sha256(data).hexdigest()
-        hit = self.cache.setdefault("ocr", {}).get(img)
-        if hit and hit.get("sha") == h:
-            return hit["blocks"]
-        blocks = ocr_table(data)
-        self.cache["ocr"][img] = {"sha": h, "blocks": blocks}
-        return blocks
+        return by_content(self.cache.setdefault("ocr", {}), img, lambda data: {"blocks": ocr_table(data)})["blocks"]
 
     def fetch(self) -> Result:
         snaps = super().fetch().snapshots
@@ -487,8 +480,7 @@ class SettlementHousingFund(PageAdapter):
         if form_url:
             found, imgs = read_form(form_url, self._table)
             listings += found
-        for img in [k for k in self.cache.get("ocr", {}) if k not in imgs]:
-            del self.cache["ocr"][img]
+        prune(self.cache.get("ocr", {}), imgs)
         for name, addr, link in links:
             pid = KNOWN_PRONTO.get(link.rstrip("/").split("/")[-1])
             target = link

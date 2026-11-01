@@ -15,7 +15,7 @@ import time
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Snapshot, Unit
-from . import Adapter
+from . import Adapter, prune
 
 URL = "https://www.taxaceny.com/projects-8"
 CONTACT = "Info@taxaceny.com, 718-908-7003"
@@ -159,8 +159,7 @@ class Taxace(Adapter):
             cache[u] = {"active": a, "checked": now}
         if links and unanswered == len(links):
             raise RuntimeError("ClickUp form API answered no form check (API changed?)")
-        for u in [u for u in cache if u not in links]:
-            del cache[u]
+        prune(cache, links)
         listings, flat = parse_page(html, forms)
         if listings:
             return Result(listings=listings)
