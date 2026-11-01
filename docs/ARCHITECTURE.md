@@ -88,8 +88,9 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 - **Tasks:**
   - `tick` (periodic, every minute; Procrastinate defers it once per minute fleet-wide): claims sources
     whose `source_state.next_due` has passed (pushing it a full cycle ahead) and defers `source_run` for
-    each; fails runs left unfinished for `HW_RUN_TIMEOUT_HOURS` (6); re-queues merges that were never
-    deferred; defers `digest(scheduled=True)` at minute 0 of each `HW_DIGEST_HOURS` hour.
+    each; fails runs left unfinished for `HW_RUN_TIMEOUT_HOURS` (6) (when a newer run of the source has
+    finished, as after a retried job, only the old run's row changes, not `source_state`); re-queues merges
+    that were never deferred; defers `digest(scheduled=True)` at minute 0 of each `HW_DIGEST_HOURS` hour.
   - `source_run(source)` (`queueing_lock` `run:<source>`, `lock` `source:<source>`): plans chunks with
     `Adapter.chunks()`. With one chunk it fetches and records inline. Otherwise it writes the plan
     (keys plus the cache every chunk starts from) to `runs.plan` and defers one `source_chunk` per key;
@@ -107,8 +108,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
     `cleanup` (daily): drops finished jobs (successes after 2 days, failures after a week).
 - **Failures:** an adapter error is a failed run (recorded, not retried); Procrastinate retries only
   infrastructure trouble and chunk errors. A failed run increments `source_state.consecutive_failures`
-  and emits `source_failed` on the 2nd and 10th consecutive failure; the next success emits
-  `source_recovered`.
+  and emits `source_failed` on the 2nd and 10th consecutive failure; the success after a reported
+  failure emits `source_recovered`.
 - **Metrics** (`metrics.py`, `:9091`, `HW_METRICS_PORT`): `hw_source_run_seconds` and
   `hw_source_failures_total` are per worker; `hw_jobs{task,status}`,
   `hw_source_last_success_timestamp_seconds` and `hw_source_consecutive_failures` are read from the
@@ -135,7 +136,9 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   Its write tools are the web app's mutations (saved views; manual tracker links), annotated as writes. Both
   are thin adapters over the same domain functions (`views.create/change/duplicate/delete`, `tracker.link/
   unlink`, `queries.tracker_link`), which raise `models.NotFound`, `views.ViewError` or `filters.FilterError`;
-  GraphQL maps those to codes in `Schema.process_errors`, MCP to tool errors in its `tool` wrapper. Each MCP
+  GraphQL maps those to codes in `Schema.process_errors`, MCP to tool errors in its `tool` wrapper. Any other
+  exception is a bug: its text goes to the log only (GraphQL's INTERNAL, MCP's `mask_error_details`, the web app's
+  catch-all handler). Each MCP
   write is logged at INFO (`mcp write <tool> by <sub> <email>: <args>`, args as keys or lengths, never values
   of objects); reads are not. `graphql` runs read-only queries in-process against the web schema (same
   DataLoaders and limits); `graphql_mutation` runs mutations in a `trusted` context: OAuth already decided
@@ -157,7 +160,9 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   applied in order so later fields break ties.
 - `web/app.py` serves GraphQL at `/graphql` (Strawberry; the schema is `web/schema.py`, snake_case fields,
   GraphiQL on GET) over `queries.py`, `views.py` and `tracker.py`, plus one REST route,
-  `/api/listing/application`, for the filled application PDF (a binary download).
+  `/api/listing/application`, for the filled application PDF (a binary download). GraphQL is HTTP only: the
+  schema has no subscriptions, and a WebSocket to `/graphql` is closed with 1008, since WebSockets skip CORS and
+  any site could read through one.
   - Types: one source of truth, the read model's dataclasses. `web/derive.py` turns each into a Strawberry
     type (nested dataclasses, optionals, lists; a field's trailing comment is its description), so a field
     added to a dataclass is in the API with no other change. Fields made with `queries.internal()`
@@ -181,7 +186,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
     with BAD_USER_INPUT. `values` and the views mutations take a page's input as a `@oneOf` object; a saved
     view's state comes back as the `ViewState` union of the three pages' states.
   - Errors carry `extensions.code`: NOT_FOUND, BAD_USER_INPUT (also every document or variable error),
-    FORBIDDEN (a cross-origin mutation), INTERNAL (a bug, the only kind logged). Resolvers raise the domain's
+    FORBIDDEN (a cross-origin mutation), INTERNAL (a bug, the only kind logged; the client gets "Internal error",
+    the log the message and trace). Resolvers raise the domain's
     own errors; `Schema.process_errors` gives them their code.
   - Depth (10), token (2000) and alias (15) limits; introspection stays on. Resolvers are async and run
     the blocking store reads in a worker thread; `Event.listing` goes through a per-request DataLoader.
