@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from housing_watch.adapters import mns
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "mns"
 DETAIL = "https://www.mns.com/details/240428/rental/morris+heights/bronx"

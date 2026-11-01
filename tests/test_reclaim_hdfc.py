@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from housing_watch.adapters.reclaim_hdfc import parse_page
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 HTML = (Path(__file__).parent / "fixtures" / "reclaim_hdfc" / "page.html").read_text()
 

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from helpers import bands
 from housing_watch.adapters.spring import build_listings, units_from_tsv
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "spring"
 

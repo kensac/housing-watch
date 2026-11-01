@@ -3,7 +3,7 @@ from pathlib import Path
 
 from housing_watch.adapters import pronto
 from housing_watch.adapters.pronto import Pronto, ny_records, parse_property
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "pronto"

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from housing_watch.adapters.tf_cornerstone import parse_api
-from housing_watch.criteria import listing_verdict, unit_verdict
+from housing_watch.eligibility import listing_verdict, unit_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "tf_cornerstone"

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from housing_watch.adapters.avalonbay import parse_list, parse_page, tier_status
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "avalonbay"

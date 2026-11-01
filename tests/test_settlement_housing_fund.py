@@ -10,7 +10,7 @@ from housing_watch.adapters.settlement_housing_fund import (
     read_blocks,
     registration_listing,
 )
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "settlement_housing_fund"
 FORM = json.loads((F / "form.json").read_text())

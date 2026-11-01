@@ -13,7 +13,8 @@ from __future__ import annotations
 import re
 import time
 
-from .. import ami, fetch, parse
+from .. import fetch, parse
+from ..eligibility import ami
 from ..models import Band, Listing, Result, Snapshot, Unit
 from . import Adapter, prune
 

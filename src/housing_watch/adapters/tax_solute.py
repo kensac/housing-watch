@@ -12,7 +12,8 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .. import ami, fetch, parse
+from .. import fetch, parse
+from ..eligibility import ami
 from ..models import Listing, Result, Snapshot, Unit
 from . import Adapter
 

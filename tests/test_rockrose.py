@@ -5,7 +5,7 @@ import pytest
 
 from housing_watch.adapters import rockrose
 from housing_watch.adapters.rockrose import Rockrose, units_from_chart
-from housing_watch.criteria import listing_verdict, unit_verdict
+from housing_watch.eligibility import listing_verdict, unit_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "rockrose"
