@@ -1,15 +1,10 @@
-from datetime import UTC, datetime
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from helpers import T
 from housing_watch import changes, db, digest
 from housing_watch.models import Band, Listing, Unit
 from housing_watch.orm import EventRow
-
-
-def T(n: int) -> datetime:
-    return datetime.fromtimestamp(1_800_000_000 + n, UTC)
 
 
 def B(status="open", units=None, **kw) -> dict:

@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from helpers import bands
 from housing_watch.adapters import tax_solute
 from housing_watch.adapters.tax_solute import TaxSolute, parse_page
 from housing_watch.criteria import listing_verdict
@@ -13,10 +14,6 @@ F = Path(__file__).parent / "fixtures" / "tax_solute"
 def listings():
     lst, _ = parse_page((F / "home.html").read_text())
     return {x.ext_id: x for x in lst}
-
-
-def bands(u):
-    return [(b.household, b.income_min, b.income_max) for b in u.bands]
 
 
 def test_every_card_captured(listings):

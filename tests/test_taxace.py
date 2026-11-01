@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from helpers import bands
 from housing_watch.adapters import taxace
 from housing_watch.adapters.taxace import Taxace, bands_for, parse_page
 from housing_watch.criteria import listing_verdict
@@ -15,10 +16,6 @@ DEAD = "https://forms.clickup.com/14203750/f/dhev6-8873/7YBOR67912I9V7B2ED"
 def listings():
     lst, _ = parse_page(HTML, {DEAD: False})
     return {x.ext_id: x for x in lst}
-
-
-def bands(u):
-    return [(b.household, b.income_min, b.income_max) for b in u.bands]
 
 
 def test_every_card_captured(listings):
