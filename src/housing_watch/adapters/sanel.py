@@ -541,10 +541,10 @@ class Sanel(Adapter):
 
 
 def _get(url: str) -> str | None:
-    """Page html, or None when the page is a 404 (no retries for those: they are permanent)."""
+    """Page html, or None when the page is a 404."""
     try:
-        return fetch.get(url, retries=0).text
+        return fetch.get(url).text
     except FetchError as e:
         if "404 Not Found" in str(e):
             return None
-    return fetch.get(url).text
+        raise
