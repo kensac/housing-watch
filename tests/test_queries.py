@@ -234,6 +234,6 @@ def test_a_listings_sizes_follow_the_size_order():
     lst = Listing("t", "1", "T", "u", units=[Unit("unknown"), Unit("6br"), Unit("5br"), Unit("studio")])
     t = datetime(2026, 11, 1, tzinfo=UTC)
     row = ListingRow(key=lst.key(), source="t", first_seen=t, last_changed=t)
-    from housing_watch.criteria import PROFILE
+    from housing_watch.eligibility.criteria import PROFILE
 
     assert Q._judging._summary(row, lst, PROFILE).sizes == ["studio", "5br", "6br", "unknown"]

@@ -100,6 +100,8 @@ def units_from_lines(lines: list[str]) -> list[Unit]:
                     close_hh()
             else:  # money
                 v = parse.money(val)
+                if v is None:
+                    continue
                 if want_min:
                     default_min, want_min = int(v), False
                 elif hh is not None:

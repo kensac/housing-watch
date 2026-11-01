@@ -103,7 +103,7 @@ def with_agent_units(lst: Listing, agent_url: str, html: str) -> Listing:
     units = housing_partnership.parse_detail(agent_url, html).units
     if units:
         lst.units = units
-        lst.notes += f" Unit tiers from the marketing agent: {agent_url}"
+        lst.notes = (lst.notes or "") + f" Unit tiers from the marketing agent: {agent_url}"
     return lst
 
 

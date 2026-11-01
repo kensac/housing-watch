@@ -439,15 +439,20 @@ def test_units_api(client):
 def test_types_are_derived_from_the_read_model():
     from dataclasses import dataclass, fields
 
+    from strawberry.types.base import StrawberryObjectDefinition
+
     from housing_watch.__main__ import main
     from housing_watch.web.derive import derive
 
-    listing = {f.name for f in schema.get_type_by_name("Listing").fields}
+    def object_fields(name: str) -> set[str]:
+        t = schema.get_type_by_name(name)
+        assert isinstance(t, StrawberryObjectDefinition)
+        return {f.name for f in t.fields}
+
+    listing = object_fields("Listing")
     model = {f.name for f in fields(queries.ListingSummary)}
     assert listing == model - {"haystack", "unit_sizes", "unit_rents"}  # internal() fields stay out
-    assert {f.name for f in schema.get_type_by_name("Unit").fields} == {f.name for f in fields(queries.UnitSummary)} - {
-        "haystack"
-    }
+    assert object_fields("Unit") == {f.name for f in fields(queries.UnitSummary)} - {"haystack"}
 
     @dataclass
     class Loose:

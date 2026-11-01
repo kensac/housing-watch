@@ -1,0 +1,31 @@
+{
+  "include": ["src", "tests"],
+  "exclude": ["**/__pycache__"],
+  "typeCheckingMode": "standard",
+  "pythonVersion": "3.15",
+  "venvPath": ".",
+  "venv": ".venv",
+  "reportMissingImports": "error",
+  "executionEnvironments": [
+    {
+      "root": "tests",
+      "extraPaths": ["src", "tests"],
+      "reportOptionalSubscript": "none",
+      "reportOptionalMemberAccess": "none",
+      "reportOptionalOperand": "none",
+      "reportOptionalIterable": "none",
+      "reportOptionalCall": "none",
+      "reportGeneralTypeIssues": "none",
+      "reportOperatorIssue": "none",
+      "reportArgumentType": "none"
+    },
+    {
+      "root": "src",
+      "reportArgumentType": "none",
+      "reportCallIssue": "none",
+      "reportReturnType": "none",
+      "reportAttributeAccessIssue": "none",
+      "reportOptionalMemberAccess": "none"
+    }
+  ]
+}

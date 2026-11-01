@@ -12,6 +12,7 @@ The sheet holds only each row's current Status, so `sync` records every change i
 
 from __future__ import annotations
 
+import builtins
 import os
 import re
 from collections import Counter
@@ -237,7 +238,7 @@ class Ref:
     stage: str | None = None
     since: Step | None = None
 
-    @property
+    @builtins.property  # the `property` field above shadows the builtin in this class body
     def group(self) -> StageGroup | None:
         return group(self.stage)
 

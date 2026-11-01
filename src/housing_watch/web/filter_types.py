@@ -1,3 +1,5 @@
+# pyright: reportInvalidTypeForm=false
+# Annotations here name types built at import time from the registries, which a static checker cannot see.
 """GraphQL filter, sort and column types, derived from the `filters` field registry and queries/'s sort registries.
 
 Every filterable field is a field of `ListingFilterInput` (or `EventFilterInput`), typed by its kind: text, a

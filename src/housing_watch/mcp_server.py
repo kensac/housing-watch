@@ -1,3 +1,5 @@
+# pyright: reportInvalidTypeForm=false
+# Annotations here name types built at import time from the registries, which a static checker cannot see.
 """MCP server over the store, for agents and chat apps (Claude, ChatGPT): every read and write the web app has.
 
 Streamable HTTP at HW_MCP_BASE_URL + /mcp. Sign-in is OAuth: FastMCP's OIDC proxy lets MCP clients register
@@ -186,7 +188,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
             if inspect.iscoroutinefunction(fn):
 
                 @functools.wraps(fn)
-                async def run(**kw):
+                async def run(**kw):  # pyright: ignore[reportRedeclaration]  # one of the two runs is defined
                     with refusals(kw):
                         out = await fn(**kw)
                     audit(kw, _errors(out))

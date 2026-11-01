@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from helpers import T
@@ -15,7 +15,9 @@ def B(status="open", units=None, **kw) -> dict:
 def test_event_detail_describes_changes_it_has_not_recorded():
     """Events from before db.py recorded `changes` (2026-10-22) still say what changed, as the digest does."""
     e = queries.EventView(1, T, "s", "a:1", "changed", None, detail={"before": B(), "after": B("waitlist")})
-    assert queries.event_detail(e).changes == ["Status: open → waitlist"]
+    d = queries.event_detail(e)
+    assert isinstance(d, queries.ListingChange)
+    assert d.changes == ["Status: open → waitlist"]
 
 
 def test_describe():
@@ -58,7 +60,7 @@ def test_record_marks_flaps_and_digest_skips_them(pg):
     with Session(pg) as s, s.begin():
         db.record_listings(s, "t", [L()], now=T(1))
     with Session(pg) as s, s.begin():
-        s.execute(EventRow.__table__.update().values(notified=T(1)))
+        s.execute(update(EventRow).values(notified=T(1)))
     with Session(pg) as s, s.begin():
         db.record_listings(s, "t", [L("unknown")], now=T(2))
         db.record_listings(s, "t", [L("open")], now=T(3))

@@ -1,3 +1,5 @@
+# pyright: reportInvalidTypeForm=false
+# Annotations here name types built at import time from the registries, which a static checker cannot see.
 """The GraphQL schema (Strawberry) over queries/, views.py and tracker.py: what the web app reads and writes.
 
 Its types are in api_types.py. Field names stay snake_case (auto_camel_case off).
