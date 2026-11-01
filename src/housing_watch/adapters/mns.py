@@ -14,7 +14,8 @@ import re
 from dataclasses import asdict
 from urllib.parse import unquote_plus, urljoin
 
-from .. import ami, fetch, parse
+from .. import fetch, parse
+from ..eligibility import ami
 from ..models import Band, Listing, Result, Snapshot, Unit
 from . import Adapter, cached_listing, prune
 

@@ -5,7 +5,7 @@ import pytest
 from helpers import bands
 from housing_watch.adapters import taxace
 from housing_watch.adapters.taxace import Taxace, bands_for, parse_page
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "taxace"
 HTML = (F / "projects-8.html").read_text()

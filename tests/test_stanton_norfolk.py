@@ -2,7 +2,7 @@ from pathlib import Path
 
 from helpers import bands
 from housing_watch.adapters.stanton_norfolk import cfemail, parse_ad, parse_site
-from housing_watch.criteria import listing_verdict, unit_verdict
+from housing_watch.eligibility import listing_verdict, unit_verdict
 
 F = Path(__file__).parent / "fixtures" / "stanton_norfolk"
 

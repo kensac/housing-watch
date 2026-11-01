@@ -2,7 +2,7 @@ from datetime import date
 from pathlib import Path
 
 from housing_watch.adapters.sois import build_listing, deadline_iso, mail_to, parse_cards, parse_hpd_ad
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "sois"

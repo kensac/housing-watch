@@ -1,5 +1,4 @@
-from housing_watch import ami
-from housing_watch.criteria import Profile, unit_verdict
+from housing_watch.eligibility import Profile, ami, unit_verdict
 from housing_watch.models import Band, Unit
 
 P = Profile(household=1, income=150_000, sizes=frozenset({"studio", "1br"}))

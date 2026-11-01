@@ -13,7 +13,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .. import ami, fetch, parse
+from .. import fetch, parse
+from ..eligibility import ami
 from ..models import Listing, Result, Unit
 from . import Adapter, prune
 

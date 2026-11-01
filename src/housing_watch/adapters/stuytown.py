@@ -21,7 +21,8 @@ import string
 import time
 from urllib.parse import quote
 
-from .. import ami, fetch, parse
+from .. import fetch, parse
+from ..eligibility import ami
 from ..models import Band, Listing, Result, Unit
 from . import Adapter
 

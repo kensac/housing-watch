@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from housing_watch import filters as F
 from housing_watch import queries as Q
-from housing_watch import tasks
+from housing_watch.fleet import tasks
 from housing_watch.models import Band, Listing, Unit
 from housing_watch.orm import ListingRow, RunRow
 from seed import seed, seed_jobs
@@ -110,7 +110,7 @@ def test_listing_detail(db):
 def test_verdicts_follow_the_profile(db):
     from dataclasses import replace
 
-    from housing_watch.criteria import PROFILE
+    from housing_watch.eligibility import PROFILE
 
     rich = replace(PROFILE, income=500_000)
     assert Q.search_listings(db, Q.ListingQuery(), rich).verdict_counts["eligible"] == 0
@@ -221,7 +221,7 @@ def test_deadline_is_a_date():
 def test_job_args_cover_every_task():
     import inspect
 
-    from housing_watch import tasks
+    from housing_watch.fleet import tasks
 
     names = {f for f in Q.JobArgs.__dataclass_fields__}
     for t in [t for t in tasks.app.tasks.values() if not t.name.startswith("builtin:")]:  # never queued here

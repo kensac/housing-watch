@@ -17,7 +17,8 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 
-from .. import ami, fetch, parse
+from .. import fetch, parse
+from ..eligibility import ami
 from ..models import Band, Listing, Result, Unit
 from . import by_content, prune
 from ._page import PageAdapter
