@@ -40,18 +40,16 @@ export function ViewBar({ state, view, modified }: { state: ListState; view: Sav
   const [busy, setBusy] = useState<string | null>(null) // the action in flight, for its button's spinner
 
   const go = (v: SavedView) => navigate(stateUrl(viewState(v), meta, v.id))
-  /** Runs a view change; says what happened either way. Returns false when it failed. */
-  const run = async (what: string, done: string, fn: () => Promise<SavedView | void>, after?: (v: SavedView | void) => void) => {
+  /** Runs a view change; says what happened either way. */
+  const run = async <T,>(what: string, done: string, fn: () => Promise<T>, after?: (result: T) => void) => {
     setBusy(what)
     try {
-      const v = await fn()
+      const result = await fn()
       await refresh()
-      after?.(v)
+      after?.(result)
       notifications.show({ color: 'green', message: done })
-      return true
     } catch (e) {
       notifications.show({ color: 'red', title: `Couldn’t ${what}`, message: `${errorMessage(e)} Try again; your filters are still in the address bar.` })
-      return false
     } finally {
       setBusy(null)
     }
@@ -93,7 +91,7 @@ export function ViewBar({ state, view, modified }: { state: ListState; view: Sav
           </Button>
           {view && modified && (
             <Button size="xs" loading={busy === 'save the changes'}
-              onClick={() => run('save the changes', `Saved changes to “${view.name}”`, () => request(ChangeViewDoc, { input: { id: view.id, state: stateInput(state) } }).then(() => undefined))}>
+              onClick={() => run('save the changes', `Saved changes to “${view.name}”`, () => request(ChangeViewDoc, { input: { id: view.id, state: stateInput(state) } }))}>
               Save Changes
             </Button>
           )}
@@ -108,23 +106,23 @@ export function ViewBar({ state, view, modified }: { state: ListState; view: Sav
                 <Menu.Item leftSection={<IconPencil size={15} aria-hidden />} onClick={() => openName('rename')}>Rename…</Menu.Item>
                 <Menu.Item leftSection={view.is_default ? <IconStarOff size={15} aria-hidden /> : <IconStar size={15} aria-hidden />}
                   onClick={() => run('change the default view', view.is_default ? `“${view.name}” no longer opens by default` : `“${view.name}” now opens by default`,
-                    () => request(ChangeViewDoc, { input: { id: view.id, is_default: !view.is_default } }).then(() => undefined))}>
+                    () => request(ChangeViewDoc, { input: { id: view.id, is_default: !view.is_default } }))}>
                   {view.is_default ? 'Stop Opening by Default' : 'Open by Default'}
                 </Menu.Item>
                 <Menu.Item leftSection={<IconCopy size={15} aria-hidden />}
-                  onClick={() => run('duplicate the view', `Duplicated “${view.name}”`, () => request(DuplicateViewDoc, { id: view.id }).then((d) => d.duplicateView.view), (v) => v && go(v))}>
+                  onClick={() => run('duplicate the view', `Duplicated “${view.name}”`, () => request(DuplicateViewDoc, { id: view.id }).then((d) => d.duplicateView.view), go)}>
                   Duplicate
                 </Menu.Item>
                 <Menu.Item leftSection={<IconArrowUp size={15} aria-hidden />}
-                  onClick={() => run('move the view', `Moved “${view.name}” up`, () => request(ChangeViewDoc, { input: { id: view.id, move: 'up' } }).then(() => undefined))}>Move Up</Menu.Item>
+                  onClick={() => run('move the view', `Moved “${view.name}” up`, () => request(ChangeViewDoc, { input: { id: view.id, move: 'up' } }))}>Move Up</Menu.Item>
                 <Menu.Item leftSection={<IconArrowDown size={15} aria-hidden />}
-                  onClick={() => run('move the view', `Moved “${view.name}” down`, () => request(ChangeViewDoc, { input: { id: view.id, move: 'down' } }).then(() => undefined))}>Move Down</Menu.Item>
+                  onClick={() => run('move the view', `Moved “${view.name}” down`, () => request(ChangeViewDoc, { input: { id: view.id, move: 'down' } }))}>Move Down</Menu.Item>
                 <Menu.Divider />
                 <Menu.Item color="red" leftSection={<IconTrash size={15} aria-hidden />} onClick={() => modals.openConfirmModal({
                   title: `Delete “${view.name}”?`, children: 'The view’s filters, sort and columns are removed. Listings are not affected.',
                   labels: { confirm: 'Delete View', cancel: 'Keep View' }, confirmProps: { color: 'red' }, cancelProps: { variant: 'default' },
                   transitionProps: motion,
-                  onConfirm: () => run('delete the view', `Deleted “${view.name}”`, () => request(DeleteViewDoc, { id: view.id }).then(() => undefined), () => navigate(stateUrl(viewState(view), meta))),
+                  onConfirm: () => run('delete the view', `Deleted “${view.name}”`, () => request(DeleteViewDoc, { id: view.id }), () => navigate(stateUrl(viewState(view), meta))),
                 })}>Delete…</Menu.Item>
               </Menu.Dropdown>
             </Menu>
