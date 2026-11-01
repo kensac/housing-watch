@@ -16,7 +16,7 @@ from dataclasses import asdict
 
 from .. import fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter
+from . import Adapter, cached_listing
 
 API = "https://a806-housingconnectapi.nyc.gov/HPDPublicAPI/api/Lottery"
 SEARCH_BODY = {
@@ -100,11 +100,6 @@ def parse_ad(rec: dict, ad: dict, sale: bool = False) -> Listing:
     )
 
 
-def _from_dict(d: dict) -> Listing:
-    units = [Unit(**{**u, "bands": [Band(**b) for b in u["bands"]]}) for u in d["units"]]
-    return Listing(**{**d, "units": units})
-
-
 def _fingerprint(rec: dict) -> str:
     stable = {k: v for k, v in rec.items() if k not in _VOLATILE}
     return hashlib.sha256(json.dumps(stable, sort_keys=True, default=str).encode()).hexdigest()
@@ -128,7 +123,7 @@ class HousingConnect(Adapter):
             fp = _fingerprint(rec)
             hit = cache.get(lid)
             if hit and hit.get("fp") == fp:
-                out.append(_from_dict(hit["listing"]))
+                out.append(cached_listing(hit["listing"]))
                 continue
             ad = fetch.json(f"{API}/GetLotteryAdvertisement?lotteryId={lid}")
             lst = parse_ad(rec, ad, sale)

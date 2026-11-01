@@ -20,10 +20,6 @@ APPLY = "https://fifthave.my.site.com/s/flow/public?var_flow=lottery"
 KNOWN_BOROUGH = {"sunset ridge": "Brooklyn", "sunset park": "Brooklyn"}
 
 
-def _slug(s: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
-
-
 def _card(col) -> dict | None:
     h3, h4 = col.find("h3"), col.find("h4")
     if not h3:
@@ -88,7 +84,7 @@ def parse_page(html: str) -> list[Listing]:
         out.append(
             Listing(
                 source="fifth_avenue",
-                ext_id=_slug(name) + ("-upcoming" if upcoming else ""),
+                ext_id=parse.slug(name) + ("-upcoming" if upcoming else ""),
                 title=name.strip() if addr else building,
                 url=URL,
                 address=addr,

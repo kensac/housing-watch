@@ -16,7 +16,7 @@ from urllib.parse import unquote_plus, urljoin
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Snapshot, Unit
-from . import Adapter
+from . import Adapter, cached_listing
 
 URL = "https://www.mns.com/affordable_units"
 OFFICE = "718-222-0211"
@@ -111,11 +111,6 @@ def parse_detail(url: str, html: str, row: dict | None = None) -> Listing:
     )
 
 
-def _from_dict(d: dict) -> Listing:
-    units = [Unit(**{**u, "bands": [Band(**b) for b in u["bands"]]}) for u in d["units"]]
-    return Listing(**{**d, "units": units})
-
-
 class MNS(Adapter):
     name = "mns"
     title = "MNS Real Estate (affordable units)"
@@ -131,7 +126,7 @@ class MNS(Adapter):
             fp = f"{r['unit']}|{r['price']}|{r['beds']}"
             hit = cache.get(r["url"])
             if hit and hit["fp"] == fp:
-                out.append(_from_dict(hit["listing"]))
+                out.append(cached_listing(hit["listing"]))
                 continue
             lst = parse_detail(r["url"], fetch.html(r["url"]), r)
             cache[r["url"]] = {"fp": fp, "listing": asdict(lst)}

@@ -121,6 +121,10 @@ def borough(*texts: str | None) -> str | None:
     return None
 
 
+def slug(t: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
+
+
 def text(html_or_soup) -> str:
     """Visible text of a page, scripts/styles dropped, whitespace collapsed one line per block."""
     soup = html_or_soup if isinstance(html_or_soup, BeautifulSoup) else BeautifulSoup(html_or_soup, "lxml")
@@ -147,6 +151,14 @@ def table_rows(soup_or_html) -> list[list[str]]:
         if any(cells):
             out.append(cells)
     return out
+
+
+def infer_ami(bands) -> int | None:
+    """AMI % from a per-household cap when none is printed: only an exact HUD cap (any chart year) counts."""
+    for b in bands:
+        if b.income_max and (m := _ami.match(b.income_max, b.household, sizes=[b.household])):
+            return m[2]
+    return None
 
 
 def bands_from_row(hh_text: str, income_text: str, ami_pct: int | None):

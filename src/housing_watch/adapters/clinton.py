@@ -21,10 +21,6 @@ URL = "https://www.clintonmanagement.com/availabilities/affordable/"
 CONTACT = "cm_leasing@cmnyc.com, (347) 287-3100"
 
 
-def slug(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-
-
 def parse_cards(html: str, url: str = URL) -> list[Listing]:
     s = parse.soup(html)
     out = []
@@ -58,7 +54,7 @@ def parse_cards(html: str, url: str = URL) -> list[Listing]:
             out.append(
                 Listing(
                     source="clinton",
-                    ext_id=slug(title),
+                    ext_id=parse.slug(title),
                     title=title,
                     url=links[0] if open_ and links else url,
                     address=addr,

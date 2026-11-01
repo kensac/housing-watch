@@ -27,10 +27,6 @@ AGENTS = {"the-clark": "https://www.housingpartnership.com/services/current-vaca
 _AMI = re.compile(r"(\d{2,3})\s*(?:%\s*)?(?:-|–|to)\s*(\d{2,3})\s*%|(\d{2,3})\s*%")
 
 
-def slug(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-
-
 def _status(text: str) -> tuple[str, str]:
     t = text.lower()
     if re.search(r"closed|no longer|filled", t):
@@ -64,7 +60,7 @@ def _market_boroughs(s) -> dict[str, str]:
             cur = parse.borough(txt.split("/")[0])
         elif cur:
             for a in el.find_all("a"):  # several buildings share one <p>, split by <br>
-                out[slug(a.get_text(" ", strip=True))] = cur
+                out[parse.slug(a.get_text(" ", strip=True))] = cur
     return out
 
 
@@ -89,10 +85,10 @@ def parse_programs(html: str, url: str = URL) -> list[Listing]:
         out.append(
             Listing(
                 source="hudson",
-                ext_id=slug(name),
+                ext_id=parse.slug(name),
                 title=name,
                 url=link,
-                borough=boroughs.get(slug(name)) or parse.borough(name, link),
+                borough=boroughs.get(parse.slug(name)) or parse.borough(name, link),
                 status=status,
                 kind=kind,
                 units=[Unit(size="unknown", ami=top)],

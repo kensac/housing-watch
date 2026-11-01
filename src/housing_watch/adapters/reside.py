@@ -16,7 +16,7 @@ from dataclasses import asdict
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import PLAN, Adapter, spread
+from . import PLAN, Adapter, cached_listing, spread
 
 log = logging.getLogger("housing_watch")
 
@@ -233,11 +233,6 @@ def parse_page(url: str, html: str) -> Listing:
     )
 
 
-def _from_dict(d: dict) -> Listing:
-    units = [Unit(**{**u, "bands": [Band(**b) for b in u["bands"]]}) for u in d["units"]]
-    return Listing(**{**d, "units": units})
-
-
 def read_form() -> list[str]:
     """Every unit Reside's application form accepts: its "Add unit" picker options, e.g.
     "2 Blue Slip - Apt 9D - $2589.74 -" (a virtualized list, so it is scrolled to the end). Needs a browser."""
@@ -367,7 +362,7 @@ class Reside(Adapter):
     def fetch_chunk(self, key: str) -> Result:
         """Cached listings for the chunk's unchanged pages; its changed pages fetched, each cached under its url."""
         part = self.cache[PLAN][key]
-        out = [_from_dict(self.cache[u]["listing"]) for u in part["keep"]]
+        out = [cached_listing(self.cache[u]["listing"]) for u in part["keep"]]
         failed = []
         for url, lastmod in part["fetch"]:
             try:
@@ -376,7 +371,7 @@ class Reside(Adapter):
                 log.warning("reside: %s", e)
                 failed.append(url)
                 if (hit := self.cache.get(url)) and hit.get("listing"):  # keep the last good copy; its old
-                    out.append(_from_dict(hit["listing"]))  # lastmod makes the next run fetch it again
+                    out.append(cached_listing(hit["listing"]))  # lastmod makes the next run fetch it again
                 continue  # a new page waits for the next run
             self.cache[url] = {"lastmod": lastmod, "v": PARSER, "listing": asdict(lst)}
             out.append(lst)

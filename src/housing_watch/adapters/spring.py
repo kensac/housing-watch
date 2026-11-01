@@ -147,14 +147,6 @@ def _bands(hh: str, income: str, a: int | None) -> list[Band]:
     return ami.bands(sizes, _num(m.group(1)), _num(m.group(2)), a)[0] if sizes else []
 
 
-def infer_ami(bands: list[Band]) -> int | None:
-    """AMI % from a per-household cap when none is printed: only an exact HUD cap (any chart year) counts."""
-    for b in bands:
-        if b.income_max and (m := ami.match(b.income_max, b.household, sizes=[b.household])):
-            return m[2]
-    return None
-
-
 def units_from_tsv(tsv: str) -> list[Unit]:
     """Rebuild a rent/income screenshot into Units; [] when any row fails to reassemble."""
     cells = [(c, k) for c in cells_from_tsv(tsv) if (k := _kind(c))]
@@ -211,7 +203,7 @@ def units_from_tsv(tsv: str) -> list[Unit]:
     units = list(tiers.values())
     for u in units:
         if u.ami is None:
-            u.ami = infer_ami(u.bands)
+            u.ami = parse.infer_ami(u.bands)
         u.chart_year = ami.year_of(u.bands, u.ami)
         if any(b.income_max is not None and b.income_min is not None and b.income_min > b.income_max for b in u.bands):
             return []

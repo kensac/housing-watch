@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter
+from . import Adapter, cached_listing
 
 BASE = "https://www.affordablehousing.com"
 COUNTIES = ["new-york-county-ny", "kings-county-ny", "queens-county-ny", "bronx-county-ny", "richmond-county-ny"]
@@ -220,11 +220,6 @@ def parse_detail(card: dict, html: str) -> Listing | None:
     )
 
 
-def _from_dict(d: dict) -> Listing:
-    units = [Unit(**{**u, "bands": [Band(**b) for b in u["bands"]]}) for u in d["units"]]
-    return Listing(**{**d, "units": units})
-
-
 class AffordableHousingCom(Adapter):
     name = "affordablehousing_com"
     title = "AffordableHousing.com (income restricted, NYC)"
@@ -253,7 +248,7 @@ class AffordableHousingCom(Adapter):
             stamp = _stamp(card)
             hit = cache.get(cid)
             if hit and hit["stamp"] == stamp and now - datetime.fromisoformat(hit["fetched"]) < MAX_AGE:
-                lst = _from_dict(hit["listing"]) if hit["listing"] else None
+                lst = cached_listing(hit["listing"]) if hit["listing"] else None
             else:
                 lst = parse_detail(card, fetch.html(card["url"]))
                 cache[cid] = {"stamp": stamp, "fetched": now.isoformat(), "listing": asdict(lst) if lst else None}

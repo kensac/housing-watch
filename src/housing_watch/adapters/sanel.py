@@ -28,6 +28,7 @@ from ..models import Band, Listing, Result, Unit
 from . import (
     PLAN,
     Adapter,
+    cached_listing,
     housing_connect,
     mitchell_lama,
     nychdc,
@@ -292,10 +293,6 @@ def _unit(u: dict) -> Unit:
     return Unit(**{**u, "bands": [Band(**b) for b in u["bands"]]})
 
 
-def _from_dict(d: dict) -> Listing:
-    return Listing(**{**d, "units": [_unit(u) for u in d["units"]]})
-
-
 class Sanel(Adapter):
     name = "sanel"
     title = "SANEL (aggregator)"
@@ -332,7 +329,7 @@ class Sanel(Adapter):
         if src == "Pronto":
             return self._pronto(lst, [official, *links])
         if src == "NYC Mitchell-Lama":
-            dev = self._doc("ml", self._ml_list).get(mitchell_lama.slug(lst.title))
+            dev = self._doc("ml", self._ml_list).get(parse.slug(lst.title))
             if not dev:
                 return None, "Not on HPD's open Mitchell-Lama waitlists PDF, so its income-limit category is unknown."
             lst.senior_only = lst.senior_only or dev["senior_only"]
@@ -513,7 +510,7 @@ class Sanel(Adapter):
     def fetch_chunk(self, key: str) -> Result:
         """Cached listings for the chunk's other pages; its planned pages fetched, enriched and cached by url."""
         c, part, now = self.cache, self.cache[PLAN][key], time.time()
-        out = [_from_dict(c[u]["listing"]) for u in part["keep"] if c[u].get("listing")]
+        out = [cached_listing(c[u]["listing"]) for u in part["keep"] if c[u].get("listing")]
         last = 0.0
         failed = []
         for url in part["fetch"]:
@@ -527,7 +524,7 @@ class Sanel(Adapter):
                 log.warning("sanel: %s", e)
                 failed.append(url)
                 if hit and hit.get("listing"):  # keep the last good copy; a new page waits for the next run
-                    out.append(_from_dict(hit["listing"]))
+                    out.append(cached_listing(hit["listing"]))
                 continue
             if lst is None:  # the sitemap lists some pages that 404
                 c[url] = {"fetched": now, "listing": None}

@@ -51,10 +51,6 @@ def _download(href: str) -> str:
     return f"https://drive.google.com/uc?export=download&id={m.group(1)}" if m else href
 
 
-def _slug(t: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
-
-
 def _infer_ami(bands) -> int | None:
     """These ads print no AMI %; the cap of the first household row gives it (154,440 for 1 = 130%)."""
     b = next((b for b in bands if b.income_max), None)
@@ -135,7 +131,7 @@ def parse_page(html: str, url: str = URL) -> tuple[list[Listing], str]:
             for u in units:
                 u.available = False
         size_txt = next((b.split(":", 1)[1].strip() for b in body if b.lower().startswith("unit size")), "")
-        ext = _slug(f"{address} {size_txt}")
+        ext = parse.slug(f"{address} {size_txt}")
         seen[ext] = seen.get(ext, 0) + 1
         if seen[ext] > 1:
             ext = f"{ext}-{seen[ext]}"
