@@ -9,10 +9,12 @@ from sqlalchemy.orm import Session
 from housing_watch import applications, queries
 from housing_watch.orm import SavedViewRow
 from housing_watch.web.app import create_app
+from housing_watch.web.hosts import DEFAULT, allowed
 from housing_watch.web.schema import Loaders, schema
 from seed import L, add_listing, event, gql, gql_code, gql_error, nodes, seed, seed_jobs
 
 SAME = {"origin": "http://testserver"}
+HOSTS_DEFAULT = frozenset(DEFAULT.split(","))
 FX = Path(__file__).parent / "fixtures" / "applications"
 SDL = Path(__file__).parent.parent / "schema.graphql"
 LISTINGS = """query($filter: ListingFilterInput, $q: String! = "", $sort: [ListingSortInput!], $after: String,
@@ -479,3 +481,15 @@ def test_enum_values_serialize_as_names(pg):
     (x,) = nodes(gql(c, '{ listings(filter: { borough: { in: [Staten_Island] } }) { edges { node { borough kind '
                         "deadline } } } }")["data"]["listings"])  # fmt: skip
     assert x == {"borough": "Staten_Island", "kind": "re_rental", "deadline": "2026-11-01"}
+
+
+def test_foreign_host_refused(tmp_path):
+    """DNS rebinding: the attacker's name arrives as Host. No store is touched before the guard answers."""
+    c = TestClient(create_app(None, dist=tmp_path))  # type: ignore[arg-type]
+    assert c.get("/").status_code == 503  # testserver is allowed (conftest): reaches the app, which is not built
+    res = c.get("/api/listing/application?key=a:1", headers={"host": "rebind.attacker.example:8095"})
+    assert res.status_code == 421
+    assert allowed("housing.kanishksachdev.com", HOSTS_DEFAULT) and allowed("127.0.0.1:8095", HOSTS_DEFAULT)
+    assert not allowed("100.79.4.41:8095", HOSTS_DEFAULT) and not allowed(
+        "housing.kanishksachdev.com.evil", HOSTS_DEFAULT
+    )

@@ -13,11 +13,19 @@ The design of both surfaces is in
 - **Read-only except two tables.** The only writes are `saved_views` and
   manual `tracker_links`. Add another written table only with the owner's
   agreement.
-- **Web auth.** The app has no login: it is reached on the tailnet or through
-  authentik forward-auth set up in `homelab-config`. Mutations are refused
+- **Web auth.** The app has no login: it is reached only through Traefik at
+  `housing.kanishksachdev.com`, behind authentik forward-auth set up in
+  `homelab-config`. No port is published to the tailnet. Mutations are refused
   unless the request is same-origin (`web/schema.same_origin`). The web
   `/graphql` never passes `trusted`; a test holds that. GraphQL over WebSocket
   is refused because WebSockets skip CORS.
+- **Host allowlist.** The web app and the MCP server refuse with 421 any
+  request whose `Host` is not in `HW_ALLOWED_HOSTS` (`web/hosts.py`), so DNS
+  rebinding cannot use the browser against them. An entry matches the header
+  exactly, port included as sent; `host:*` takes any port. The default is
+  `housing.kanishksachdev.com,localhost:*,127.0.0.1:*`. A new public name or
+  a call by container name needs an entry, or it gets 421. The metrics port is
+  not guarded: it serves counters, not user data.
 - **MCP auth.** OAuth through FastMCP's OIDC proxy. It refuses to start when
   any `HW_MCP_*` setting is missing, so there is no open mode. Its `graphql`
   tool runs queries only and `graphql_mutation` mutations only. Each write is
