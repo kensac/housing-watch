@@ -3,7 +3,7 @@ import { IconDownload, IconExternalLink } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 
-import { BOROUGH, KIND, qs, request } from '../api'
+import { BOROUGH, changes, KIND, qs, request } from '../api'
 import { graphql } from '../gql'
 import { commute, date, money, pct, when } from '../format'
 import { useMotion } from '../hooks'
@@ -163,7 +163,9 @@ export function ListingDrawer({ k, onClose }: { k: string | null; onClose: () =>
               <Timeline>
                 {d.events.map((e) => (
                   <Timeline.Item key={e.id} title={<Group gap="xs"><EventBadge t={e.type} baseline={e.baseline} /><Text size="xs" c="dimmed">{when(e.at)}{e.notified ? ' · mailed' : ''}</Text></Group>}>
-                    {e.summary && <Text size="sm" c="dimmed">{e.summary}</Text>}
+                    {changes(e).length
+                      ? changes(e).map((c) => <Text key={c} size="sm" c="dimmed">{c}</Text>)
+                      : e.summary && <Text size="sm" c="dimmed">{e.summary}</Text>}
                   </Timeline.Item>
                 ))}
               </Timeline>
