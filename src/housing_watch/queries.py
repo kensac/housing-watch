@@ -50,6 +50,7 @@ HEALTH = values(Health)
 EVENT_TYPES = values(EventType)
 LISTING_EVENTS = EVENT_TYPES[:5]
 _VRANK = {ELIGIBLE: 0, POSSIBLE: 1, EXCLUDED: 2}
+_SIZE_ORDER = {z: i for i, z in enumerate(values(Size))}
 
 
 def now() -> datetime:
@@ -132,8 +133,7 @@ def _summary(r: ListingRow, lst: Listing, p: Profile, commutes: dict | None = No
     fit = [u for u, uv, _ in v.units if uv != EXCLUDED] or lst.units
     rents = tuple(u.rent for u in fit if u.rent)
     amis = [u.ami for u in fit if u.ami]
-    order = ["studio", "sro", "1br", "2br", "3br", "4br", "5br", "unknown"]
-    sizes = sorted({u.size for u in lst.units}, key=lambda z: order.index(z) if z in order else 99)
+    sizes = sorted({u.size for u in lst.units}, key=lambda z: _SIZE_ORDER.get(z, 99))
     return ListingSummary(
         key=r.key,
         source=r.source,
@@ -474,7 +474,6 @@ def filter_units(
     ]
 
 
-_SIZE_ORDER = {z: i for i, z in enumerate(values(Size))}
 UNIT_SORTS = {
     "verdict": SortSpec("Verdict", lambda u: (_VRANK[u.verdict], u.rent is None, u.rent or 0)),
     "rent": SortSpec("Rent", lambda u: (u.rent is None, u.rent or 0)),

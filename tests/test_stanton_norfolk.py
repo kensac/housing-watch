@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from helpers import bands
 from housing_watch.adapters.stanton_norfolk import cfemail, parse_ad, parse_site
 from housing_watch.criteria import listing_verdict, unit_verdict
 
@@ -15,10 +16,6 @@ def site(host, ad=True):
         ad_txt,
         "https://example/ad.pdf",
     )
-
-
-def bands(u):
-    return [(b.household, b.income_min, b.income_max) for b in u.bands]
 
 
 def test_east_village_140_1br_eligible():

@@ -99,12 +99,13 @@ def _defer(task, *, queueing_lock: str | None = None, lock: str | None = None, q
         return None
 
 
-def _needs_byparr(source: str) -> None:
+def _route_to_byparr(source: str) -> None:
     with Session(engine()) as s, s.begin():
         db.set_queue(s, source, BYPARR)
 
 
-def _after_record(source: str, events: int) -> None:
+def _queue_urgent_digest(events: int) -> None:
+    """A run that recorded events may have opened an eligible unit: queue the digest's urgency check."""
     if events:
         _defer(digest, queueing_lock="digest:urgent", lock="digest")
 
@@ -142,19 +143,19 @@ def source_run(context, source: str) -> str:
             adapter = cls(db.load_cache(s, source))
         keys = adapter.chunks()
         if len(keys) == 1:
-            out, n = runner.record(eng, run_id, source, adapter.fetch_chunk(keys[0]), adapter.cache, [worker])
+            message, events = runner.record(eng, run_id, source, adapter.fetch_chunk(keys[0]), adapter.cache, [worker])
             metrics.observe_run(source, True, time.monotonic() - t0)
-            _after_record(source, n)
-            return out
+            _queue_urgent_digest(events)
+            return message
     except NeedsByparr:
         with Session(eng) as s, s.begin():
             db.discard_run(s, run_id)
-        _needs_byparr(source)
+        _route_to_byparr(source)
         raise
     except Exception as e:  # noqa: BLE001 - an adapter error is a failed run, not a job error
         log.warning("%s failed: %s\n%s", source, e, traceback.format_exc(limit=3))
         metrics.observe_run(source, False, time.monotonic() - t0)
-        return runner.fail(eng, run_id, source, f"{type(e).__name__}: {e}", [worker])
+        return runner.fail(eng, run_id, source, runner.error_text(e), [worker])
     with Session(eng) as s, s.begin():
         db.plan_run(s, run_id, keys, adapter.cache)
     queue = context.job.queue or SOURCES
@@ -172,22 +173,23 @@ def source_chunk(context, source: str, key: str, run_id: int) -> str:
         plan = db.open_plan(s, run_id)
     if plan is None:
         return "run already finished"
-    adapter = cls(copy.deepcopy(plan[1]))
+    _, planned_cache = plan
+    adapter = cls(copy.deepcopy(planned_cache))
     try:
         res = adapter.fetch_chunk(key)
     except NeedsByparr:
-        _needs_byparr(source)
+        _route_to_byparr(source)
         raise
     except Exception as e:
         if CHUNK_RETRY.get_retry_decision(exception=e, job=context.job) is None:  # last attempt: the run fails
             with Session(eng) as s, s.begin():
-                done = db.save_chunk(s, run_id, key, ok=False, worker=worker, error=f"{type(e).__name__}: {e}")
+                done = db.save_chunk(s, run_id, key, ok=False, worker=worker, error=runner.error_text(e))
             if done:
                 _defer_merge(source, run_id)
         raise
     with Session(eng) as s, s.begin():
         done = db.save_chunk(
-            s, run_id, key, ok=True, result=res.to_json(), cache=runner.cache_delta(plan[1], adapter.cache),
+            s, run_id, key, ok=True, result=res.to_json(), cache=runner.cache_delta(planned_cache, adapter.cache),
             worker=worker,
         )  # fmt: skip
     if done:
@@ -208,10 +210,10 @@ def source_merge(source: str, run_id: int) -> str:
     out = runner.merge(eng, run_id, source)
     if out is None:
         return "run already finished"
-    ok = out[0].startswith("ok")
-    metrics.observe_run(source, ok, (db.utcnow() - started).total_seconds() if started else 0)
-    _after_record(source, out[1])
-    return out[0]
+    message, events = out
+    metrics.observe_run(source, message.startswith("ok"), (db.utcnow() - started).total_seconds() if started else 0)
+    _queue_urgent_digest(events)
+    return message
 
 
 @app.task(name="digest", queue=DIGEST, retry=Retry(retries=3, wait=300))

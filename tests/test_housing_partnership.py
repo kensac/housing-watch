@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from helpers import bands
 from housing_watch.adapters import housing_partnership as hp
 from housing_watch.criteria import listing_verdict
 
@@ -9,10 +10,6 @@ BASE = "https://www.housingpartnership.com/services/current-vacancies/"
 
 def page(slug, active=True):
     return hp.parse_detail(BASE + slug, (F / f"{slug}.html").read_text(), active)
-
-
-def bands(u):
-    return [(b.household, b.income_min, b.income_max) for b in u.bands]
 
 
 def test_index_split():
