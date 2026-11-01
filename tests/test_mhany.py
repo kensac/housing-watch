@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from helpers import bands
 from housing_watch.adapters.mhany import building_urls, closed_section, parse_building
 from housing_watch.criteria import listing_verdict
 
@@ -9,10 +10,6 @@ CLOSED = closed_section((F / "av.html").read_text())
 
 def building(slug):
     return parse_building(f"https://www.mutualhousingny.org/{slug}", (F / f"{slug}.html").read_text(), CLOSED)
-
-
-def bands(u):
-    return [(b.household, b.income_min, b.income_max) for b in u.bands]
 
 
 def test_building_urls():

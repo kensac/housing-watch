@@ -21,6 +21,7 @@ from typing import Literal
 from urllib.parse import quote
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
@@ -302,8 +303,6 @@ def match(
 
 def link(engine: Engine, listing_key: str, key: str | None) -> None:
     """Link a listing to a row by hand (key None: to no row), overriding automatic matching."""
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
-
     stmt = pg_insert(TrackerLinkRow).values(listing_key=listing_key, row_key=key)
     with Session(engine) as s, s.begin():
         if not s.scalar(select(ListingRow.key).where(ListingRow.key == listing_key)):

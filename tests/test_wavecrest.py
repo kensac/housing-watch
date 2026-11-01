@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from helpers import bands
 from housing_watch.adapters.wavecrest import index_links, parse_flyer
 from housing_watch.criteria import listing_verdict
 
@@ -13,10 +14,6 @@ LINKS = {
 def flyer(name):
     h, u, b = LINKS[name]
     return parse_flyer(h, u, b, (F / f"{name}.txt").read_text())
-
-
-def bands(u):
-    return [(b.household, b.income_min, b.income_max) for b in u.bands]
 
 
 def test_index_lists_five_flyers():

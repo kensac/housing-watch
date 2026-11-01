@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from helpers import bands
 from housing_watch.adapters.settlement_housing_fund import (
     form_api_url,
     index_links,
@@ -14,10 +15,6 @@ from housing_watch.criteria import listing_verdict
 F = Path(__file__).parent / "fixtures" / "settlement_housing_fund"
 FORM = json.loads((F / "form.json").read_text())
 FORM_URL = "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=16LZ_9BUgkmpOsX39EKwQ4y0VvZoZjhPj428CE41l_lUNjVJTk9ESks4MlEyU0lZTjlDQVJDTjVHWC4u"
-
-
-def bands(u):
-    return [(b.household, b.income_min, b.income_max) for b in u.bands]
 
 
 def test_index_links():
