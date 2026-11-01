@@ -24,7 +24,7 @@ export interface Patch { filter?: unknown; q?: string; sort?: { field: string; d
 /** A JSON value: what a filter's operator holds. */
 export type Json = string | number | boolean | null | Json[] | { [k: string]: Json }
 
-const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x)
+export const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x)
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 const UNITS = new Set(['minutes', 'hours', 'days'])
 
