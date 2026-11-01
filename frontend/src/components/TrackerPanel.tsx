@@ -2,7 +2,7 @@ import { Button, Group, Select, Stack, Text, Timeline } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
 
-import { LinkTrackerDoc, request, STAGE_GROUP, UnlinkTrackerDoc, type Listing, type StageStep } from '../api'
+import { errorMessage, LinkTrackerDoc, request, STAGE_GROUP, UnlinkTrackerDoc, type Listing, type StageStep } from '../api'
 import { when } from '../format'
 import { useTracker, useTrackerRefresh } from '../hooks'
 import { ApplicationBadge } from './Badges'
@@ -41,7 +41,7 @@ export function TrackerPanel({ x }: { x: Listing }) {
       await refresh()
       notifications.show({ message: done })
     } catch (e) {
-      notifications.show({ color: 'red', title: 'Couldn’t change the tracker link', message: e instanceof Error ? e.message : String(e) })
+      notifications.show({ color: 'red', title: 'Couldn’t change the tracker link', message: errorMessage(e) })
     } finally {
       setBusy(false)
     }

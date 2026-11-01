@@ -65,9 +65,8 @@ def _slot(url: str):
 
 def _polite(url: str) -> None:
     """Gap only, for callers that use _client directly; waits out any request in flight to the host."""
-    host = urlparse(url).netloc
-    with _host_locks[host]:
-        _wait_gap(host)
+    with _slot(url):
+        pass
 
 
 def get(url: str, *, headers: dict | None = None, retries: int = 2, allow_304: bool = False) -> httpx.Response:
@@ -206,6 +205,4 @@ def pdf_bytes_text(data: bytes) -> str:
 
 
 def _ocr_file(path: str) -> str:
-    if not shutil.which("tesseract"):
-        raise FetchError("tesseract not installed")
     return subprocess.run(["tesseract", path, "-", "--psm", "6"], capture_output=True, text=True, timeout=180).stdout

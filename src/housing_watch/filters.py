@@ -171,17 +171,17 @@ COMPUTED = [
 ]
 
 
-def listing_fields(listings: Table = ListingRow.__table__, units=UnitRow.__table__, bands=BandRow.__table__,
-                   prefix: str = "") -> dict[str, Field]:  # fmt: skip
+def listing_fields(listings: Table = ListingRow.__table__, prefix: str = "") -> dict[str, Field]:
     fs = _columns(listings, prefix, "listing", HIDDEN["listings"])
-    fs += _columns(units, prefix + "units.", "unit", HIDDEN["units"])
-    fs += _columns(bands, prefix + "units.bands.", "band", HIDDEN["bands"])
+    fs += _columns(UnitRow.__table__, prefix + "units.", "unit", HIDDEN["units"])
+    fs += _columns(BandRow.__table__, prefix + "units.bands.", "band", HIDDEN["bands"])
     computed = [Field(prefix + f.name, f.label, f.group, f.type, f.scope, values=f.values, order=f.order)
                 for f in COMPUTED]  # fmt: skip
     return {f.name: f for f in fs + computed}
 
 
-def event_fields(events: Table = EventRow.__table__) -> dict[str, Field]:
+def event_fields() -> dict[str, Field]:
+    events = EventRow.__table__
     first_run = func.coalesce(events.c.detail["baseline"].astext, "false") == "true"
     fs = _columns(events, "", "event", HIDDEN["events"]) + [
         Field("first_run", "First run", "Event", "bool", "event", first_run)
@@ -418,27 +418,25 @@ def sql(c: Cond):
     return {"eq": col.__eq__, "lt": col.__lt__, "le": col.__le__, "gt": col.__gt__, "ge": col.__ge__}[op](v)
 
 
-def listing_where(conds: list[Cond], listings=ListingRow.__table__, units=UnitRow.__table__,
-                  bands=BandRow.__table__) -> list:  # fmt: skip
+def listing_where(conds: list[Cond]) -> list:
     """SQL clauses on `listings` for the listing, unit and band conditions (computed ones are skipped)."""
     out = [sql(c) for c in conds if c.field.scope == "listing"]
     uc = [sql(c) for c in conds if c.field.scope == "unit"]
     bc = [sql(c) for c in conds if c.field.scope == "band"]
     if bc:
-        uc.append(exists(select(1).where(bands.c.unit_id == units.c.id, *bc)))
+        uc.append(exists(select(1).where(BandRow.unit_id == UnitRow.id, *bc)))
     if uc:
-        out.append(exists(select(1).where(units.c.listing_key == listings.c.key, *uc)))
+        out.append(exists(select(1).where(UnitRow.listing_key == ListingRow.key, *uc)))
     return out
 
 
-def unit_where(conds: list[Cond], listings=ListingRow.__table__, units=UnitRow.__table__,
-               bands=BandRow.__table__) -> list:  # fmt: skip
+def unit_where(conds: list[Cond]) -> list:
     """SQL clauses on `units` joined to `listings`: the unit conditions hold on that unit itself, and the
     band conditions on one of its bands."""
     out = [sql(c) for c in conds if c.field.scope in ("listing", "unit")]
     bc = [sql(c) for c in conds if c.field.scope == "band"]
     if bc:
-        out.append(exists(select(1).where(bands.c.unit_id == units.c.id, *bc)))
+        out.append(exists(select(1).where(BandRow.unit_id == UnitRow.id, *bc)))
     return out
 
 

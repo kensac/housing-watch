@@ -21,7 +21,8 @@ from pydantic.json_schema import SkipJsonSchema
 
 from . import filters as F
 from . import queries, views
-from .web.derive import comments
+from .web import filter_types as FT
+from .web.derive import comments, own_doc
 
 
 def _no_default(s: dict) -> None:
@@ -60,24 +61,6 @@ class Duration(Strict):
     unit: F.DurationUnit
 
 
-def _op_type(kind: str, op: str, item):
-    if op in ("in", "not_in"):
-        return list[item]
-    if op in ("contains", "not_contains"):
-        return str
-    if op in ("empty", "is"):
-        return bool
-    if op == "between":
-        return NumberRange if kind == "number" else DateRange
-    if op in ("after", "before"):
-        return date
-    if op in ("since", "until"):
-        return datetime
-    if op == "last":
-        return Duration
-    return float
-
-
 _LEAVES: dict[object, type[BaseModel]] = {}
 
 
@@ -86,16 +69,12 @@ def _leaf(f: F.Field) -> type[BaseModel]:
     if key not in _LEAVES:
         item = f.values if f.type == "enum" else str
         name = f"{f.values.__name__}Filter" if f.type == "enum" else f"{f.type.capitalize()}Filter"
-        ops = {f"{op}_": opt(_op_type(f.type, op, item), F.OP_DOC[op], alias=op) for op in F.OPS[f.type]}
+        ops = {
+            f"{op}_": opt(FT.op_type(f.type, op, item, NumberRange, DateRange, Duration), F.OP_DOC[op], alias=op)
+            for op in F.OPS[f.type]
+        }
         _LEAVES[key] = create_model(name, __base__=Strict, **ops)
     return _LEAVES[key]
-
-
-_NESTED_DOC = {
-    "units": "A listing matches when one of its units meets every condition here together.",
-    "bands": "The unit matches when one of its income bands meets every condition here together.",
-    "listing": "Conditions on the event's listing; events with no listing never match.",
-}
 
 
 def _label(f: F.Field, prefix: str) -> str | None:
@@ -105,9 +84,8 @@ def _label(f: F.Field, prefix: str) -> str | None:
 
 def _container(name: str, fields: dict[str, F.Field], prefix: str, nested: dict[str, type[BaseModel]],
                doc: str) -> type[BaseModel]:  # fmt: skip
-    level = [f for n, f in fields.items() if n.startswith(prefix) and "." not in n[len(prefix) :]]
-    spec: dict = {f.name[len(prefix) :]: opt(_leaf(f), _label(f, prefix)) for f in level}
-    spec |= {k: opt(m, _NESTED_DOC[k]) for k, m in nested.items()}
+    spec: dict = {f.name[len(prefix) :]: opt(_leaf(f), _label(f, prefix)) for f in FT.level(fields, prefix)}
+    spec |= {k: opt(m, FT.NESTED_DOC[k]) for k, m in nested.items()}
     return create_model(name, __base__=Strict, __doc__=doc, **spec)
 
 
@@ -163,8 +141,7 @@ def model_of(dc: type, name: str | None = None, **override) -> type[BaseModel]:
     hints, notes = typing.get_type_hints(dc), comments(dc)
     spec = {f.name: (override.get(f.name, _py(hints[f.name])), Field(description=notes.get(f.name)))
             for f in dataclasses.fields(dc) if not f.metadata.get("internal")}  # fmt: skip
-    m = create_model(name or dc.__name__, __doc__=dc.__doc__ if dc.__doc__ and "(" not in dc.__doc__[:40] else None,
-                     **spec)  # fmt: skip
+    m = create_model(name or dc.__name__, __doc__=own_doc(dc), **spec)
     if not override:
         _MODELS[dc] = m
     return m
