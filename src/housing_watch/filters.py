@@ -61,7 +61,7 @@ OP_DOC: dict[Op, str] = {  # what each operator means, for the API docs
 
 # Internal columns nobody filters on, and labels that read better than the column name.
 HIDDEN = {
-    "listings": {"key", "fingerprint", "ext_id", "url"},
+    "listings": {"key", "fingerprint", "ext_id", "url", "updated"},
     "units": {"id", "listing_key", "pos"},
     "bands": {"id", "unit_id"},
     "events": {"id", "key", "detail"},

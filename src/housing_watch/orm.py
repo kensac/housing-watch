@@ -56,6 +56,8 @@ class ListingRow(Base):
     first_seen: Mapped[datetime] = mapped_column(TS)
     last_seen: Mapped[datetime] = mapped_column(TS)
     last_changed: Mapped[datetime] = mapped_column(TS)
+    # when any stored field last moved, event or not (not last_seen alone): the read cache's key
+    updated: Mapped[datetime] = mapped_column(TS, server_default=func.now())
     gone_since: Mapped[datetime | None] = mapped_column(TS)  # set when the source stopped listing it
     units: Mapped[list[UnitRow]] = relationship(
         back_populates="listing", cascade="all, delete-orphan", order_by="UnitRow.pos"

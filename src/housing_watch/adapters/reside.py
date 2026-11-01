@@ -25,7 +25,7 @@ APPLY = "https://airtable.com/appsseXTOVx59HC0W/pagcVengefPFQvMZC/form"
 FORM = "_form"  # cache: {"at": epoch s, "units": [picker labels]}: the units Reside's form accepts
 FORM_MAX_AGE = 12 * 3600  # an older list is not used to judge status
 MAX_FAILED = 20  # more page failures than this in one run = something is wrong with the site
-PARSER = 6  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
+PARSER = 7  # bump when parse_page changes, so cached listings are re-parsed rather than kept until lastmod moves
 
 
 _W = "one two three four five six seven eight".split()
@@ -186,7 +186,9 @@ def parse_page(url: str, html: str) -> Listing:
     about = _grab(r"About this home(.*?)(?:Features & Amenities|Would you like to find out more)", flat)
     sizes = _sizes(s, about, title)
     units = _table_units(s)
-    m = re.search(r"unit[-\s]*(?:apt[-\s]*)?([0-9]+[a-z]?|[a-z][0-9]+)\b", url.rstrip("/").split("/")[-1], re.I)
+    # the slug names the unit: '...-unit-4h', '...-apt-2a', '...-apartment-3b' (not '...-apartment-112023-ml-4b')
+    slug = url.rstrip("/").split("/")[-1]
+    m = re.search(r"(?:unit|apt|apartment)[-\s]*(?:apt[-\s]*)?([0-9]{1,4}[a-z]?|[a-z][0-9]+)\b", slug, re.I)
     if m and len(units) == 1:
         units[0].unit_no = m.group(1).upper()
     rents = [_n(x) for x in re.findall(r"\d[\d,]*(?:\.\d+)?", box.get("Rent/ Month", "")) if _n(x) >= 100]
@@ -221,7 +223,7 @@ def parse_page(url: str, html: str) -> Listing:
     )
     return Listing(
         source="reside",
-        ext_id=url.rstrip("/").split("/")[-1],
+        ext_id=slug,
         title=title,
         url=url,
         address=re.sub(r"\s*[,–—-]?\s*(Apartment|Apt\.?|Units?)\b.*$", "", title, flags=re.I),

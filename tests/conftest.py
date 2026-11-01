@@ -5,7 +5,9 @@ os.environ.setdefault("HW_INCOME", "150000")
 os.environ.setdefault("HW_SIZES", "studio,1br")
 os.environ.setdefault("HW_EXCLUDED_BOROUGHS", "Bronx")
 
+import shutil  # noqa: E402
 import uuid  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 import pytest  # noqa: E402
 
@@ -42,10 +44,13 @@ def pg_url():
 
 @pytest.fixture
 def pg(pg_url):
-    """An engine on the migrated test database, with every app table emptied first."""
+    """An engine on the migrated test database, with every app table emptied first, and nothing cached from it."""
     from sqlalchemy import create_engine, text
 
+    from housing_watch import queries
     from housing_watch.orm import Base
+
+    queries._cache.clear()  # keyed by the database URL, which every test shares; seeds reuse the same timestamps
 
     eng = create_engine(pg_url)
     with eng.begin() as c:
@@ -63,3 +68,14 @@ def store(pg):
 
     with Session(pg) as s, s.begin():
         yield s
+
+
+@pytest.fixture(scope="session")
+def shf_tables():
+    """Settlement Housing Fund's two chart images, OCR'd once per session: each takes seconds of tesseract."""
+    if not shutil.which("tesseract"):
+        pytest.skip("tesseract not installed")
+    from housing_watch.adapters.settlement_housing_fund import ocr_table
+
+    d = Path(__file__).parent / "fixtures" / "settlement_housing_fund"
+    return {n: ocr_table((d / n).read_bytes()) for n in ("table-130.png", "table-40-60.png")}
