@@ -243,12 +243,24 @@ def test_bad_cursor_and_page_size(client):
         assert gql_error(gql(client, LISTINGS, first=first)) == "first must be 1 to 500"
 
 
-def test_errors_are_coded(client, monkeypatch):
+def test_errors_are_coded(client, monkeypatch, caplog):
     assert gql_code(gql(client, "{ nope }")) == "BAD_USER_INPUT"
     assert gql_code(gql(client, "{ listings(")) == "BAD_USER_INPUT"
     monkeypatch.setattr(queries, "sources", lambda *a: 1 / 0)
     res = gql(client, "{ sources { source } }")
-    assert gql_code(res) == "INTERNAL" and gql_error(res) == "division by zero"
+    assert gql_code(res) == "INTERNAL" and gql_error(res) == "Internal error"  # the bug's text is not the client's
+    assert any(r.exc_info and "division by zero" in str(r.exc_info[1]) for r in caplog.records)  # but it is logged
+
+
+def test_unexpected_errors_are_masked(pg, monkeypatch):
+    seed(pg)
+    monkeypatch.setattr(applications, "applicant", lambda: {"name": "x"})
+    monkeypatch.setattr(queries, "listing_detail", lambda *a: 1 / 0)
+    res = TestClient(create_app(pg), raise_server_exceptions=False).get("/api/listing/application?key=a:1")
+    assert res.status_code == 500 and res.json() == {"error": "Internal error", "code": "INTERNAL"}
+    monkeypatch.setattr(applications, "applicant", lambda: None)  # a deliberate refusal still says what
+    res = TestClient(create_app(pg)).get("/api/listing/application?key=a:1")
+    assert res.status_code == 404 and "HW_APPLICANT_FILE" in res.json()["error"]
 
 
 def test_abuse_limits_keep_introspection(client):
