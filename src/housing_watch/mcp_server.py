@@ -29,11 +29,12 @@ from typing import Annotated
 from pydantic import Field
 from sqlalchemy.engine import Engine
 
-from . import digest, queries, tracker, views
 from . import filters as F
 from . import mcp_models as M
+from . import queries, tracker, views
 from .criteria import PROFILE, Profile
 from .models import NotFound
+from .notify import changes, digest
 
 log = logging.getLogger("housing_watch")
 REFUSALS = (NotFound, views.ViewError, F.FilterError)  # the domain's refusals: the caller's to fix, not bugs
@@ -91,7 +92,7 @@ def _event(e: queries.EventView) -> M.Change:
     out = {"at": e.at, "type": e.type, "source": e.source, "key": e.key, "title": e.title or e.summary,
            "verdict": e.verdict, "first_run": e.baseline}  # fmt: skip
     if e.type == "changed":
-        out["changes"] = digest._changes(d)
+        out["changes"] = changes.lines(d)
         out["noise"] = bool(d.get("noise"))
     elif e.type == "page_changed":
         out["added"], out["new_links"] = d.get("added", [])[:15], d.get("new_links", [])
