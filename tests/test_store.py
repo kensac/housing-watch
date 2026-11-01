@@ -192,3 +192,51 @@ def test_digest_collapses_baseline(pg):
         db.record_listings(s, "t", [good, meh], baseline=True)
     out = digest.send(pg, dry_run=True)
     assert "Good" in out and "Meh" not in out and "First run of 1 source(s) (t): 2 listings" in out
+
+
+def test_updated_moves_with_stored_fields_not_with_scrapes(pg):
+    from dataclasses import replace
+
+    from housing_watch.orm import ListingRow
+
+    def year(y):
+        return replace(L(), units=[Unit("studio", 2400.0, 130, "2A", chart_year=y)])
+
+    t = db.utcnow()
+    runs = [  # (what the source lists, whether a stored field moved)
+        ([year(2024)], True),  # new
+        ([year(2024)], False),  # the same again: only last_seen moves
+        ([year(2025)], True),  # chart_year alone: no event, but verdicts read it
+        ([replace(year(2025), title="T2")], True),  # title alone: no event, but the UI shows it
+        ([], True),  # gone
+        ([replace(year(2025), title="T2")], True),  # reopened
+    ]
+    with Session(pg) as s, s.begin():
+        for i, (listed, moved) in enumerate(runs):
+            now = t + timedelta(minutes=i)
+            db.record_listings(s, "t", listed, now=now)
+            s.flush()
+            row = s.scalar(select(ListingRow))
+            assert (row.updated == now) == moved, i
+
+
+def test_unchanged_scrape_keeps_the_judged_cache(pg):
+    from dataclasses import replace
+
+    from housing_watch import queries
+
+    with Session(pg) as s, s.begin():
+        db.record_listings(s, "t", [L()])
+    first = queries.judged(pg)
+    with Session(pg) as s, s.begin():
+        db.record_listings(s, "t", [L()])
+    assert queries.judged(pg) is first
+    with Session(pg) as s, s.begin():
+        db.record_listings(s, "t", [replace(L(), title="T2")])
+    assert [x.title for x in queries.judged(pg)] == ["T2"]
+    with Session(pg) as s, s.begin():  # another source's run stamps the newest `updated`
+        db.record_listings(s, "u", [replace(L(), source="u")])
+    queries.judged(pg)
+    with Session(pg) as s, s.begin():  # a run that started earlier commits later, with an older timestamp
+        db.record_listings(s, "t", [replace(L(), title="T3")], now=db.utcnow() - timedelta(minutes=5))
+    assert [x.title for x in queries.judged(pg) if x.source == "t"] == ["T3"]
