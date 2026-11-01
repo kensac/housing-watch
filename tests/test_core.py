@@ -1,16 +1,11 @@
-from datetime import UTC, datetime
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from helpers import T
 from housing_watch import db, parse
 from housing_watch.criteria import ELIGIBLE, EXCLUDED, POSSIBLE, listing_verdict, unit_verdict
 from housing_watch.models import Band, Listing, Snapshot, Unit
 from housing_watch.orm import EventRow
-
-
-def T(n: int) -> datetime:
-    return datetime.fromtimestamp(1_800_000_000 + n, UTC)
 
 
 def L(units, **kw):

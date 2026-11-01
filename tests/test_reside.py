@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from helpers import bands
 from housing_watch import adapters, runner
 from housing_watch.adapters import PLAN, reside
 from housing_watch.adapters.reside import Reside, parse_page
@@ -57,10 +58,6 @@ def test_upcoming_project():
 def test_lxml_namespace_crash_falls_back():
     # this page makes bs4's lxml builder raise ValueError in _getNsTag
     assert page("100-freedom-place-apartment-unit-4p").title.startswith("100 Freedom Place")
-
-
-def bands(u):
-    return [(b.household, b.income_min, b.income_max) for b in u.bands]
 
 
 def test_word_pasted_table_and_continuation_rows():

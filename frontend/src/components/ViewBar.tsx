@@ -5,7 +5,7 @@ import { IconAlertTriangle, IconArrowDown, IconArrowUp, IconBookmark, IconCopy, 
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { request, type SavedView } from '../api'
+import { errorMessage, request, type SavedView } from '../api'
 import { stateInput, stateUrl, viewState, type ListState } from '../filters'
 import { graphql } from '../gql'
 import { TITLES, useMeta, useMotion, useRefreshViews } from '../hooks'
@@ -25,8 +25,6 @@ const DuplicateViewDoc = graphql(`
 const DeleteViewDoc = graphql(`
   mutation DeleteView($id: ID!) { deleteView(input: { id: $id }) { id } }
 `)
-
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
 /** The page title, or the open saved view with its actions. Views are only ever created by the user. */
 export function ViewBar({ state, view, modified }: { state: ListState; view: SavedView | null; modified: boolean }) {
@@ -52,7 +50,7 @@ export function ViewBar({ state, view, modified }: { state: ListState; view: Sav
       notifications.show({ color: 'green', message: done })
       return true
     } catch (e) {
-      notifications.show({ color: 'red', title: `Couldn’t ${what}`, message: `${message(e)} Try again; your filters are still in the address bar.` })
+      notifications.show({ color: 'red', title: `Couldn’t ${what}`, message: `${errorMessage(e)} Try again; your filters are still in the address bar.` })
       return false
     } finally {
       setBusy(null)
@@ -71,7 +69,7 @@ export function ViewBar({ state, view, modified }: { state: ListState; view: Sav
       notifications.show({ color: 'green', message: naming === 'new' ? `Saved “${n}”` : `Renamed to “${n}”` })
       if (naming === 'new') go(v)
     } catch (e) {
-      setNameError(message(e)) // e.g. a duplicate name: shown on the field, the dialog stays open
+      setNameError(errorMessage(e)) // e.g. a duplicate name: shown on the field, the dialog stays open
     } finally {
       setBusy(null)
     }

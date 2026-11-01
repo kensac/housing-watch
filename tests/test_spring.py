@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from helpers import bands
 from housing_watch.adapters.spring import build_listings, units_from_tsv
 from housing_watch.criteria import listing_verdict
 
@@ -12,10 +13,6 @@ def tsv(url):
 
 def listings():
     return {lst.ext_id: lst for lst in build_listings((F / "apartments-for-rent.html").read_text(), tsv)}
-
-
-def bands(u):
-    return [(b.household, b.income_min, b.income_max) for b in u.bands]
 
 
 def test_sections_and_buildings():

@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom'
 import { BOROUGH, KIND, ListingsDoc, request, type Listing, type ListingColumn } from '../api'
 import { ApplicationBadge, SizeBadge, StatusBadge, VerdictBadge } from '../components/Badges'
 import { LeadTd, ListPage, ListRows, ListTable, MoreRow, SortTh, Summary, type Cells } from '../components/ListPage'
-import { hasFilter, type ListingsState } from '../filters'
+import { hasFilter } from '../filters'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { ago, date, minutes, money, pct, range, when } from '../format'
 import { useListState } from '../hooks'
@@ -38,21 +38,18 @@ const lead = (x: Listing, to: string | null) => (
   </LeadTd>
 )
 
-function useListings(st: ListingsState | null, enabled: boolean) {
-  return useInfiniteQuery({
+export function ListingsPage() {
+  const ctx = useListState('listings')
+  const st = ctx.state?.page === 'listings' ? ctx.state : null
+  const q = useInfiniteQuery({
     queryKey: ['listings', st?.filter, st?.q, st?.sort],
     queryFn: ({ pageParam }) =>
       request(ListingsDoc, { filter: st?.filter, q: st?.q, sort: st?.sort, after: pageParam }).then((d) => d.listings),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => (last.page_info.has_next_page ? last.page_info.end_cursor : null),
     placeholderData: keepPreviousData,
-    enabled: enabled && st !== null,
+    enabled: ctx.ready && st !== null,
   })
-}
-
-export function ListingsPage() {
-  const ctx = useListState('listings')
-  const q = useListings(ctx.state?.page === 'listings' ? ctx.state : null, ctx.ready)
   const first = q.data?.pages[0]
   const rows = useMemo(() => q.data?.pages.flatMap((p) => p.edges.map((e) => e.node)) ?? [], [q.data])
   return (
