@@ -23,6 +23,12 @@ def test_open_studio_unit():
     assert listing_verdict(lst).verdict == "eligible"
 
 
+def test_unit_number_from_apt_slug():
+    # '...-apt-2a' names the unit as surely as '...-unit-2a' (40 of Reside's ~2,180 slugs use apt or apartment)
+    (u,) = page("1988-anthony-avenue-apt-2a").units
+    assert (u.size, u.unit_no, u.rent, u.ami) == ("studio", "2A", 2798.41, 130)
+
+
 def test_multi_unit_page():
     lst = page("25-01-queens-plaza-north-units-619-325-and-503")
     assert lst.borough == "Queens"

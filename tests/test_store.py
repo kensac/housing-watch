@@ -94,6 +94,14 @@ def test_baseline_flag(pg):
         ]  # fmt: skip
 
 
+def test_one_unreported_failure_recovers_silently(pg):
+    with Session(pg) as s, s.begin():
+        finish(s, "t", False, error="timed out")
+        finish(s, "t", True)
+        assert events(s, type="source_failed") == [] and events(s, type="source_recovered") == []
+        assert s.get(SourceStateRow, "t").failing_since is None
+
+
 def test_failures_report_on_2nd_and_10th_then_recover(pg):
     with Session(pg) as s, s.begin():
         for _ in range(10):
@@ -104,6 +112,19 @@ def test_failures_report_on_2nd_and_10th_then_recover(pg):
         finish(s, "t", True)
         assert len(events(s, type="source_recovered")) == 1
         assert st.consecutive_failures == 0 and st.failing_since is None and st.last_ok is not None
+
+
+def test_a_run_finishing_after_a_newer_one_leaves_the_source_state_alone(pg):
+    with Session(pg) as s, s.begin():
+        lost = db.start_run(s, "t")  # its worker died mid-run; the retried job recorded a new run
+        finish(s, "t", True, every_hours=1)
+        st = s.get(SourceStateRow, "t")
+        due = st.next_due
+        db.finish_run(s, lost, "t", False, error="abandoned", every_hours=1)  # tick, hours later
+        assert s.get(RunRow, lost).ok is False
+        assert (st.consecutive_failures, st.failing_since, st.next_due) == (0, None, due)
+        finish(s, "t", True, every_hours=1)
+        assert events(s, type="source_recovered") == []
 
 
 def test_run_bookkeeping(pg):
@@ -168,3 +189,51 @@ def test_digest_collapses_baseline(pg):
         db.record_listings(s, "t", [good, meh], baseline=True)
     out = digest.send(pg, dry_run=True)
     assert "Good" in out and "Meh" not in out and "First run of 1 source(s) (t): 2 listings" in out
+
+
+def test_updated_moves_with_stored_fields_not_with_scrapes(pg):
+    from dataclasses import replace
+
+    from housing_watch.orm import ListingRow
+
+    def year(y):
+        return replace(L(), units=[Unit("studio", 2400.0, 130, "2A", chart_year=y)])
+
+    t = db.utcnow()
+    runs = [  # (what the source lists, whether a stored field moved)
+        ([year(2024)], True),  # new
+        ([year(2024)], False),  # the same again: only last_seen moves
+        ([year(2025)], True),  # chart_year alone: no event, but verdicts read it
+        ([replace(year(2025), title="T2")], True),  # title alone: no event, but the UI shows it
+        ([], True),  # gone
+        ([replace(year(2025), title="T2")], True),  # reopened
+    ]
+    with Session(pg) as s, s.begin():
+        for i, (listed, moved) in enumerate(runs):
+            now = t + timedelta(minutes=i)
+            db.record_listings(s, "t", listed, now=now)
+            s.flush()
+            row = s.scalar(select(ListingRow))
+            assert (row.updated == now) == moved, i
+
+
+def test_unchanged_scrape_keeps_the_judged_cache(pg):
+    from dataclasses import replace
+
+    from housing_watch import queries
+
+    with Session(pg) as s, s.begin():
+        db.record_listings(s, "t", [L()])
+    first = queries.judged(pg)
+    with Session(pg) as s, s.begin():
+        db.record_listings(s, "t", [L()])
+    assert queries.judged(pg) is first
+    with Session(pg) as s, s.begin():
+        db.record_listings(s, "t", [replace(L(), title="T2")])
+    assert [x.title for x in queries.judged(pg)] == ["T2"]
+    with Session(pg) as s, s.begin():  # another source's run stamps the newest `updated`
+        db.record_listings(s, "u", [replace(L(), source="u")])
+    queries.judged(pg)
+    with Session(pg) as s, s.begin():  # a run that started earlier commits later, with an older timestamp
+        db.record_listings(s, "t", [replace(L(), title="T3")], now=db.utcnow() - timedelta(minutes=5))
+    assert [x.title for x in queries.judged(pg) if x.source == "t"] == ["T3"]

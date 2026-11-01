@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from housing_watch import commute as C
+from housing_watch import fetch
 from housing_watch import filters as F
 from housing_watch import queries as Q
 from seed import seed
@@ -70,3 +71,22 @@ def test_refresh_is_off_without_key_or_destination(pg, monkeypatch):
     seed(pg)
     monkeypatch.setattr(C, "KEY", "")
     assert C.refresh(pg) == 0
+
+
+def test_failed_route_backs_off(pg, monkeypatch):
+    seed(pg)
+    monkeypatch.setattr(C, "DESTINATION", "1 Work Pl, New York, NY")
+    monkeypatch.setattr(C, "KEY", "test")
+
+    def route(src, dest, depart):
+        raise fetch.FetchError("POST routes: 429 Too Many Requests")
+
+    monkeypatch.setattr(C, "route", route)
+    t = datetime(2026, 10, 20, 12, 0, tzinfo=NY)
+    waits = [10, 20, 40, 80, 160, 320, 640, 1280, 1280, 1280]  # minutes: doubling, then capped
+    m = 0
+    assert C.refresh(pg, now=t) == 1
+    for w in waits:
+        assert C.refresh(pg, now=t + timedelta(minutes=m + w - 1)) == 0  # still backing off
+        assert C.refresh(pg, now=t + timedelta(minutes=m + w)) == 1
+        m += w
