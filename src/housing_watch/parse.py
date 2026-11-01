@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup
 
-from . import ami as _ami
+from .eligibility import ami as _ami
 
 _SIZE_PATTERNS = [
     (r"\b(sro|single room)\b", "sro"),

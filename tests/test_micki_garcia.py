@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from housing_watch.adapters.micki_garcia import gallery, page_map, parse_income_page, parse_project
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "micki_garcia"
 BASE = "https://www.mickigarciarealty.com"

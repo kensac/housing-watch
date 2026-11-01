@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from housing_watch.adapters.sjp import parse_collection, parse_item
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "sjp"
 

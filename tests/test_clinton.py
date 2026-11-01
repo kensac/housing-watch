@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from housing_watch import db
 from housing_watch.adapters.clinton import parse_cards
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 HTML = (Path(__file__).parent / "fixtures" / "clinton" / "affordable.html").read_text()
 

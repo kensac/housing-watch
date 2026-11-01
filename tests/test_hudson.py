@@ -4,7 +4,7 @@ import pytest
 
 from housing_watch.adapters._pagekit import snapshot
 from housing_watch.adapters.hudson import AGENTS, Hudson, parse_programs, with_agent_units
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "hudson"
 HTML = (F / "availability.html").read_text()

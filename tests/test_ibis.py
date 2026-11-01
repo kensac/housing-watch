@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from housing_watch.adapters.ibis import BASE, coming_soon, ocr_png, parse_cards, parse_detail
-from housing_watch.criteria import PROFILE, listing_verdict, unit_verdict
+from housing_watch.eligibility import PROFILE, listing_verdict, unit_verdict
 
 F = Path(__file__).parent / "fixtures" / "ibis"
 

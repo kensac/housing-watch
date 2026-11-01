@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from housing_watch.adapters.acj import parse_detail, parse_index
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "acj"

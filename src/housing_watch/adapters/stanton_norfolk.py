@@ -20,7 +20,8 @@ import re
 import time
 from urllib.parse import urljoin, urlparse
 
-from .. import ami, fetch, parse
+from .. import fetch, parse
+from ..eligibility import ami
 from ..models import Band, Listing, Result, Unit
 from . import Adapter, prune
 
