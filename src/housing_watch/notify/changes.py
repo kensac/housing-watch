@@ -70,6 +70,12 @@ def describe(before: dict, after: dict) -> list[str]:
     return out or ["Details changed (income limits or set-asides)"]
 
 
+def lines(detail: dict) -> list[str]:
+    """A `changed` event's differences in words: as db.py recorded them, or described from its before/after
+    (events from before 2026-10-22 have no `changes`)."""
+    return detail.get("changes") or describe(detail.get("before") or {}, detail.get("after") or {})
+
+
 def _rest(d: dict) -> dict:
     """Everything but the status, units in a stable order (a stored row's rent is a float, a fresh one may not be)."""
     units = sorted(repr([*u[:RENT], None if u[RENT] is None else float(u[RENT]), *u[RENT + 1 :]])

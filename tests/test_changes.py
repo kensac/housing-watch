@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from helpers import T
-from housing_watch import db
+from housing_watch import db, queries
 from housing_watch.models import Band, Listing, Unit
 from housing_watch.notify import changes, digest
 from housing_watch.orm import EventRow
@@ -10,6 +10,12 @@ from housing_watch.orm import EventRow
 
 def B(status="open", units=None, **kw) -> dict:
     return {"status": status, "deadline": None, "units": units or [["1br", "8L", 2900.0, 130, None]], **kw}
+
+
+def test_event_detail_describes_changes_it_has_not_recorded():
+    """Events from before db.py recorded `changes` (2026-10-22) still say what changed, as the digest does."""
+    e = queries.EventView(1, T, "s", "a:1", "changed", None, detail={"before": B(), "after": B("waitlist")})
+    assert queries.event_detail(e).changes == ["Status: open → waitlist"]
 
 
 def test_describe():

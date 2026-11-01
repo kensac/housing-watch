@@ -58,10 +58,6 @@ def _noise(r: EventRow) -> bool:
     return bool(d.get("noise") or (d.get("before") and changes.is_noise(d["before"], d["after"])))
 
 
-def _changes(d: dict) -> list[str]:
-    return d.get("changes") or changes.describe(d.get("before") or {}, d.get("after") or {})
-
-
 def _names(xs: set[str], n: int = 6) -> str:
     xs = sorted(xs)
     return ", ".join(xs[:n]) + (f" and {len(xs) - n} more" if len(xs) > n else "")
@@ -89,7 +85,7 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
     changed: dict[str, list[str]] = {}  # key -> what changed, over every pending change, oldest first
     for r in rows:
         if r.type == "changed" and not queries.is_baseline(r.detail):
-            changed.setdefault(r.key, []).extend(_changes(r.detail or {}))
+            changed.setdefault(r.key, []).extend(changes.lines(r.detail or {}))
     sections: dict[str, list[tuple[str, list[str]]]] = {k: [] for k in SECTIONS}  # (headline, lines)
     new = {POSSIBLE: 0, EXCLUDED: 0}  # new listings not mailed, by verdict
     watching = 0

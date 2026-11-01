@@ -444,11 +444,6 @@ def mutation(name: str):
     return lambda fn: strawberry.mutation(resolver=blocking(fn), name=name, description=inspect.getdoc(fn))
 
 
-def _conds(page: str, given) -> list[F.Cond]:
-    """A filter input's conditions; one that means nothing is refused (FilterError), saying why."""
-    return F.from_tree(FT.tree(given), views.FIELDS[page])
-
-
 def _chips(conds: list[F.Cond]) -> list[Chip]:
     return [Chip(field=c.field.name, op=c.op, label=c.label()) for c in conds]
 
@@ -490,13 +485,13 @@ def _info(edges: list[Edge], more: bool, earlier: bool) -> PageInfo:
 def _list(cls, page: str, filter, q, sort, first, after, info, search):
     """A listings or units connection: position cursors over one filtered, sorted list."""
     engine, p = _ctx(info)
-    conds = _conds(page, filter)
+    conds = views.conds(page, FT.tree(filter))
     start = (a + 1) if (a := _after(page, after)) is not None else 0
     res = search(engine, queries.ListingQuery(conds, q, FT.sorts(page, sort), start, _first(first)), p)
     edges = [Edge(cursor=_cursor(page, start + i), node=x) for i, x in enumerate(res.items)]
     return cls(
         edges=edges, page_info=_info(edges, res.next_offset is not None, start > 0), total=res.total,
-        verdict_counts=VerdictCounts(**{v: res.verdict_counts.get(v, 0) for v in queries.VERDICTS}),
+        verdict_counts=VerdictCounts(**res.verdict_counts),
         filters=_chips(conds), hidden_gone=queries.hides_gone(conds),
     )  # fmt: skip
 
@@ -578,7 +573,7 @@ class Query:
         engine, p = _ctx(info)
         d = queries.listing_detail(engine, key, p)
         if d is None:
-            raise Problem(Code.NOT_FOUND, "This listing is not in the store.")
+            raise models.NotFound("This listing is not in the store.")
         return d
 
     @query(name="listingApplications")
@@ -605,7 +600,7 @@ class Query:
         fld = views.FIELDS[page].get(field.value)
         if fld is None:
             raise Problem(Code.BAD_USER_INPUT, f"{page} has no field {field.name}")
-        conds = _conds(page, given)
+        conds = views.conds(page, FT.tree(given))
         is_enum = queries.is_enum(engine, fld, p)
         counts = queries.value_counts(engine, page, fld, conds, q, p) if is_enum else []
         name = gql_name if fld.type == "enum" else str
@@ -617,7 +612,7 @@ class Query:
                after: str | None = None) -> EventConnection:  # fmt: skip
         """What happened, newest first. Listing conditions (`listing`) apply through the event's listing."""
         engine, p = _ctx(info)
-        conds = _conds("events", filter)
+        conds = views.conds("events", FT.tree(filter))
         page = queries.events(engine, conds, before=_after("events", after), limit=_first(first), p=p)
         edges = [Edge(cursor=_cursor("events", e.id), node=e) for e in page.items]
         return EventConnection(edges=edges, page_info=_info(edges, page.next_before is not None, after is not None),
