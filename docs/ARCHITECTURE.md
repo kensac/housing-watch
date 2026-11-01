@@ -121,7 +121,9 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   unit search (one row per unit), listing detail with units/bands/events, the per-source health table,
   event feed, overview counts.
   It attaches verdicts by calling `criteria` at read time.
-  Every listing is judged once per store version and cached in memory, so pages filter in Python.
+  Every listing is judged once per store version and cached in memory, so pages filter in Python. The version is
+  the sum of `listings.updated` (set by `record_listings` whenever a stored field moves, with or without an
+  event; never by a scrape that only moves `last_seen`) plus the commute and tracker tables' counts and newest rows.
 - `changes.py` turns a `changed` event's `before`/`after` into lines (status, deadline, units relabeled,
   added or removed, rent, availability, income limits) and flags noise: a status moving to "unknown", or
   back from it to what it was, with nothing else changed. `db.py` stores both in the event's detail.
