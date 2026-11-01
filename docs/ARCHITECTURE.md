@@ -133,7 +133,9 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   Its write tools are the web app's mutations (saved views; manual tracker links), annotated as writes. Both
   are thin adapters over the same domain functions (`views.create/change/duplicate/delete`, `tracker.link/
   unlink`, `queries.tracker_link`), which raise `models.NotFound`, `views.ViewError` or `filters.FilterError`;
-  GraphQL maps those to codes in `Schema.process_errors`, MCP to tool errors in its `tool` wrapper. Each MCP
+  GraphQL maps those to codes in `Schema.process_errors`, MCP to tool errors in its `tool` wrapper. Any other
+  exception is a bug: its text goes to the log only (GraphQL's INTERNAL, MCP's `mask_error_details`, the web app's
+  catch-all handler). Each MCP
   write is logged at INFO (`mcp write <tool> by <sub> <email>: <args>`, args as keys or lengths, never values
   of objects); reads are not. `graphql` runs read-only queries in-process against the web schema (same
   DataLoaders and limits); `graphql_mutation` runs mutations in a `trusted` context: OAuth already decided
@@ -181,7 +183,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
     with BAD_USER_INPUT. `values` and the views mutations take a page's input as a `@oneOf` object; a saved
     view's state comes back as the `ViewState` union of the three pages' states.
   - Errors carry `extensions.code`: NOT_FOUND, BAD_USER_INPUT (also every document or variable error),
-    FORBIDDEN (a cross-origin mutation), INTERNAL (a bug, the only kind logged). Resolvers raise the domain's
+    FORBIDDEN (a cross-origin mutation), INTERNAL (a bug, the only kind logged; the client gets "Internal error",
+    the log the message and trace). Resolvers raise the domain's
     own errors; `Schema.process_errors` gives them their code.
   - Depth (10), token (2000) and alias (15) limits; introspection stays on. Resolvers are async and run
     the blocking store reads in a worker thread; `Event.listing` goes through a per-request DataLoader.
