@@ -34,7 +34,7 @@ from . import mcp_models as M
 from . import queries, tracker, views
 from .criteria import PROFILE, Profile
 from .models import NotFound
-from .notify import changes, digest
+from .notify import digest
 
 log = logging.getLogger("housing_watch")
 REFUSALS = (NotFound, views.ViewError, F.FilterError)  # the domain's refusals: the caller's to fix, not bugs
@@ -51,10 +51,6 @@ FILTERS = (
 
 def _summary(x: queries.ListingSummary):
     return M.ListingModel.model_validate(queries.public(x))
-
-
-def _conds(page: str, tree: dict) -> list[F.Cond]:
-    return F.from_tree(tree, views.FIELDS[page])  # FilterError explains a bad one to the caller
 
 
 def caller() -> str:
@@ -88,16 +84,16 @@ def _errors(out) -> str:
 
 
 def _event(e: queries.EventView) -> M.Change:
-    d = e.detail or {}
+    """The event with its detail as GraphQL reads it (queries.event_detail), flattened."""
     out = {"at": e.at, "type": e.type, "source": e.source, "key": e.key, "title": e.title or e.summary,
            "verdict": e.verdict, "first_run": e.baseline}  # fmt: skip
-    if e.type == "changed":
-        out["changes"] = changes.lines(d)
-        out["noise"] = bool(d.get("noise"))
-    elif e.type == "page_changed":
-        out["added"], out["new_links"] = d.get("added", [])[:15], d.get("new_links", [])
-    elif e.type in ("source_failed", "source_recovered"):
-        out["error"] = d.get("error")
+    match queries.event_detail(e):
+        case queries.ListingChange() as d:
+            out |= {"changes": d.changes, "noise": d.noise}
+        case queries.PageChange() as d:
+            out |= {"added": d.added[:15], "new_links": d.new_links}
+        case queries.SourceFailure() as d:
+            out["error"] = d.error
     return M.Change(**out)
 
 
@@ -205,7 +201,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     ) -> M.ListingsPage:
         """Listings matching a filter, one row per building/opportunity. Removed listings are hidden unless
         a condition asks about removal (gone_since)."""
-        lq = queries.ListingQuery(_conds("listings", M.tree(filter)), q, M.sorts("listings", sort), offset, limit)
+        lq = queries.ListingQuery(views.conds("listings", M.tree(filter)), q, M.sorts("listings", sort), offset, limit)
         res = queries.search_listings(engine, lq, p)
         return M.ListingsPage(items=[_summary(x) for x in res.items], total=res.total, next_offset=res.next_offset,
                               verdict_counts=M.VerdictCounts(**res.verdict_counts))  # fmt: skip
@@ -220,7 +216,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     ) -> M.UnitsPage:
         """Individual units or rent tiers (size, rent, AMI, income band) with their listing and verdict; unit
         conditions hold on the row's own unit."""
-        uq = queries.ListingQuery(_conds("units", M.tree(filter)), q, M.sorts("units", sort), offset, limit)
+        uq = queries.ListingQuery(views.conds("units", M.tree(filter)), q, M.sorts("units", sort), offset, limit)
         res = queries.search_units(engine, uq, p)
         return M.UnitsPage(items=[M.UnitModel.model_validate(queries.public(u)) for u in res.items],
                            total=res.total, next_offset=res.next_offset)  # fmt: skip
@@ -240,7 +236,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     ) -> M.Changes:
         """What happened, newest first: new, changed (with what changed), closed, removed, reopened listings,
         watched pages that changed, and sources failing or recovering."""
-        page = queries.events(engine, _conds("events", M.tree(filter)), before=before, limit=100, p=p)
+        page = queries.events(engine, views.conds("events", M.tree(filter)), before=before, limit=100, p=p)
         items = [_event(e) for e in page.items]
         return M.Changes(items=[e for e in items if include_noise or not e.noise], total=page.total,
                          next_before=page.next_before)  # fmt: skip

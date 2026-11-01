@@ -6,7 +6,7 @@ A filter is a tree with one key per field, holding that field's operators; every
      "last_changed": {"last": {"amount": 7, "unit": "days"}}}
 
 The same tree is the GraphQL input (web/filter_types.py derives `ListingFilterInput` from this registry), the MCP
-tools' parameter (mcp_server.py derives pydantic models from it) and what a saved view stores. Fields come from the
+tools' parameter (mcp_models.py derives pydantic models from it) and what a saved view stores. Fields come from the
 listings/units/bands (and events) columns, so a new column in orm.py is filterable with no other change; a column
 with `info={"values": <Literal alias>}` is an enum; LABELS and HIDDEN only rename or hide. Unit fields match a
 listing when one unit matches all unit conditions together; band conditions (`units.bands`) must hold on one band
