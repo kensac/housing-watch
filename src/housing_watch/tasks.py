@@ -99,12 +99,6 @@ def _defer(task, *, queueing_lock: str | None = None, lock: str | None = None, q
         return None
 
 
-def _learned_queue(source: str) -> str:
-    with Session(engine()) as s:
-        st = s.get(db.SourceStateRow, source)
-        return st.queue if st and st.queue else SOURCES
-
-
 def _needs_byparr(source: str) -> None:
     with Session(engine()) as s, s.begin():
         db.set_queue(s, source, BYPARR)

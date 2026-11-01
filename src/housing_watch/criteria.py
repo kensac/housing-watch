@@ -32,7 +32,6 @@ class Profile:
     income: int = int(os.environ.get("HW_INCOME", "0"))  # annual household income; required to run
     sizes: frozenset[Size] = env_set("HW_SIZES", Size, "studio,1br,2br,3br")
     excluded_boroughs: frozenset[Borough] = env_set("HW_EXCLUDED_BOROUGHS", Borough)
-    max_rent: float | None = None
 
 
 PROFILE = Profile()
@@ -52,8 +51,6 @@ def unit_verdict(u: Unit, p: Profile = PROFILE) -> tuple[Verdict, str]:
         return EXCLUDED, f"set aside ({u.set_aside})"
     if u.size not in p.sizes and u.size != "unknown":
         return EXCLUDED, f"{u.size} not wanted"
-    if u.rent and p.max_rent and u.rent > p.max_rent:
-        return EXCLUDED, f"rent ${u.rent:,.0f} over max"
     band = next((b for b in u.bands if b.household == p.household), None)
     if u.bands and band is None:
         smallest = min(b.household for b in u.bands)
