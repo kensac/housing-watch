@@ -64,8 +64,9 @@ class Duration:
 _ATTR = {"in": "in_", "is": "is_"}  # Python keywords
 
 
-def _op_type(kind: str, op: str, item, output: bool):
-    """The GraphQL type of operator `op` on a field of `kind` whose values are `item`."""
+def op_type(kind: str, op: str, item, number_range: type, date_range: type, duration: type):
+    """The type of operator `op`'s value on a field of `kind` whose values are `item`. The three object values are
+    the caller's own types: GraphQL inputs or outputs here, pydantic models in mcp_models.py."""
     if op in ("in", "not_in"):
         return list[item]
     if op in ("contains", "not_contains"):
@@ -73,18 +74,17 @@ def _op_type(kind: str, op: str, item, output: bool):
     if op in ("empty", "is"):
         return bool
     if op == "between":
-        return (
-            (NumberRange if output else NumberRangeInput)
-            if kind == "number"
-            else (DateRange if output else DateRangeInput)
-        )
+        return number_range if kind == "number" else date_range
     if op in ("after", "before"):
         return date
     if op in ("since", "until"):
         return datetime
     if op == "last":
-        return Duration if output else DurationInput
+        return duration
     return float
+
+
+_OBJECTS = {False: (NumberRangeInput, DateRangeInput, DurationInput), True: (NumberRange, DateRange, Duration)}
 
 
 def _leaf(name: str, kind: str, item=str, description: str | None = None) -> tuple[type, type]:
@@ -94,7 +94,7 @@ def _leaf(name: str, kind: str, item=str, description: str | None = None) -> tup
         anns, ns = {}, {}
         for op in F.OPS[kind]:
             attr = _ATTR.get(op, op)
-            anns[attr] = _op_type(kind, op, item, output) | None
+            anns[attr] = op_type(kind, op, item, *_OBJECTS[output]) | None
             ns[attr] = strawberry.field(default=None, name=op, description=F.OP_DOC[op])
         ns["__annotations__"] = anns
         cls = type(name if output else f"{name}Input", (), ns)
@@ -122,28 +122,32 @@ def _leaf_of(f: F.Field) -> tuple[type, type]:
 
 # --- the filter objects -----------------------------------------------------------------------------------
 
-_NESTED_DOC = {
+NESTED_DOC = {
     "units": "A listing matches when one of its units meets every condition here together.",
     "bands": "The unit matches when one of its income bands meets every condition here together.",
     "listing": "Conditions on the event's listing, as it reads now; events with no listing never match.",
 }
 
 
+def level(fields: dict[str, F.Field], prefix: str) -> list[F.Field]:
+    """The fields directly at `prefix` ("units." holds units.rent, not units.bands.household)."""
+    return [f for n, f in fields.items() if n.startswith(prefix) and "." not in n[len(prefix) :]]
+
+
 def _container(name: str, fields: dict[str, F.Field], prefix: str, nested: dict[str, tuple[type, type]],
                description: str) -> tuple[type, type]:  # fmt: skip
     """The input and output types of one level of the tree: its fields, then its nested levels."""
-    level = [f for n, f in fields.items() if n.startswith(prefix) and "." not in n[len(prefix) :]]
     out = []
     for i in (0, 1):
         anns, ns = {}, {}
-        for f in level:
+        for f in level(fields, prefix):
             key = f.name[len(prefix) :]
             anns[key] = _leaf_of(f)[i] | None
             hint = f" ({f.group})" if f.scope == "computed" else ""
             ns[key] = strawberry.field(default=None, description=f"{f.label}{hint}.")
         for key, types in nested.items():
             anns[key] = types[i] | None
-            ns[key] = strawberry.field(default=None, description=_NESTED_DOC[key])
+            ns[key] = strawberry.field(default=None, description=NESTED_DOC[key])
         ns["__annotations__"] = anns
         cls = type(f"{name}Input" if i == 0 else name, (), ns)
         out.append((strawberry.input if i == 0 else strawberry.type)(cls, name=cls.__name__, description=description))

@@ -21,7 +21,7 @@ from urllib.parse import quote, urljoin
 
 from .. import fetch, parse
 from ..models import Listing, Result, Snapshot, Unit
-from . import Adapter
+from . import Adapter, prune
 
 BASE = "https://ibis.powerappsportals.com/"
 _REFRESH = 7 * 86400  # re-OCR a cached image after a week, in case it was replaced under the same name
@@ -177,8 +177,7 @@ class Ibis(Adapter):
                 pass  # no tesseract: keep the listing (size from the card), flagged in notes
             out.append(parse_detail(c["href"], body, ocr, c))
         ocr_cache = self.cache.get("ocr", {})
-        for k in [k for k in ocr_cache if k not in self._seen]:
-            del ocr_cache[k]
+        prune(ocr_cache, self._seen)
         if not out:
             txt = parse.text(home)
             return Result(snapshots=[Snapshot(source=self.name, ext_id=BASE, url=BASE, text=txt)])

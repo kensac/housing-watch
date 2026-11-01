@@ -11,7 +11,6 @@ OCR text is cached per image URL + sha256, so unchanged screenshots are not re-r
 
 from __future__ import annotations
 
-import hashlib
 import os
 import re
 import subprocess
@@ -20,6 +19,7 @@ from dataclasses import dataclass
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
+from . import by_content, prune
 from ._page import PageAdapter
 
 URL = "https://springmanagement.net/apartments-for-rent/"
@@ -217,20 +217,15 @@ def ocr_tsv(path: str) -> str:
 
 
 def _ocr_cached(cache: dict, url: str, seen: set[str]) -> str:
-    data = fetch.get(url).content
-    h = hashlib.sha256(data).hexdigest()
-    store = cache.setdefault("ocr", {})
+    def extract(data: bytes) -> dict:
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "img" + (os.path.splitext(url.split("?")[0])[1] or ".png"))
+            with open(p, "wb") as f:
+                f.write(data)
+            return {"text": ocr_tsv(p)}
+
     seen.add(url)
-    hit = store.get(url)
-    if hit and hit.get("sha") == h:
-        return hit["text"]
-    with tempfile.TemporaryDirectory() as d:
-        p = os.path.join(d, "img" + (os.path.splitext(url.split("?")[0])[1] or ".png"))
-        with open(p, "wb") as f:
-            f.write(data)
-        text = ocr_tsv(p)
-    store[url] = {"sha": h, "text": text}
-    return text
+    return by_content(cache.setdefault("ocr", {}), url, extract)["text"]
 
 
 def build_listings(html: str, tsv_for) -> list[Listing]:
@@ -279,7 +274,5 @@ class Spring(PageAdapter):
         snaps = super().fetch().snapshots
         seen: set[str] = set()
         listings = build_listings(fetch.html(URL), lambda u: _ocr_cached(self.cache, u, seen))
-        store = self.cache.setdefault("ocr", {})
-        for u in [u for u in store if u not in seen]:
-            del store[u]
+        prune(self.cache.setdefault("ocr", {}), seen)
         return Result(listings=listings, snapshots=snaps)

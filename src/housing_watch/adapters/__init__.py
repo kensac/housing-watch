@@ -7,10 +7,13 @@ watches when it does not. Raise on anything unexpected: a loud failure beats a s
 
 from __future__ import annotations
 
+import hashlib
 import importlib
 import pkgutil
+from collections.abc import Callable, Container
 from typing import ClassVar
 
+from .. import fetch
 from ..models import Listing, Result
 
 REGISTRY: dict[str, type[Adapter]] = {}
@@ -89,3 +92,26 @@ def load_all() -> dict[str, type[Adapter]]:
 def cached_listing(d: dict) -> Listing:
     """A Listing an adapter kept in its cache as plain JSON (dataclasses.asdict)."""
     return Result.from_json({"listings": [d]}).listings[0]
+
+
+def by_content(store: dict, url: str, extract: Callable[[bytes], dict]) -> dict:
+    """store[url]: extract(the file's bytes) plus their sha256, re-extracted only when the bytes change.
+    For files that are slow to read (OCR, PDF text): the download is cheap, the reading is not."""
+    data = fetch.get(url).content
+    sha = hashlib.sha256(data).hexdigest()
+    hit = store.get(url)
+    if hit and hit.get("sha") == sha:
+        return hit
+    store[url] = {"sha": sha, **extract(data)}
+    return store[url]
+
+
+def pdf_cached(cache: dict, url: str) -> str:
+    """A PDF's text, kept in cache["pdf"] by content hash."""
+    return by_content(cache.setdefault("pdf", {}), url, lambda data: {"text": fetch.pdf_bytes_text(data)})["text"]
+
+
+def prune(store: dict, keep: Container) -> None:
+    """Drop the cache entries whose keys are not in keep (pages, files or records the source no longer lists)."""
+    for k in [k for k in store if k not in keep]:
+        del store[k]

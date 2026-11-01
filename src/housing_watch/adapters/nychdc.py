@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 from .. import ami, fetch, parse
 from ..models import Listing, Result, Unit
-from . import Adapter
+from . import Adapter, prune
 
 BASE = "https://www.nychdc.com"
 API = BASE + "/api/re-rentals?current-page={page}&offset={offset}"
@@ -308,6 +308,5 @@ class NycHdc(Adapter):
                     text = None  # listing still reported, as "possible"; retried next run
             out.append(parse_card(c, text))
         live = {c.get("pdf") for c in cards}
-        for k in [k for k in cache if k not in live]:
-            del cache[k]
+        prune(cache, live)
         return Result(listings=out)

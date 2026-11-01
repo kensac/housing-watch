@@ -11,7 +11,6 @@ cached per URL + content hash, so a file is only re-read when it changes.
 
 from __future__ import annotations
 
-import hashlib
 import os
 import re
 import shutil
@@ -21,7 +20,7 @@ from urllib.parse import urljoin
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter
+from . import Adapter, by_content, prune
 
 INDEX = "https://rockrose.com/affordable-availabilities/"
 QUESTIONS = "Questions: Housing Partnership 646-217-3387. No fee to apply."
@@ -175,19 +174,8 @@ class Rockrose(Adapter):
     min_listings = 1
 
     def _cached(self, url: str, kind: str, make) -> str:
-        """Fetch url; re-use the OCR/PDF text while the file's content hash is unchanged.
-
-        (A conditional GET would be cheaper, but fetch.get raises on 304.)
-        """
-        store = self.cache.setdefault(kind, {})
-        data = fetch.get(url).content
-        digest = hashlib.sha256(data).hexdigest()
-        hit = store.get(url)
-        if hit and hit.get("sha256") == digest:
-            return hit["text"]
-        text = make(data)
-        store[url] = {"sha256": digest, "text": text}
-        return text
+        """make(the file's bytes), kept in cache[kind] by content hash."""
+        return by_content(self.cache.setdefault(kind, {}), url, lambda data: {"text": make(data)})["text"]
 
     def fetch(self) -> Result:
         cards, buttons = parse_index(fetch.html(INDEX))
@@ -215,7 +203,5 @@ class Rockrose(Adapter):
             out.append(parse_paper(name, pdf, self._cached(pdf, "pdf", pdftotext)))
             used_pdfs.add(pdf)
         for kind, used in (("ocr", used_imgs), ("pdf", used_pdfs)):
-            store = self.cache.get(kind, {})
-            for u in [u for u in store if u not in used]:
-                del store[u]
+            prune(self.cache.get(kind, {}), used)
         return Result(listings=out)

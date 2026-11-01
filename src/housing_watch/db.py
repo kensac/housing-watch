@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from . import ami, changes
 from .mapping import apply_listing, listing_from_row
-from .models import Listing, Snapshot
+from .models import EventType, Listing, Snapshot
 from .orm import (
     AdapterCacheRow,
     ChunkResultRow,
@@ -113,10 +113,31 @@ def _status_before_unknown(s: Session, key: str) -> str | None:
     return (d or {}).get("before", {}).get("status")
 
 
-def _event(s: Session, source, key, typ, summary="", detail=None, now=None, baseline=False) -> None:
+def _event(s: Session, source, key, typ, summary="", *, detail=None, now=None, baseline=False) -> None:
     if baseline:
         detail = {**(detail or {}), "baseline": True}
     s.add(EventRow(at=now or utcnow(), source=source, key=key, type=typ, summary=summary, detail=detail))
+
+
+def _change_type(row: ListingRow, lst: Listing, fp: str) -> EventType | None:
+    """The event a source's new version of a stored listing is, or None when nothing that matters moved."""
+    if row.gone_since is not None:  # listed again: reopened, unless it comes back closed
+        return "closed" if lst.status == "closed" else "reopened"
+    if row.status == "closed" and lst.status != "closed":
+        return "reopened"
+    if row.fingerprint != fp:
+        return "closed" if lst.status == "closed" and row.status != "closed" else "changed"
+    return None
+
+
+def _changed_detail(s: Session, key: str, stored: Listing, lst: Listing) -> dict:
+    """A `changed` event's detail: both sides, the differences in words, and whether it is only noise."""
+    before, after = _brief(stored), _brief(lst)
+    prior = _status_before_unknown(s, key) if before["status"] == changes.UNKNOWN else None
+    detail = {"before": before, "after": after, "changes": changes.describe(before, after)}
+    if changes.is_noise(before, after, prior):
+        detail["noise"] = True
+    return detail
 
 
 def is_baseline(s: Session, source: str) -> bool:
@@ -158,24 +179,12 @@ def record_listings(
             )
             row.source = source  # the run's source owns the row, as gone detection assumes
             s.add(row)
-            _event(s, source, key, "new", lst.title, None, now, baseline)
+            _event(s, source, key, "new", lst.title, now=now, baseline=baseline)
             n += 1
             continue
-        typ = None
-        if row.gone_since is not None:  # listed again: reopened, unless it comes back closed
-            typ = "closed" if lst.status == "closed" else "reopened"
-        elif row.status == "closed" and lst.status != "closed":
-            typ = "reopened"
-        elif row.fingerprint != fp:
-            typ = "closed" if lst.status == "closed" and row.status != "closed" else "changed"
+        typ = _change_type(row, lst, fp)
         stored = listing_from_row(row)
-        detail = None
-        if typ == "changed":
-            before, after = _brief(stored), _brief(lst)
-            prior = _status_before_unknown(s, key) if before["status"] == changes.UNKNOWN else None
-            detail = {"before": before, "after": after, "changes": changes.describe(before, after)}
-            if changes.is_noise(before, after, prior):
-                detail["noise"] = True
+        detail = _changed_detail(s, key, stored, lst) if typ == "changed" else None
         # chart_year is the one unit field outside the fingerprint: when only it moved, store it without an event
         years = [(u.key(), u.chart_year) for u in stored.units] != [(u.key(), u.chart_year) for u in lst.units]
         apply_listing(lst, row, units=row.fingerprint != fp or years)
@@ -185,12 +194,12 @@ def record_listings(
         row.last_seen = now
         if typ:
             row.last_changed = now
-            _event(s, source, key, typ, lst.title, detail, now, baseline)
+            _event(s, source, key, typ, lst.title, detail=detail, now=now, baseline=baseline)
             n += 1
     for key, row in rows.items():
         if key not in seen and row.gone_since is None:
             row.gone_since = row.updated = now
-            _event(s, source, key, "gone", row.title, None, now, baseline)
+            _event(s, source, key, "gone", row.title, now=now, baseline=baseline)
             n += 1
     return n
 
@@ -216,7 +225,7 @@ def record_snapshots(
                     last_seen=now,
                 )  # fmt: skip
             )
-            _event(s, source, sn.key(), "watching", sn.url, None, now, baseline)
+            _event(s, source, sn.key(), "watching", sn.url, now=now, baseline=baseline)
             n += 1
             continue
         row.last_seen = now
@@ -230,7 +239,7 @@ def record_snapshots(
             "new_links": sorted(set(sn.links) - set(row.links or [])),
         }
         row.url, row.digest, row.text, row.links, row.changed = sn.url, dg, sn.text, sorted(sn.links), now
-        _event(s, source, sn.key(), "page_changed", sn.url, detail, now, baseline)
+        _event(s, source, sn.key(), "page_changed", sn.url, detail=detail, now=now, baseline=baseline)
         n += 1
     return n
 
@@ -289,14 +298,14 @@ def finish_run(
         st.next_due = now + timedelta(hours=every_hours) - DUE_SLACK
     if ok:
         if (st.consecutive_failures or 0) >= 2:  # only a failure that was reported recovers
-            _event(s, source, None, "source_recovered", source, None, now)
+            _event(s, source, None, "source_recovered", source, now=now)
         st.last_ok, st.failing_since, st.consecutive_failures = now, None, 0
         return
     st.consecutive_failures = (st.consecutive_failures or 0) + 1
     st.failing_since = st.failing_since or now
     if st.consecutive_failures in (2, 10):  # one transient failure is noise; report on the 2nd and the 10th
         detail = {"error": (error or "")[:500], "fails": st.consecutive_failures}
-        _event(s, source, None, "source_failed", source, detail, now)
+        _event(s, source, None, "source_failed", source, detail=detail, now=now)
 
 
 def claim_due(s: Session, every: dict[str, float], now: datetime | None = None) -> list[tuple[str, str | None]]:
