@@ -8,10 +8,7 @@ not the presence of the PDF. The ad's unit/income table is read from `pdftotext 
 from __future__ import annotations
 
 import hashlib
-import os
 import re
-import subprocess
-import tempfile
 from datetime import date, datetime
 from urllib.parse import urljoin
 
@@ -24,31 +21,14 @@ URL = "https://soisrealestateconsulting.com/current-projects-1"
 # --- shared PDF + HPD ad helpers -------------------------------------------------------------------------------
 
 
-def pdf_bytes_text(data: bytes) -> str:
-    """pdftotext -layout of PDF bytes; OCR of the first pages when the PDF is a scan."""
-    with tempfile.TemporaryDirectory() as d:
-        p = os.path.join(d, "f.pdf")
-        with open(p, "wb") as f:
-            f.write(data)
-        out = subprocess.run(["pdftotext", "-layout", p, "-"], capture_output=True, text=True, timeout=120).stdout
-        if len(out.strip()) >= 80:
-            return out
-        subprocess.run(["pdftoppm", "-r", "200", "-png", "-l", "4", p, os.path.join(d, "pg")], timeout=180)
-        pages = sorted(x for x in os.listdir(d) if x.startswith("pg"))
-        return "\n".join(fetch._ocr_file(os.path.join(d, x)) for x in pages)
-
-
-def _pdf_text(cache: dict, url: str) -> str:
+def pdf_cached(cache: dict, url: str) -> str:
     """PDF text, re-extracted only when the file's bytes change (cache: url -> {sha, text})."""
     data = fetch.get(url).content
     h = hashlib.sha256(data).hexdigest()
     store = cache.setdefault("pdf", {})
-    hit = store.get(url)
-    if hit and hit.get("sha") == h:
-        return hit["text"]
-    t = pdf_bytes_text(data)
-    store[url] = {"sha": h, "text": t}
-    return t
+    if store.get(url, {}).get("sha") != h:
+        store[url] = {"sha": h, "text": fetch.pdf_bytes_text(data)}
+    return store[url]["text"]
 
 
 def prune_pdf_cache(cache: dict, seen: set[str]) -> None:
@@ -261,7 +241,7 @@ class Sois(PageAdapter):
             txt = None
             if card["pdf"]:
                 seen.add(card["pdf"])
-                txt = _pdf_text(self.cache, card["pdf"])
+                txt = pdf_cached(self.cache, card["pdf"])
             out.append(build_listing(card, txt))
         prune_pdf_cache(self.cache, seen)
         return Result(listings=out, snapshots=snaps)

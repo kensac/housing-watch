@@ -183,16 +183,17 @@ def _render(url: str, wait_ms: int) -> str:
 
 
 def pdf_text(url: str) -> str:
-    """pdftotext -layout of a PDF; falls back to OCR when the PDF is a scan."""
-    data = get(url).content
+    return pdf_bytes_text(get(url).content)
+
+
+def pdf_bytes_text(data: bytes) -> str:
+    """pdftotext -layout of PDF bytes; OCR of the first 4 pages when the PDF is a scan (under 80 characters)."""
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, "f.pdf")
         with open(p, "wb") as f:
             f.write(data)
         out = subprocess.run(["pdftotext", "-layout", p, "-"], capture_output=True, text=True, timeout=120).stdout
-        if len(out.strip()) > 80:
-            return out
-        if not shutil.which("pdftoppm") or not shutil.which("tesseract"):
+        if len(out.strip()) >= 80 or not shutil.which("pdftoppm") or not shutil.which("tesseract"):
             return out
         subprocess.run(["pdftoppm", "-r", "200", "-png", "-l", "4", p, os.path.join(d, "pg")], timeout=180)
         pages = sorted(x for x in os.listdir(d) if x.startswith("pg"))

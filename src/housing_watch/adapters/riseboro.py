@@ -15,7 +15,7 @@ from urllib.parse import urljoin
 from .. import fetch, parse
 from ..models import Listing, Result
 from ._page import PageAdapter
-from .sois import _pdf_text, deadline_iso, prune_pdf_cache
+from .sois import deadline_iso, pdf_cached, prune_pdf_cache
 
 API = "https://riseboro.org/wp-json/wp/v2/housing?per_page=100&_fields=id,link,title,slug,modified"
 URL = "https://riseboro.org/housing/woodlawn-senior-living/"
@@ -92,7 +92,7 @@ class RiseBoro(PageAdapter):
             app_text = None
             if b["app"]:
                 seen.add(b["app"])
-                app_text = _pdf_text(self.cache, b["app"])
+                app_text = pdf_cached(self.cache, b["app"])
             out.append(build_listing(b, app_text))
         prune_pdf_cache(self.cache, seen)
         return Result(listings=out, snapshots=snaps)
