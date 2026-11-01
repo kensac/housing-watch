@@ -841,7 +841,7 @@ class Overview:
     eligible_now: list[ListingSummary]
     recent: list[EventView]
     total: int
-    n_sources: int
+    n_sources: int  # every source, as the Sources page lists them, with listings or not
 
 
 def overview(engine: Engine, p: Profile = PROFILE) -> Overview:
@@ -889,7 +889,7 @@ def overview(engine: Engine, p: Profile = PROFILE) -> Overview:
         eligible_now=live[:10],
         recent=_attach(engine, recent, p),
         total=sum(1 for x in allx if x.status != "gone"),
-        n_sources=len({x.source for x in allx}),
+        n_sources=len(sources(engine, p)),
         **ov,
     )
 

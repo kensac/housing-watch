@@ -123,6 +123,7 @@ def test_overview(db):
     assert (o.new_24h, o.baseline_24h, o.changed_24h) == (2, 0, 2)
     assert o.failing == ["b"] and o.pending == 6 and o.last_digest is None
     assert o.recent[0].type == "source_failed"
+    assert o.n_sources == len(Q.sources(db)) > len({x.source for x in Q.judged(db)})  # registered, listings or not
 
 
 def test_sources(db):
