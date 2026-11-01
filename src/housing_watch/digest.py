@@ -28,6 +28,12 @@ SMTP_HOST = os.environ.get("SMTP_HOST", "localhost")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 
 TITLES = {"new": "New", "reopened": "Reopened", "changed": "Changed", "closed": "Closed", "gone": "Removed"}
+SECTIONS = {  # the email's sections, in order
+    "eligible": "Eligible",
+    "closed": "Closed or removed (were eligible)",
+    "failed": "Sources failing",
+    "recovered": "Sources recovered",
+}
 
 
 def _units(lst: Listing, p: Profile) -> list[str]:
@@ -83,9 +89,7 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
     for r in rows:
         if r.type == "changed" and not queries.is_baseline(r.detail):
             changed.setdefault(r.key, []).extend(_changes(r.detail or {}))
-    sections: dict[str, list[tuple[str, list[str]]]] = {
-        k: [] for k in ("eligible", "pages", "failed", "recovered", "closed")
-    }
+    sections: dict[str, list[tuple[str, list[str]]]] = {k: [] for k in SECTIONS}  # (headline, lines)
     new = {POSSIBLE: 0, EXCLUDED: 0}  # new listings not mailed, by verdict
     watching = 0
     base = {"sources": set(), "listings": 0, ELIGIBLE: 0, POSSIBLE: 0, EXCLUDED: 0, "pages": 0}
@@ -110,9 +114,7 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
         if typ == "source_recovered":
             sections["recovered"].append((f"{r.source}: working again", []))
             continue
-        if typ == "page_changed":
-            lines = [f"+ {x}" for x in d.get("added", [])[:15]] + [f"new link: {x}" for x in d.get("new_links", [])]
-            sections["pages"].append((f"{r.source}: {r.summary}", lines))
+        if typ == "page_changed":  # read in the web UI, never mailed
             continue
         lst = listings.get(r.key)
         if lst is None:
@@ -142,20 +144,42 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
             new[v.verdict] += 1
     if not (sections["eligible"] or sections["closed"]):
         return "", "", "", ids  # nothing eligible happened (possible, page changes, failures alone): mark read
+    subject = _subject(sections)
+    plain, htm = _render(subject, sections, _footnotes(base, new, watching))
+    return subject, plain, htm, ids
+
+
+def _subject(sections: dict[str, list]) -> str:
     subject = f"Housing watch: {len(sections['eligible'])} eligible"
     if sections["closed"]:
         subject += f", {len(sections['closed'])} closed"
     if sections["failed"]:
         n = len(sections["failed"])
         subject += f", {n} source{'s' if n != 1 else ''} failing"
-    order = [
-        ("eligible", "Eligible"),
-        ("closed", "Closed or removed (were eligible)"),
-        ("failed", "Sources failing"),
-        ("recovered", "Sources recovered"),
-    ]
+    return subject
+
+
+def _footnotes(base: dict, new: dict[str, int], watching: int) -> list[str]:
+    """The small print: what first runs and new listings that were not mailed amount to."""
+    out = []
+    if base["sources"]:
+        out.append(
+            f"First run of {len(base['sources'])} source(s) ({_names(base['sources'])}):"
+            f" {base['listings']} listings ({base[ELIGIBLE]} eligible, shown above; {base[POSSIBLE]} possible;"
+            f" {base[EXCLUDED]} excluded), {base['pages']} pages now watched."
+        )
+    if new[POSSIBLE] or new[EXCLUDED] or watching:
+        out.append(
+            f"Also: {new[EXCLUDED]} new listings filtered out, {new[POSSIBLE]} new possible (in the web UI),"
+            f" {watching} pages now watched."
+        )
+    return out
+
+
+def _render(subject: str, sections: dict[str, list[tuple[str, list[str]]]], tail: list[str]) -> tuple[str, str]:
+    """(plain, html) of the email."""
     plain, htm = [subject, ""], [f"<h2>{html.escape(subject)}</h2>"]
-    for k, title in order:
+    for k, title in SECTIONS.items():
         if not sections[k]:
             continue
         plain += [f"== {title} ({len(sections[k])})"]
@@ -168,21 +192,9 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
                 + "</li>"
             ]
         htm += ["</ul>"]
-    tail = []
-    if base["sources"]:
-        tail.append(
-            f"First run of {len(base['sources'])} source(s) ({_names(base['sources'])}):"
-            f" {base['listings']} listings ({base[ELIGIBLE]} eligible, shown above; {base[POSSIBLE]} possible;"
-            f" {base[EXCLUDED]} excluded), {base['pages']} pages now watched."
-        )
-    if new[POSSIBLE] or new[EXCLUDED] or watching:
-        tail.append(
-            f"Also: {new[EXCLUDED]} new listings filtered out, {new[POSSIBLE]} new possible (in the web UI),"
-            f" {watching} pages now watched."
-        )
     plain += tail
     htm += [f"<p><small>{html.escape(t)}</small></p>" for t in tail]
-    return subject, "\n".join(plain), "\n".join(htm), ids
+    return "\n".join(plain), "\n".join(htm)
 
 
 def send(engine: Engine, dry_run: bool = False) -> str:
