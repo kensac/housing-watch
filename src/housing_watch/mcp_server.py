@@ -103,7 +103,15 @@ def _event(e: queries.EventView) -> M.Change:
 def build(engine: Engine, p: Profile = PROFILE, auth=None):
     from fastmcp import FastMCP
     from fastmcp.exceptions import ToolError
-    from graphql import GraphQLSyntaxError, OperationDefinitionNode, OperationType, parse
+    from graphql import (
+        FieldNode,
+        FragmentDefinitionNode,
+        GraphQLSyntaxError,
+        InlineFragmentNode,
+        OperationDefinitionNode,
+        OperationType,
+        parse,
+    )
     from strawberry.types.graphql import OperationType as Op
 
     from .web.schema import context, schema
@@ -351,9 +359,25 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         return {"data": res.data, "errors": [e.formatted for e in res.errors or []]}
 
     def _fields(bound: dict) -> str:
+        """The mutations a document runs, for the audit log: its operations' root fields, through fragments."""
         doc, _ = _parse(bound["query"])
-        names = [f.name.value for d in (doc.definitions if doc else []) if isinstance(d, OperationDefinitionNode)
-                 for f in d.selection_set.selections if hasattr(f, "name")]  # fmt: skip
+        defs = doc.definitions if doc else []
+        frags = {d.name.value: d for d in defs if isinstance(d, FragmentDefinitionNode)}
+        names, seen = [], set()
+
+        def walk(sel) -> None:
+            for f in sel.selections:
+                if isinstance(f, FieldNode):
+                    names.append(f.name.value)
+                elif isinstance(f, InlineFragmentNode):
+                    walk(f.selection_set)
+                elif f.name.value in frags and f.name.value not in seen:  # seen: a fragment cycle never ends
+                    seen.add(f.name.value)
+                    walk(frags[f.name.value].selection_set)
+
+        for d in defs:
+            if isinstance(d, OperationDefinitionNode):
+                walk(d.selection_set)
         return f"mutations={','.join(names) or '?'} variables={brief(bound.get('variables') or {})}"
 
     @tool(DELETE, args=_fields, more=GQL)
