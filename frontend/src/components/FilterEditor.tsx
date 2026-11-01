@@ -5,7 +5,7 @@ import dayjs from 'dayjs'
 import { useMemo, useState } from 'react'
 
 import { request, type Field, type FilterOp, type Page } from '../api'
-import { pageFilter, type Json } from '../filters'
+import { isRecord, pageFilter, type Json } from '../filters'
 import { graphql } from '../gql'
 import { num } from '../format'
 import { useMeta } from '../hooks'
@@ -23,7 +23,6 @@ export interface Condition { field: Field; op: FilterOp; value: Json }
 type UiOp = FilterOp | 'not_empty'
 const UNIT_LABEL = { minutes: 'minutes', hours: 'hours', days: 'days' }
 const isUnit = (u: string): u is keyof typeof UNIT_LABEL => u in UNIT_LABEL
-const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x)
 const text = (v: unknown) => (typeof v === 'string' || typeof v === 'number' ? String(v) : '')
 
 function defaultOp(f: Field, isEnum: boolean): UiOp {

@@ -501,9 +501,14 @@ def _list(cls, page: str, filter, q, sort, first, after, info, search):
     )  # fmt: skip
 
 
+def _one_page(given: ViewStateInput | PageFilterInput) -> tuple[str, object]:
+    """The page set in a `@oneOf` input (GraphQL ensures exactly one is), and its value."""
+    return next((k, v) for k in views.FIELDS if (v := getattr(given, k)) not in (None, strawberry.UNSET))
+
+
 def _state(st: ViewStateInput) -> views.State:
     """The page's state from the one page set in the input."""
-    page, given = next((k, v) for k in views.FIELDS if (v := getattr(st, k)) not in (None, strawberry.UNSET))
+    page, given = _one_page(st)
     return views.make_state(page, FT.tree(given.filter), getattr(given, "q", ""),
                             FT.sort_pairs(getattr(given, "sort", None)), FT.values_of(given.columns))  # fmt: skip
 
@@ -536,20 +541,20 @@ class Query:
     def meta(self, info: strawberry.Info) -> Meta:
         """The profile and the registries the app builds its pages from."""
 
-        def common(page: str) -> dict:
+        def fields_and_columns(page: str) -> dict:
             col = FT.COLUMN_TYPES[page]
             return {"fields": list(views.FIELDS[page].values()),
                     "columns": [col(column=k, label=v) for k, v in views.COLUMNS[page].items()],
                     "default_columns": list(views.DEFAULT_COLUMNS[page])}  # fmt: skip
 
-        def sorted_(page: str) -> dict:
+        def sorting(page: str) -> dict:
             choice = FT.SORT_TYPES[page][1]
             return {"sorts": [choice(field=k, label=s.label, natural=s.natural) for k, s in views.SORTS[page].items()],
                     "default_sort": FT.sort_output(page, views.DEFAULT_SORT[page])}  # fmt: skip
 
-        pages = Pages(listings=ListingsPageMeta(**common("listings"), **sorted_("listings")),
-                      units=UnitsPageMeta(**common("units"), **sorted_("units")),
-                      events=EventsPageMeta(**common("events")))  # fmt: skip
+        pages = Pages(listings=ListingsPageMeta(**fields_and_columns("listings"), **sorting("listings")),
+                      units=UnitsPageMeta(**fields_and_columns("units"), **sorting("units")),
+                      events=EventsPageMeta(**fields_and_columns("events")))  # fmt: skip
         return Meta(profile=_ctx(info)[1], statuses=list(queries.STATUSES), verdicts=list(queries.VERDICTS),
                     ops=[OpLabel(op=k, label=v) for k, v in F.OP_LABEL.items()], pages=pages)  # fmt: skip
 
@@ -596,7 +601,7 @@ class Query:
         """Distinct values of a field with counts under a page's filter (send it without the condition being
         edited); `enum` says whether the field has few enough values to pick from."""
         engine, p = _ctx(info)
-        page, given = next((k, v) for k in views.FIELDS if (v := getattr(filter, k)) not in (None, strawberry.UNSET))
+        page, given = _one_page(filter)
         fld = views.FIELDS[page].get(field.value)
         if fld is None:
             raise Problem(Code.BAD_USER_INPUT, f"{page} has no field {field.name}")
