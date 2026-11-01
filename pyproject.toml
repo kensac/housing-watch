@@ -24,6 +24,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "import-linter==2.15",
     "pyright==1.1.414",
     "pytest==9.2.0",
     "pytest-xdist==3.8.0",
@@ -40,3 +41,49 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+# Layering, as docs/ARCHITECTURE.md draws it: sources -> rules -> store -> fleet -> readers.
+# Contracts name packages. A source module must exist, so moving one fails here loudly: rename it in the
+# contract in the same PR. A forbidden module that does not exist is skipped silently, so a moved
+# forbidden module must be renamed here too, or the rule stops checking it. The top-level criteria and
+# digest names are the sys.modules aliases #154 left; drop them from these lists with the aliases.
+[tool.importlinter]
+root_packages = ["housing_watch"]
+
+[[tool.importlinter.contracts]]
+name = "adapters only fetch and parse: no store, verdicts, fleet or readers"
+type = "forbidden"
+source_modules = ["housing_watch.adapters"]
+forbidden_modules = [
+    "housing_watch.orm", "housing_watch.db", "housing_watch.mapping",
+    "housing_watch.eligibility.criteria", "housing_watch.criteria",
+    "housing_watch.fleet",
+    "housing_watch.queries", "housing_watch.views", "housing_watch.tracker", "housing_watch.filters",
+    "housing_watch.notify", "housing_watch.digest", "housing_watch.commute",
+    "housing_watch.web", "housing_watch.mcp_server", "housing_watch.mcp_models",
+]
+
+[[tool.importlinter.contracts]]
+name = "eligibility is pure: no store, network or fleet"
+type = "forbidden"
+source_modules = ["housing_watch.eligibility"]
+forbidden_modules = [
+    "housing_watch.orm", "housing_watch.db", "housing_watch.fetch", "housing_watch.adapters", "housing_watch.fleet",
+]
+
+[[tool.importlinter.contracts]]
+name = "the store does not reach up into verdicts, the fleet or readers"
+type = "forbidden"
+source_modules = ["housing_watch.orm", "housing_watch.db", "housing_watch.mapping"]
+forbidden_modules = [
+    "housing_watch.eligibility.criteria", "housing_watch.criteria",
+    "housing_watch.fleet",
+    "housing_watch.queries", "housing_watch.views", "housing_watch.web", "housing_watch.mcp_server",
+    "housing_watch.mcp_models",
+]
+
+[[tool.importlinter.contracts]]
+name = "web and MCP read; they do not import the fleet"
+type = "forbidden"
+source_modules = ["housing_watch.web", "housing_watch.mcp_server", "housing_watch.mcp_models"]
+forbidden_modules = ["housing_watch.fleet"]

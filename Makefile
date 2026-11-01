@@ -9,6 +9,7 @@ check:  ## everything CI gates on, except the frontend
 	ruff check src tests alembic
 	ruff format --check src tests alembic
 	pyright
+	lint-imports
 	python -m housing_watch schema --check schema.graphql
 	python -m pytest -q -n auto
 
