@@ -1,13 +1,16 @@
-from sqlalchemy import inspect, select
+from alembic.autogenerate import compare_metadata
+from alembic.migration import MigrationContext
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from housing_watch.orm import BandRow, ListingRow, UnitRow
+from housing_watch.orm import BandRow, Base, ListingRow, UnitRow
 
 
 def test_migrations_match_models(pg):
-    assert {"listings", "units", "bands", "events", "runs", "snapshots", "source_state", "adapter_cache"} <= set(
-        inspect(pg).get_table_names()
-    )
+    """The migrated schema is the ORM's: a model change without its migration fails here."""
+    ctx = {"include_name": lambda name, type_, _: not (type_ == "table" and name.startswith("procrastinate"))}
+    with pg.connect() as c:
+        assert compare_metadata(MigrationContext.configure(c, opts=ctx), Base.metadata) == []
 
 
 def test_listing_units_bands_roundtrip(pg):
