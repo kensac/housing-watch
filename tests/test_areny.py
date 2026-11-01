@@ -4,7 +4,7 @@ import pytest
 
 from housing_watch.adapters import areny
 from housing_watch.adapters.areny import ARENY, parse_availability
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 HTML = (Path(__file__).parent / "fixtures" / "areny" / "affordable-housing-marketing.html").read_text()
 NONE = "We don’t have any apartments available right now, but complete our Housing Interest Form"

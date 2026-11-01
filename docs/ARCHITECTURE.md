@@ -4,10 +4,10 @@ housing-watch is five layers. Each depends only on the layers above it, so they 
 
 ```
 adapters/  parse.py  fetch.py      SOURCES   what does each source list right now?  -> models.Result
-criteria.py                        RULES     is a unit eligible for the profile?    (pure, read time)
+eligibility/                       RULES     is a unit eligible for the profile?    (pure, read time)
 orm.py  db.py  alembic/            STORE     raw facts + change events in Postgres  (no verdicts)
-tasks.py  worker                   FLEET     who fetches what, when, from which IP  (Procrastinate)
-queries.py  digest.py  web/ frontend/  READ      what changed, what fits                (UI, email)
+fleet/  worker                     FLEET     who fetches what, when, from which IP  (Procrastinate)
+queries.py  notify/  web/ frontend/ READ      what changed, what fits                (UI, email)
 ```
 
 ## Sources (adapters)
@@ -43,9 +43,9 @@ queries.py  digest.py  web/ frontend/  READ      what changed, what fits        
   A label matches by address and unit number, or by rent on a page naming no unit (some labels name a
   size: "Apt 1 BR"); on a multi-unit page the units whose rents the form no longer lists are taken.
 
-## Rules (criteria)
+## Rules (eligibility)
 
-`criteria.listing_verdict(listing, profile)` → eligible / possible / excluded with a reason. Pure
+`eligibility.listing_verdict(listing, profile)` → eligible / possible / excluded with a reason. Pure
 function of a `models.Listing` and the `HW_*` profile; never stored, so changing the profile re-judges
 everything.
 
@@ -62,11 +62,11 @@ everything.
   `record_snapshots`, `load_listing`, run and source-state bookkeeping, cache load/save, chunk results.
   Change detection (fingerprints → `new` / `changed` (detail `before`/`after`) / `closed` / `gone` /
   `reopened`, `watching` / `page_changed`, `source_failed` / `source_recovered`) lives here and only here.
-  `record_listings` also stamps each unit with the HUD chart its printed caps match (`ami.stamp`) when the
+  `record_listings` also stamps each unit with the HUD chart its printed caps match (`eligibility.ami.stamp`) when the
   adapter set none; a unit whose chart year alone moved is rewritten without an event.
 - Events from a source's first successful run carry `detail.baseline = true`: they describe what was
   already listed, not a change, and the digest collapses them.
-- `runner.py` records one run in one transaction: listings, snapshots, cache, `runs` and `source_state`
+- `fleet/runner.py` records one run in one transaction: listings, snapshots, cache, `runs` and `source_state`
   land together or not at all.
 - One database: `housing-watch-db` on hetzner, reachable over the tailnet. `HW_DATABASE_URL`
   (`postgresql+psycopg://...`) everywhere.
@@ -77,6 +77,9 @@ The job queue is [Procrastinate](https://procrastinate.readthedocs.io/) on the s
 provides `SKIP LOCKED` claiming, LISTEN/NOTIFY, periodic tasks, `queueing_lock` dedupe, `lock`
 serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are not in `orm.py`.
 
+- **Code:** the `fleet/` package. `fleet/__init__.py` is its public surface (`work`, `run_inline`,
+  `fetch_all`); `tasks.py` is the Procrastinate app and its tasks, `runner.py` runs and records one source,
+  `metrics.py` is the exporter. `__main__.py` is only the CLI: one short function per subcommand.
 - **Workers** are the same image on every host: `python -m housing_watch worker`. `HW_WORKER_NAME`
   names the worker (the host); each worker upserts itself into `fleet_workers` every 30s, because
   Procrastinate's own workers table has no name. Each worker runs `HW_WORKER_CONCURRENCY` threads; politeness is in
@@ -111,21 +114,21 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   infrastructure trouble and chunk errors. A failed run increments `source_state.consecutive_failures`
   and emits `source_failed` on the 2nd and 10th consecutive failure; the success after a reported
   failure emits `source_recovered`.
-- **Metrics** (`metrics.py`, `:9091`, `HW_METRICS_PORT`): `hw_source_run_seconds` and
+- **Metrics** (`fleet/metrics.py`, `:9091`, `HW_METRICS_PORT`): `hw_source_run_seconds` and
   `hw_source_failures_total` are per worker; `hw_jobs{task,status}`,
   `hw_source_last_success_timestamp_seconds` and `hw_source_consecutive_failures` are read from the
   database at scrape time, so every worker reports the same values (aggregate with `max`).
 
-## Read (queries, digest, web)
+## Read (queries, notify, web)
 
 - `queries.py` is the read API, returning plain dicts/dataclasses: listing search with filters,
   unit search (one row per unit), listing detail with units/bands/events, the per-source health table,
   event feed, overview counts.
-  It attaches verdicts by calling `criteria` at read time.
+  It attaches verdicts by calling `eligibility` at read time.
   Every listing is judged once per store version and cached in memory, so pages filter in Python. The version is
   the sum of `listings.updated` (set by `record_listings` whenever a stored field moves, with or without an
   event; never by a scrape that only moves `last_seen`) plus the commute and tracker tables' counts and newest rows.
-- `changes.py` turns a `changed` event's `before`/`after` into lines (status, deadline, units relabeled,
+- `notify/changes.py` turns a `changed` event's `before`/`after` into lines (status, deadline, units relabeled,
   added or removed, rent, availability, income limits) and flags noise: a status moving to "unknown", or
   back from it to what it was, with nothing else changed. `db.py` stores both in the event's detail.
 - `mcp_server.py` exposes `queries.py` over MCP (streamable HTTP, a thread of `serve` on `HW_MCP_PORT`),
@@ -147,7 +150,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   DataLoaders and limits); `graphql_mutation` runs mutations in a `trusted` context: OAuth already decided
   who may call it, so they skip the browser's same-origin check. `context(trusted=)` is keyword-only and the
   web app's /graphql never passes it (a test holds that).
-- `digest.py` builds the email from `queries.py`: `send(engine, dry_run)` and `urgent(engine)` (an open,
+- `notify/digest.py` builds the email from `queries.py`: `send(engine, dry_run)` and `urgent(engine)` (an open,
   eligible listing has a pending new/reopened/changed event). Events with `detail.baseline = true` come from
   a source's first run; they collapse into one summary line and only their eligible listings are listed.
 - `filters.py` is the generic filter layer: fields are read off the listings/units/bands (and events)
@@ -232,10 +235,3 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   signs and dates the applicant's line; never the SSN). The drawer checks a listing's linked PDFs lazily; a download is built
   per request and never stored.
 - `scripts/load_sqlite_dev.py` (dev only) copies an old SQLite store into Postgres to run the UI on real data.
-
-## Tests
-
-- Adapter tests are offline against `tests/fixtures/`.
-- Store, fleet and web tests need Postgres: they use the `pg` fixture (tests/conftest.py), which runs
-  migrations into a throwaway database at `HW_TEST_DATABASE_URL` and is skipped when that is unset.
-  CI provides it as a service container.

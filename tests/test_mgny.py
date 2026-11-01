@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from housing_watch.adapters.mgny import parse_record
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 from housing_watch.models import Band
 
 RECS = {r["slug"]: r for r in json.loads((Path(__file__).parent / "fixtures" / "mgny" / "listings.json").read_text())}

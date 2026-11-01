@@ -6,7 +6,7 @@ import pytest
 from housing_watch import fetch
 from housing_watch.adapters import nychdc
 from housing_watch.adapters.nychdc import NycHdc, parse_card, parse_flyer
-from housing_watch.criteria import listing_verdict, unit_verdict
+from housing_watch.eligibility import listing_verdict, unit_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "nychdc"
