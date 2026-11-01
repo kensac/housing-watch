@@ -3,7 +3,7 @@ import { IconDownload, IconExternalLink } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 
-import { BOROUGH, changes, KIND, qs, request } from '../api'
+import { BOROUGH, changes, KIND, request } from '../api'
 import { graphql } from '../gql'
 import type { ListingQuery } from '../gql/graphql'
 import { commute, date, money, pct, when } from '../format'
@@ -88,7 +88,7 @@ function ApplicationsPanel({ k }: { k: string }) {
           <Group gap="xs" wrap="nowrap">
             <Button size="xs" variant="default" component="a" href={p.url} target="_blank" rel="noopener noreferrer">Open Blank PDF</Button>
             {p.form && q.data.ready && (
-              <Button size="xs" component="a" href={`/api/listing/application${qs({ key: k, n: p.n })}`} download
+              <Button size="xs" component="a" href={`/api/listing/application?${new URLSearchParams({ key: k, n: String(p.n) })}`} download
                 leftSection={<IconDownload size={14} aria-hidden />}>
                 Download Filled PDF
               </Button>

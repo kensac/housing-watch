@@ -8,11 +8,12 @@ from .orm import BandRow, ListingRow, UnitRow
 
 def _check(lst: Listing) -> None:
     """The closed value sets hold: the API serves them as enums, so a stray value is an adapter bug, caught here."""
-    bad = [(name, v, alias) for name, v, alias in [("status", lst.status, PublishedStatus), ("kind", lst.kind, Kind),
-           ("borough", lst.borough, Borough), *[("size", u.size, Size) for u in lst.units]]
+    checks = [("status", lst.status, PublishedStatus), ("kind", lst.kind, Kind), ("borough", lst.borough, Borough)]
+    checks += [("size", u.size, Size) for u in lst.units]
+    bad = [f"{name} {v!r} is not one of {values(alias)}" for name, v, alias in checks
            if v is not None and v not in values(alias)]  # fmt: skip
     if bad:
-        raise ValueError(f"{lst.key()}: " + "; ".join(f"{n} {v!r} is not one of {values(a)}" for n, v, a in bad))
+        raise ValueError(f"{lst.key()}: " + "; ".join(bad))
 
 
 def listing_from_row(r: ListingRow) -> Listing:
@@ -49,13 +50,8 @@ def apply_listing(lst: Listing, r: ListingRow, units: bool = True) -> ListingRow
     _check(lst)
     r.key, r.source, r.ext_id = lst.key(), lst.source, lst.ext_id
     r.title, r.url, r.address, r.borough = lst.title, lst.url, lst.address, lst.borough
-    r.status, r.kind, r.deadline, r.senior_only, r.notes = (
-        lst.status,
-        lst.kind,
-        lst.deadline,
-        lst.senior_only,
-        lst.notes,
-    )
+    r.status, r.kind, r.deadline = lst.status, lst.kind, lst.deadline
+    r.senior_only, r.notes = lst.senior_only, lst.notes
     if not units:
         return r
     r.units = [
