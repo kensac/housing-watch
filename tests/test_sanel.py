@@ -6,11 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from housing_watch import adapters, runner
+from housing_watch import adapters
 from housing_watch.adapters import PLAN, sanel
 from housing_watch.adapters.sanel import Sanel, parse_page, reside_buildings, reside_match
 from housing_watch.criteria import listing_verdict
 from housing_watch.fetch import FetchError
+from housing_watch.fleet import runner
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "sanel"

@@ -20,9 +20,10 @@ import sys
 import threading
 from dataclasses import asdict
 
-from . import db, runner
+from . import db
 from .adapters import load_all
 from .criteria import PROFILE, listing_verdict
+from .fleet import runner
 
 log = logging.getLogger("housing_watch")
 
@@ -37,7 +38,7 @@ def _serve_in_thread(name: str, asgi_app, port: int) -> None:
 
 
 def _worker(eng) -> None:
-    from . import metrics, tasks
+    from .fleet import metrics, tasks
 
     tasks.set_engine(eng)
     metrics.serve(tasks.engine)
