@@ -1095,7 +1095,6 @@ type Profile {
 
   """Annual household income; required to run"""
   income: Int!
-  max_rent: Float
   sizes: [Size!]!
   excluded_boroughs: [Borough!]!
 }

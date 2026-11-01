@@ -65,7 +65,7 @@ def _worker(eng, migrate: bool = True) -> None:
         db.migrate(eng)
     tasks.set_engine(eng)
     metrics.serve(tasks.engine)
-    name = os.environ.get("HW_WORKER_NAME") or runner.WORKER
+    name = runner.WORKER
     concurrency = int(os.environ.get("HW_WORKER_CONCURRENCY", "4"))
     queues = tasks.queues()
     log.info("worker %s: queues %s, concurrency %d", name, queues, concurrency)

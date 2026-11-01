@@ -199,14 +199,6 @@ def pdf_text(url: str) -> str:
         return "\n".join(_ocr_file(os.path.join(d, x)) for x in pages)
 
 
-def ocr_image(url: str) -> str:
-    data = get(url).content
-    with tempfile.NamedTemporaryFile(suffix=os.path.splitext(urlparse(url).path)[1] or ".png") as f:
-        f.write(data)
-        f.flush()
-        return _ocr_file(f.name)
-
-
 def _ocr_file(path: str) -> str:
     if not shutil.which("tesseract"):
         raise FetchError("tesseract not installed")
