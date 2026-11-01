@@ -168,9 +168,10 @@ class Mhany(PageAdapter):
     min_listings = 1
 
     def fetch(self) -> Result:
-        snaps = super().fetch().snapshots
-        urls = building_urls(fetch.html(RERENTALS))
+        rerentals, available = fetch.html(RERENTALS), fetch.html(AVAILABLE)
+        snaps = [self.snapshot(RERENTALS, rerentals), self.snapshot(AVAILABLE, available)]
+        urls = building_urls(rerentals)
         if not urls:
             raise RuntimeError("no building pages linked from the re-rental page")
-        closed = closed_section(fetch.html(AVAILABLE))
+        closed = closed_section(available)
         return Result(listings=[parse_building(u, fetch.html(u), closed) for u in urls], snapshots=snaps)

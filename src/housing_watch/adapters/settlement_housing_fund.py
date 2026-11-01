@@ -473,8 +473,9 @@ class SettlementHousingFund(PageAdapter):
         return by_content(self.cache.setdefault("ocr", {}), img, lambda data: {"blocks": ocr_table(data)})["blocks"]
 
     def fetch(self) -> Result:
-        snaps = super().fetch().snapshots
-        form_url, links = index_links(fetch.html(URL))
+        body = fetch.html(URL)
+        snaps = [self.snapshot(URL, body)]
+        form_url, links = index_links(body)
         listings: list[Listing] = []
         imgs: set[str] = set()
         if form_url:

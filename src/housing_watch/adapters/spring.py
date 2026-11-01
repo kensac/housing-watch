@@ -271,8 +271,9 @@ class Spring(PageAdapter):
     min_listings = 1
 
     def fetch(self) -> Result:
-        snaps = super().fetch().snapshots
+        body = fetch.html(URL)
+        snaps = [self.snapshot(URL, body)]
         seen: set[str] = set()
-        listings = build_listings(fetch.html(URL), lambda u: _ocr_cached(self.cache, u, seen))
+        listings = build_listings(body, lambda u: _ocr_cached(self.cache, u, seen))
         prune(self.cache.setdefault("ocr", {}), seen)
         return Result(listings=listings, snapshots=snaps)

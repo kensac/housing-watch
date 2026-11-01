@@ -14,11 +14,11 @@ import re
 from collections.abc import Iterable
 from urllib.parse import urljoin, urlparse
 
-from bs4 import BeautifulSoup, Tag
+from bs4 import Tag
 
 from .. import fetch, parse
 from ..models import Result, Snapshot
-from ._page import COMMON_IGNORE, DOC_RE, PageAdapter
+from ._page import DOC_RE, PageAdapter, visible_text
 
 WSIMG_RE = re.compile(r"(?:https?:)?//img1\.wsimg\.com/isteam/ip/([0-9a-f-]{36})/([^\"'\s/:?&;\\]+)")
 GODADDY_IGNORE = [
@@ -47,12 +47,6 @@ def wsimg_images(body: str) -> set[str]:
     return {f"https://img1.wsimg.com/isteam/ip/{a}/{b}" for a, b in WSIMG_RE.findall(body)}
 
 
-def visible_text(root, ignore: Iterable[str]) -> str:
-    pats = [re.compile(p, re.I) for p in [*COMMON_IGNORE, *ignore]]
-    src = root if isinstance(root, BeautifulSoup | str) else str(root)  # parse.text takes a soup or html
-    return "\n".join(ln for ln in parse.text(src).splitlines() if not any(p.fullmatch(ln.strip()) for p in pats))
-
-
 def snapshot(
     adapter: PageAdapter,
     url: str,
@@ -61,7 +55,8 @@ def snapshot(
     root: str | None = None,
     extra_links: Iterable[str] = (),
 ) -> Snapshot:
-    """What `PageAdapter.fetch` does for one page, optionally limited to the CSS selector `root`."""
+    """`PageAdapter.snapshot`, optionally limited to the CSS selector `root`, for GoDaddy-style pages: links are
+    normalized with norm_link (wsimg resize suffixes dropped) and godaddy.com footer links are skipped."""
     s = parse.soup(body)
     node: Tag | None = s.select_one(root) if root else s
     if node is None:

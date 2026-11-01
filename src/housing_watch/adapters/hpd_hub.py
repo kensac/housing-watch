@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from .. import fetch, parse
 from ..models import Result, Snapshot
-from ._page import PageAdapter
-from ._pagekit import external_links, visible_text
+from ._page import PageAdapter, visible_text
+from ._pagekit import external_links
 
 URL = "https://www.nyc.gov/site/hpd/services-and-information/find-affordable-housing-re-rentals.page"
 ROOT = "div.about-description"
