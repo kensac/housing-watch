@@ -25,7 +25,7 @@ from sqlalchemy import Engine, create_engine, delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, selectinload
 
-from . import changes
+from . import ami, changes
 from .mapping import apply_listing, listing_from_row
 from .models import Listing, Snapshot
 from .orm import (
@@ -149,6 +149,7 @@ def record_listings(
         if key in seen:
             continue  # an adapter listing one thing twice must not flap
         seen.add(key)
+        ami.stamp(lst.units)  # the chart year of printed caps, for adapters that do not set one
         fp = _fp(lst)
         row = rows.get(key)
         if row is None:
@@ -163,14 +164,17 @@ def record_listings(
             typ = "reopened"
         elif row.fingerprint != fp:
             typ = "closed" if lst.status == "closed" and row.status != "closed" else "changed"
+        stored = listing_from_row(row)
         detail = None
         if typ == "changed":
-            before, after = _brief(listing_from_row(row)), _brief(lst)
+            before, after = _brief(stored), _brief(lst)
             prior = _status_before_unknown(s, key) if before["status"] == changes.UNKNOWN else None
             detail = {"before": before, "after": after, "changes": changes.describe(before, after)}
             if changes.is_noise(before, after, prior):
                 detail["noise"] = True
-        apply_listing(lst, row, units=row.fingerprint != fp)
+        # chart_year is the one unit field outside the fingerprint: when only it moved, store it without an event
+        years = [(u.key(), u.chart_year) for u in stored.units] != [(u.key(), u.chart_year) for u in lst.units]
+        apply_listing(lst, row, units=row.fingerprint != fp or years)
         row.source, row.fingerprint, row.last_seen, row.gone_since = source, fp, now, None
         if typ:
             row.last_changed = now

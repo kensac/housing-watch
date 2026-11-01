@@ -59,6 +59,8 @@ everything.
   `record_snapshots`, `load_listing`, run and source-state bookkeeping, cache load/save, chunk results.
   Change detection (fingerprints → `new` / `changed` (detail `before`/`after`) / `closed` / `gone` /
   `reopened`, `watching` / `page_changed`, `source_failed` / `source_recovered`) lives here and only here.
+  `record_listings` also stamps each unit with the HUD chart its printed caps match (`ami.stamp`) when the
+  adapter set none; a unit whose chart year alone moved is rewritten without an event.
 - Events from a source's first successful run carry `detail.baseline = true`: they describe what was
   already listed, not a change, and the digest collapses them.
 - `runner.py` records one run in one transaction: listings, snapshots, cache, `runs` and `source_state`
