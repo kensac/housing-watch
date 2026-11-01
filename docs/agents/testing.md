@@ -39,6 +39,8 @@ CI (`.github/workflows/ci.yml`) runs two jobs. Run both before pushing,
 docs-only changes included:
 
 - `check`: `make check` with `HW_TEST_DATABASE_URL` set (ruff lint, ruff
-  format, `schema --check`, pytest).
+  format, pyright, lint-imports, `schema --check`, `make test-par`). A gate
+  that takes flags or more than one command is a make target CI calls, so the
+  two cannot drift. Add a gate to both, or to neither.
 - `web`: in `frontend/`, `npm ci`, `npm run codegen` with no diff in
   `src/gql/`, `npm run lint`, `npm run build`.

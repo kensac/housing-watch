@@ -39,7 +39,8 @@ jobs:
         run: uv run python -m housing_watch schema --check schema.graphql
       # Offline: adapter tests parse saved fixtures; store/fleet/web tests use the postgres service.
       # -n auto: one worker per core, each with its own throwaway database (conftest.pg_url).
-      - run: nproc && uv run python -m pytest -n auto --durations=25 -p no:randomly
+      - run: nproc # cores, so the worker count below is readable
+      - run: uv run make test-par
 
   web:
     runs-on: ubuntu-latest
