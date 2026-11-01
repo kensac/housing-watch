@@ -13,6 +13,7 @@ from .. import filters as F
 from ..criteria import PROFILE, Profile, Verdict
 from ..mapping import listing_from_row
 from ..models import Band, Borough, EventType, Key, Kind, Listing, PublishedStatus, Serial, Size
+from ..notify import changes
 from ..orm import EventRow, ListingRow
 from ._common import day, internal, is_baseline, known
 from ._judging import _load, judged_by_key
@@ -98,7 +99,7 @@ def event_detail(e: EventView) -> ListingChange | PageChange | SourceFailure | N
     """An event's stored detail as its type's dataclass; None for types that keep none."""
     d = e.detail or {}
     if e.type == "changed" and "before" in d:
-        return ListingChange(Brief.of(d["before"]), Brief.of(d.get("after") or {}), list(d.get("changes") or []),
+        return ListingChange(Brief.of(d["before"]), Brief.of(d.get("after") or {}), changes.lines(d),
                              bool(d.get("noise")))  # fmt: skip
     if e.type == "page_changed":
         return PageChange(list(d.get("added") or []), list(d.get("removed") or []), list(d.get("new_links") or []))
