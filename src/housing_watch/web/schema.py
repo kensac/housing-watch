@@ -710,7 +710,7 @@ def context(engine, profile, request=None, *, trusted: bool = False) -> dict:
 
 class Schema(strawberry.Schema):
     def process_errors(self, errors, execution_context=None):
-        """Give every error a code; log only the ones that are bugs."""
+        """Give every error a code; log only the ones that are bugs, and tell the client no more than that."""
         bugs = []
         for e in errors:
             orig = e.original_error
@@ -727,7 +727,9 @@ class Schema(strawberry.Schema):
                 bugs.append(e)
             e.extensions = {**(e.extensions or {}), "code": str(code)}
         if bugs:
-            super().process_errors(bugs, execution_context)
+            super().process_errors(bugs, execution_context)  # the log keeps the message and the trace
+        for e in bugs:
+            e.message = "Internal error"
 
 
 # Introspection stays on (GraphiQL, the MCP tool); these bound what one document can ask for.
