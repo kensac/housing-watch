@@ -41,7 +41,7 @@ FIELDS = "sheets(data(rowData(values(formattedValue,hyperlink,textFormatRuns(for
 # --- application stages -----------------------------------------------------------------------------------
 
 type StageGroup = Literal["your move", "their move", "done"]  # whose move an application stage is
-GROUPS = YOU, THEM, DONE = values(StageGroup)
+YOU, THEM, DONE = values(StageGroup)
 # The sheet's Status dropdown, in order, with whose move it is. A blank Status means not pursuing (yet).
 STAGES = {
     "To Apply": YOU, "Ready to Send": YOU, "Action Needed": YOU,
@@ -62,7 +62,8 @@ def stage(status: str | None) -> str | None:
     s = " ".join((status or "").split())
     if not s:
         return None
-    return _BY_LOWER[s.lower()] if s.lower() in _BY_LOWER else LEGACY.get(s.lower(), s)
+    low = s.lower()
+    return _BY_LOWER.get(low, LEGACY.get(low, s))
 
 
 def group(st: str | None) -> StageGroup | None:
@@ -182,7 +183,7 @@ def _events(s: Session, rows: dict[str, TrackerRow], stored: set[str], now: date
     ]  # fmt: skip
 
 
-# --- matching ----------------------------------------------------------------------------------------------
+# --- stage history -----------------------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -219,6 +220,9 @@ def since(steps: list[Step], status: str | None) -> Step | None:
     return steps[-1] if steps and steps[-1].stage_to == stage(status) else None
 
 
+# --- matching ----------------------------------------------------------------------------------------------
+
+
 type Match = Literal["url", "address", "name", "manual"]  # how a listing was matched to its tracker row
 MATCHES = values(Match)
 
@@ -251,6 +255,12 @@ def load(engine: Engine) -> tuple[list[TrackerRow], dict[str, str | None]]:
     return rows, links
 
 
+def _row_units(r: TrackerRow) -> set[str]:
+    """The units a row names: in its Property, or on a Notes line that starts with "Unit" or "Units"."""
+    lines = [line for line in (r.notes or "").splitlines() if re.match(r"\s*units?\b", line, re.I)]
+    return units(r.property).union(*(units(line) for line in lines))
+
+
 def match(
     listings: list, rows: list[TrackerRow], links: dict[str, str | None], steps: dict[str, list[Step]] | None = None
 ) -> dict[str, Ref]:
@@ -264,9 +274,7 @@ def match(
     by_url = {k: r for r in rows if (k := url_key(r.source_url)) and row_urls[k] == 1 and listing_urls[k] == 1}
     by_addr: dict[str, list[TrackerRow]] = {}
     by_name: dict[str, list[TrackerRow]] = {}
-    row_units = {r.row_key: units(r.property) | {u for line in (r.notes or "").splitlines()
-                                                 if re.match(r"\s*units?\b", line, re.I) for u in units(line)}
-                 for r in rows}  # fmt: skip
+    row_units = {r.row_key: _row_units(r) for r in rows}
     for r in rows:
         for a in addr_keys(r.property):
             by_addr.setdefault(a, []).append(r)

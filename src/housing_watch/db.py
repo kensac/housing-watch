@@ -42,6 +42,7 @@ from .orm import (
 DATABASE_URL = os.environ.get("HW_DATABASE_URL", "")
 MIGRATE_LOCK = 0x68770001  # pg advisory lock id held while migrating
 DUE_SLACK = timedelta(seconds=60)  # a run finishing a little late still counts as on schedule
+REPORT_FAILURE_AT = (2, 10)  # consecutive failures that emit source_failed; one transient failure is noise
 
 
 def utcnow() -> datetime:
@@ -113,10 +114,10 @@ def _status_before_unknown(s: Session, key: str) -> str | None:
     return (d or {}).get("before", {}).get("status")
 
 
-def _event(s: Session, source, key, typ, summary="", *, detail=None, now=None, baseline=False) -> None:
+def _event(s: Session, source, key, typ, summary, *, now, detail=None, baseline=False) -> None:
     if baseline:
         detail = {**(detail or {}), "baseline": True}
-    s.add(EventRow(at=now or utcnow(), source=source, key=key, type=typ, summary=summary, detail=detail))
+    s.add(EventRow(at=now, source=source, key=key, type=typ, summary=summary, detail=detail))
 
 
 def _change_type(row: ListingRow, lst: Listing, fp: str) -> EventType | None:
@@ -186,8 +187,8 @@ def record_listings(
         stored = listing_from_row(row)
         detail = _changed_detail(s, key, stored, lst) if typ == "changed" else None
         # chart_year is the one unit field outside the fingerprint: when only it moved, store it without an event
-        years = [(u.key(), u.chart_year) for u in stored.units] != [(u.key(), u.chart_year) for u in lst.units]
-        apply_listing(lst, row, units=row.fingerprint != fp or years)
+        years_moved = [(u.key(), u.chart_year) for u in stored.units] != [(u.key(), u.chart_year) for u in lst.units]
+        apply_listing(lst, row, units=row.fingerprint != fp or years_moved)
         row.source, row.fingerprint, row.gone_since = source, fp, None
         if s.is_modified(row):  # an event, a silent chart_year or title edit; not last_seen alone
             row.updated = now
@@ -297,13 +298,13 @@ def finish_run(
     if every_hours is not None:
         st.next_due = now + timedelta(hours=every_hours) - DUE_SLACK
     if ok:
-        if (st.consecutive_failures or 0) >= 2:  # only a failure that was reported recovers
+        if st.consecutive_failures >= REPORT_FAILURE_AT[0]:  # only a failure that was reported recovers
             _event(s, source, None, "source_recovered", source, now=now)
         st.last_ok, st.failing_since, st.consecutive_failures = now, None, 0
         return
-    st.consecutive_failures = (st.consecutive_failures or 0) + 1
+    st.consecutive_failures += 1
     st.failing_since = st.failing_since or now
-    if st.consecutive_failures in (2, 10):  # one transient failure is noise; report on the 2nd and the 10th
+    if st.consecutive_failures in REPORT_FAILURE_AT:
         detail = {"error": (error or "")[:500], "fails": st.consecutive_failures}
         _event(s, source, None, "source_failed", source, detail=detail, now=now)
 

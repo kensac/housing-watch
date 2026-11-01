@@ -7,12 +7,13 @@ adapters/  parse.py  fetch.py      SOURCES   what does each source list right no
 eligibility/                       RULES     is a unit eligible for the profile?    (pure, read time)
 orm.py  db.py  alembic/            STORE     raw facts + change events in Postgres  (no verdicts)
 fleet/  worker                     FLEET     who fetches what, when, from which IP  (Procrastinate)
-queries.py  notify/  web/ frontend/ READ      what changed, what fits                (UI, email)
+queries/  notify/  web/ frontend/  READ      what changed, what fits                (UI, email)
 ```
 
 ## Sources (adapters)
 
-- One module per source in `adapters/`. An adapter is pure input → output: it fetches through
+- One module per source in `adapters/`, or a package when part of a source stands on its own (a
+  page parser, a table-image reader). An adapter is pure input → output: it fetches through
   `fetch.py` and returns `models.Result` (`Listing`s with units and bands, or `Snapshot`s of
   unstructured pages). It never touches the database, the queue or criteria.
 - `fetch.py` is the only network access. It enforces politeness per site and per process: at most
@@ -121,9 +122,11 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 
 ## Read (queries, notify, web)
 
-- `queries.py` is the read API, returning plain dicts/dataclasses: listing search with filters,
+- `queries/` is the read API, returning plain dicts/dataclasses: listing search with filters,
   unit search (one row per unit), listing detail with units/bands/events, the per-source health table,
-  event feed, overview counts.
+  event feed, overview counts. One module per page or concern (`_judging` the judged read model and its
+  cache, `_search`, `_value_counts`, `_detail`, `_events`, `_overview`, `_tracker`, `_sources`, `_fleet`,
+  `_common` the shared value sets); callers import from `queries` itself, which re-exports the public names.
   It attaches verdicts by calling `eligibility` at read time.
   Every listing is judged once per store version and cached in memory, so pages filter in Python. The version is
   the sum of `listings.updated` (set by `record_listings` whenever a stored field moves, with or without an
@@ -131,7 +134,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 - `notify/changes.py` turns a `changed` event's `before`/`after` into lines (status, deadline, units relabeled,
   added or removed, rent, availability, income limits) and flags noise: a status moving to "unknown", or
   back from it to what it was, with nothing else changed. `db.py` stores both in the event's detail.
-- `mcp_server.py` exposes `queries.py` over MCP (streamable HTTP, a thread of `serve` on `HW_MCP_PORT`),
+- `mcp_server.py` exposes `queries/` over MCP (streamable HTTP, a thread of `serve` on `HW_MCP_PORT`),
   with FastMCP's OIDC proxy for sign-in (clients register themselves; the upstream decides who).
   Every tool's parameters and result are typed (`mcp_models.py`), so its JSON Schema lists the filter fields,
   operators and enum values; enums there are the data's own strings ("1br"), not GraphQL names. A saved view
@@ -150,7 +153,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   DataLoaders and limits); `graphql_mutation` runs mutations in a `trusted` context: OAuth already decided
   who may call it, so they skip the browser's same-origin check. `context(trusted=)` is keyword-only and the
   web app's /graphql never passes it (a test holds that).
-- `notify/digest.py` builds the email from `queries.py`: `send(engine, dry_run)` and `urgent(engine)` (an open,
+- `notify/digest.py` builds the email from `queries/`: `send(engine, dry_run)` and `urgent(engine)` (an open,
   eligible listing has a pending new/reopened/changed event). Events with `detail.baseline = true` come from
   a source's first run; they collapse into one summary line and only their eligible listings are listed.
 - `filters.py` is the generic filter layer: fields are read off the listings/units/bands (and events)
@@ -165,7 +168,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   prefilter. Sorts are registries too (`queries.LISTING_SORTS`, `UNIT_SORTS`: label, key, natural direction),
   applied in order so later fields break ties.
 - `web/app.py` serves GraphQL at `/graphql` (Strawberry; the schema is `web/schema.py`, snake_case fields,
-  GraphiQL on GET) over `queries.py`, `views.py` and `tracker.py`, plus one REST route,
+  GraphiQL on GET) over `queries/`, `views.py` and `tracker.py`, plus one REST route,
   `/api/listing/application`, for the filled application PDF (a binary download). GraphQL is HTTP only: the
   schema has no subscriptions, and a WebSocket to `/graphql` is closed with 1008, since WebSockets skip CORS and
   any site could read through one.
@@ -217,7 +220,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 - `commute.py` routes eligible, listed listings to `HW_COMMUTE_TO` by transit (Google Routes API, weekday
   8:30 AM), each origin address once per destination (again after 60 days; a failed one after 10 minutes,
   doubling with each failure in a row up to ~21 h), into `commutes`; a periodic
-  `commute` task on the digest worker does it. queries.py attaches the minutes and lines at read time
+  `commute` task on the digest worker does it. `queries/` attaches the minutes and lines at read time
   (`commute` filter field, sort and column).
 - `tracker.py` copies the owner's application tracker sheet (the source of truth for application status
   and notes) into `tracker_rows` every 5 minutes, read-only via a service account, and matches rows to
@@ -235,10 +238,3 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   signs and dates the applicant's line; never the SSN). The drawer checks a listing's linked PDFs lazily; a download is built
   per request and never stored.
 - `scripts/load_sqlite_dev.py` (dev only) copies an old SQLite store into Postgres to run the UI on real data.
-
-## Tests
-
-- Adapter tests are offline against `tests/fixtures/`.
-- Store, fleet and web tests need Postgres: they use the `pg` fixture (tests/conftest.py), which runs
-  migrations into a throwaway database at `HW_TEST_DATABASE_URL` and is skipped when that is unset.
-  CI provides it as a service container.
