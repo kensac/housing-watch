@@ -1,8 +1,10 @@
 """MHANY Management: one Duda sub-page per re-rental building, each with HTML income tables.
 
-The re-rental page's menu lists the building pages. Closed buildings stay linked; their status is the
-"Recently Leased Properties" section of /avaliable-properties. Tables have one row per household size
-(continuation rows leave the size/AMI/rent cells empty). A "62+" heading above a table = senior units.
+The re-rental page's gallery links each building page ("View" / "View Details"). Closed buildings stay
+linked; their status is the "Recently Leased Properties" section of /avaliable-properties. Tables have one
+row per household size (continuation rows leave the size/AMI/rent cells empty). A "62+" heading above a
+table = senior units. Without an AMI column, the AMI is the "60% AREA MEDIAN INCOME" heading above the
+table; without a size column, sizes are unknown (never guessed from household counts).
 """
 
 from __future__ import annotations
@@ -21,18 +23,13 @@ OFFICE = re.compile(r"vanderbilt|11238|mhany management inc|lottery dept", re.I)
 
 
 def building_urls(html: str) -> list[str]:
-    """Pages under the menu's "Affordable Re-Rental Units" entry, plus the body's "View" links."""
+    """The gallery's "View" / "View Details" links."""
     s = parse.soup(html)
-    hrefs = [a["href"].strip() for a in s.find_all("a", href=True)]
-    out: list[str] = []
-    if "/affordable-re-rental-units" in hrefs:
-        for h in hrefs[hrefs.index("/affordable-re-rental-units") + 1 :]:
-            if h in ("#", "/home-ownership") or not h.startswith("/"):
-                break
-            out.append(h)
-    for a in s.find_all("a", href=True):
-        if a.get_text(strip=True).lower() == "view" and a["href"].startswith("/"):
-            out.append(a["href"].strip())
+    out = [
+        a["href"].strip()
+        for a in s.find_all("a", href=True)
+        if a.get_text(strip=True).lower().startswith("view") and a["href"].startswith("/")
+    ]
     return [urljoin(BASE, h) for h in dict.fromkeys(out)]
 
 
@@ -46,7 +43,7 @@ def closed_section(html: str) -> str:
 
 
 def _income(txt: str) -> tuple[int | None, int | None]:
-    nums = [int(float(x.replace(",", ""))) for x in re.findall(r"\$\s*(\d[\d,]*(?:\.\d+)?)", txt or "")]
+    nums = [int(float(x.replace(",", ""))) for x in re.findall(r"\$?\s*(\d[\d,]*(?:\.\d+)?)", txt or "")]
     return (nums[0], nums[1]) if len(nums) >= 2 else (None, nums[0] if nums else None)
 
 
@@ -68,15 +65,19 @@ def _units(s) -> list[Unit]:
         c_hh = _col(header, r"household size|# of people|^people")
         c_inc = next((i for i in range(len(header) - 1, -1, -1) if re.search(r"income", header[i], re.I)), None)
         c_ami = _col(header, r"ami|median")
-        if c_size is None or c_inc is None:
+        anchor = c_size if c_size is not None else c_rent  # a non-empty anchor cell starts a unit
+        if anchor is None or c_inc is None:
             continue
+        above = table.find_previous(string=re.compile(r"\d{2,3}\s*%\s*area median income", re.I))
+        table_ami = parse.ami(above) if c_ami is None and above else None
         cur: Unit | None = None
         for cells in body:
             cells = cells + [""] * (len(header) - len(cells))
-            if cells[c_size].strip():
-                ami = parse.ami(cells[c_ami]) if c_ami is not None else None
-                rent = parse.money(cells[c_rent]) if c_rent is not None and "$" in cells[c_rent] else None
-                cur = Unit(size=parse.size(cells[c_size]), rent=rent, ami=ami, set_aside="senior" if senior else None)
+            if cells[anchor].strip():
+                ami = parse.ami(cells[c_ami]) if c_ami is not None else table_ami
+                rent = parse.money(cells[c_rent]) if c_rent is not None and re.search(r"\d", cells[c_rent]) else None
+                size = parse.size(cells[c_size]) if c_size is not None else "unknown"
+                cur = Unit(size=size, rent=rent, ami=ami, set_aside="senior" if senior else None)
                 units.append(cur)
             if cur is None:
                 continue
@@ -108,7 +109,7 @@ def parse_building(url: str, html: str, closed: str) -> Listing:
     apps = [
         urljoin(url, a["href"])
         for a in s.find_all("a", href=True)
-        if a.get_text(strip=True).upper().startswith("DOWNLOAD APPLICATION")
+        if a.get_text(strip=True).upper().startswith("DOWNLOAD APPLICATION") and a["href"].strip() not in ("", "/", "#")
     ]
     t = parse.text(s)
     i = t.find("DONATE")
@@ -152,6 +153,7 @@ def parse_building(url: str, html: str, closed: str) -> Listing:
         address=" / ".join(addrs) or None,
         borough=_borough(clean),
         status="closed" if is_closed else "open",
+        kind="homeownership" if re.search(r"homeowner", title, re.I) else "re-rental",
         units=units,
         senior_only=bool(units) and all(u.set_aside == "senior" for u in units),
         notes=("Apply: " + "; ".join(notes)) if notes else None,
