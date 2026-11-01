@@ -22,6 +22,12 @@ const FleetDoc = graphql(`
 
 const QUEUE_STATES: JobStatus[] = ['todo', 'doing', 'succeeded', 'failed']
 
+// a worker's health by seconds since its last heartbeat (one every 30 s, tasks.HEARTBEAT): three missed is late
+const LATE_AFTER_S = 90
+const STALE_AFTER_S = 600
+const HEALTH_COLOR = { live: 'green', late: 'yellow', stale: 'red' } as const
+const health = (ageS: number): keyof typeof HEALTH_COLOR => (ageS < LATE_AFTER_S ? 'live' : ageS < STALE_AFTER_S ? 'late' : 'stale')
+
 /** A table body's single "nothing here" row. */
 const Empty = ({ cols, children }: { cols: number; children: React.ReactNode }) => (
   <Table.Tr><Table.Td colSpan={cols}><Text size="sm" c="dimmed">{children}</Text></Table.Td></Table.Tr>
@@ -52,13 +58,13 @@ export function FleetPage() {
               <Table.Tbody>
                 {f.workers.length === 0 && <Empty cols={4}>No worker has checked in.</Empty>}
                 {f.workers.map((w) => {
-                  const health = w.age < 90 ? 'live' : w.age < 600 ? 'late' : 'stale'
+                  const h = health(w.age)
                   return (
-                    <Table.Tr key={w.name} opacity={health === 'stale' ? 0.55 : 1}>
+                    <Table.Tr key={w.name} opacity={h === 'stale' ? 0.55 : 1}>
                       <Table.Td>
                         <Group gap={6} wrap="nowrap">
-                          <Dot color={health === 'live' ? 'green' : health === 'late' ? 'yellow' : 'red'} />
-                          <VisuallyHidden>{health}</VisuallyHidden>
+                          <Dot color={HEALTH_COLOR[h]} />
+                          <VisuallyHidden>{h}</VisuallyHidden>
                           <Text size="sm" fw={500} translate="no">{w.name}</Text>
                         </Group>
                       </Table.Td>
