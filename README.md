@@ -20,17 +20,18 @@ tables), so the same input always gives the same output.
   filtered at storage time. A source's first run is flagged as a baseline.
 - `fleet/` is the worker fleet: a per-minute `tick` queues due sources, any worker
   runs them, and big sources split into chunks that run on several workers.
-- `criteria.py` labels each listing **eligible**, **possible** or **excluded**
-  when it is read, and gives a reason. An open or waitlisted listing it cannot
-  rule out counts as possible and shows in the web UI; an upcoming one, or one
-  whose source shows no status, is excluded unless it is plainly eligible.
+- `eligibility/` (`criteria.py`, with `ami.py` for the HUD income chart) labels each
+  listing **eligible**, **possible** or **excluded** when it is read, and gives a reason.
+  An open or waitlisted listing it cannot rule out counts as possible and shows in the
+  web UI; an upcoming one, or one whose source shows no status, is excluded unless it
+  is plainly eligible.
 - `applications.py` pre-fills paper application PDFs that are a known form (today HPD's HC2.0
   application, used by Tax Solute, iAfford, AFNY and others) from `HW_APPLICANT_FILE`. The UI
   generates the filled PDF on request and stores nothing.
-- `digest.py` sends a digest at `HW_DIGEST_HOURS`, only when an eligible listing is new,
+- `notify/digest.py` sends a digest at `HW_DIGEST_HOURS`, only when an eligible listing is new,
   changed or closed (possible listings and page changes stay in the UI). When a new
   eligible unit is open, it sends right away instead. A change leads with what changed
-  (`changes.py`: "Rent: 1BR #8L $2,900 → $2,750"); a status flapping to "unknown" and
+  (`notify/changes.py`: "Rent: 1BR #8L $2,900 → $2,750"); a status flapping to "unknown" and
   back is noise and never mailed.
 - `mcp_server.py` is an MCP server with every read and write the web UI has (search, fetch,
   find listings/units, recent changes, overview, sources, saved views and the tracker board;

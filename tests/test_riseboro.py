@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from housing_watch.adapters.riseboro import build_listing, parse_building
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "riseboro"
 WL = "https://riseboro.org/housing/woodlawn-senior-living/"

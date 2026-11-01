@@ -5,8 +5,8 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from housing_watch import digest
 from housing_watch.models import Band, Unit
+from housing_watch.notify import digest
 from housing_watch.orm import EventRow
 from seed import L, add_listing, event, seed
 

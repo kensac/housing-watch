@@ -3,7 +3,7 @@ from pathlib import Path
 
 from housing_watch import db
 from housing_watch.adapters import nys_housing_search as nys
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "nys_housing_search"
 RECORDS = json.loads((F / "records.json").read_text())

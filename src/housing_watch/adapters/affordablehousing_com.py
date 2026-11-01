@@ -18,7 +18,8 @@ import re
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 
-from .. import ami, fetch, parse
+from .. import fetch, parse
+from ..eligibility import ami
 from ..models import Band, Listing, Result, Unit
 from . import Adapter, cached_listing, prune
 

@@ -26,7 +26,7 @@ from starlette.requests import HTTPConnection
 from strawberry.fastapi import GraphQLRouter
 
 from .. import applications, queries
-from ..criteria import PROFILE, Profile
+from ..eligibility import PROFILE, Profile
 from .schema import Code, Problem, context, schema
 
 DIST = Path(__file__).parent / "dist"

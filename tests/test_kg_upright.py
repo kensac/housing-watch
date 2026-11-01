@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from housing_watch.adapters import kg_upright as kg
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "kg_upright"
 

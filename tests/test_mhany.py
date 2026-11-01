@@ -2,7 +2,7 @@ from pathlib import Path
 
 from helpers import bands
 from housing_watch.adapters.mhany import building_urls, closed_section, parse_building
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "mhany"
 CLOSED = closed_section((F / "av.html").read_text())

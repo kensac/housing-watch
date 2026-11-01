@@ -2,7 +2,7 @@ from datetime import date
 from pathlib import Path
 
 from housing_watch.adapters.langsam import build_listings, parse_page
-from housing_watch.criteria import listing_verdict
+from housing_watch.eligibility import listing_verdict
 from housing_watch.models import Band
 
 F = Path(__file__).parent / "fixtures" / "langsam"

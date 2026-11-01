@@ -110,7 +110,7 @@ def test_listing_detail(db):
 def test_verdicts_follow_the_profile(db):
     from dataclasses import replace
 
-    from housing_watch.criteria import PROFILE
+    from housing_watch.eligibility import PROFILE
 
     rich = replace(PROFILE, income=500_000)
     assert Q.search_listings(db, Q.ListingQuery(), rich).verdict_counts["eligible"] == 0
