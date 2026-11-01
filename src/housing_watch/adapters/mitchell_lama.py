@@ -35,10 +35,6 @@ NAME_RE = re.compile(r"^[A-Z0-9][A-Z0-9 .,'&/()-]*[A-Z]{2}[A-Z0-9 .,'&/()-]*$")
 SEG_RE = re.compile(r"\S+(?: \S+)*")  # runs of text separated by 2+ spaces
 
 
-def slug(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-
-
 def income_limits(html: str) -> dict[str, dict[int, int]]:
     """Program page's limit table -> {"rental_fed": {1: 95040, ...}, "coop_fed": {...}, "non_fed": {...}}."""
     s = parse.soup(html)
@@ -150,7 +146,7 @@ def parse_open_lists(text: str, limits: dict[str, dict[int, int]] | None = None)
             out.append(
                 Listing(
                     source="mitchell_lama",
-                    ext_id=slug(clean),
+                    ext_id=parse.slug(clean),
                     title=f"{clean} (Mitchell-Lama)",
                     url=OPEN_LISTS,
                     address=addr or None,

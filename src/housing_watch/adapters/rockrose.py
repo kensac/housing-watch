@@ -33,10 +33,6 @@ KNOWN = {  # paper waitlists with no card: (address, borough); the PDFs print on
 }
 
 
-def _slug(s: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
-
-
 def tesseract(data: bytes, suffix: str = ".png") -> str:
     if not shutil.which("tesseract"):
         raise fetch.FetchError("tesseract not installed")
@@ -141,7 +137,7 @@ def parse_paper(name: str, pdf_url: str, pdf: str) -> Listing:
     head = pdf.split("Mail completed", 1)[0]
     return Listing(
         source="rockrose",
-        ext_id=_slug(name),
+        ext_id=parse.slug(name),
         title=name,
         url=pdf_url,
         address=known[0] if known else None,
@@ -169,7 +165,7 @@ def parse_index(html: str) -> tuple[list[tuple[str, str]], list[tuple[str, str]]
 
 def _matches(name: str, title: str, url: str) -> bool:
     key = re.sub(r"^the\s+", "", name.lower()).strip()
-    return bool(key) and (key in title.lower() or _slug(key) in url)
+    return bool(key) and (key in title.lower() or parse.slug(key) in url)
 
 
 class Rockrose(Adapter):

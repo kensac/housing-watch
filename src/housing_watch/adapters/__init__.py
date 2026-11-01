@@ -11,7 +11,7 @@ import importlib
 import pkgutil
 from typing import ClassVar
 
-from ..models import Result
+from ..models import Listing, Result
 
 REGISTRY: dict[str, type[Adapter]] = {}
 PLAN = "_plan"  # cache key where chunks() leaves its plan for the chunks; runner.record never saves it
@@ -84,3 +84,8 @@ def load_all() -> dict[str, type[Adapter]]:
         if not m.name.startswith("_"):
             importlib.import_module(f"{__name__}.{m.name}")
     return REGISTRY
+
+
+def cached_listing(d: dict) -> Listing:
+    """A Listing an adapter kept in its cache as plain JSON (dataclasses.asdict)."""
+    return Result.from_json({"listings": [d]}).listings[0]

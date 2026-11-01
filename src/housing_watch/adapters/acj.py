@@ -17,8 +17,8 @@ from dataclasses import asdict
 from urllib.parse import unquote, urljoin
 
 from .. import fetch, parse
-from ..models import Band, Listing, Result, Unit
-from . import Adapter
+from ..models import Listing, Result, Unit
+from . import Adapter, cached_listing
 
 BASE = "https://www.acjinternationalrealty.com"
 INDEX = f"{BASE}/affordable-re-rentals"
@@ -119,11 +119,6 @@ def parse_detail(url: str, html: str) -> Listing:
     )
 
 
-def _from_dict(d: dict) -> Listing:
-    units = [Unit(**{**u, "bands": [Band(**b) for b in u["bands"]]}) for u in d["units"]]
-    return Listing(**{**d, "units": units})
-
-
 class ACJ(Adapter):
     name = "acj"
     title = "ACJ International Realty"
@@ -135,14 +130,14 @@ class ACJ(Adapter):
         pages: dict = self.cache.setdefault("pages", {})
         body, changed = fetch.conditional(INDEX, idx)
         if not changed and "urls" in idx:
-            return Result(listings=[_from_dict(pages[u]["listing"]) for u in idx["urls"]])
+            return Result(listings=[cached_listing(pages[u]["listing"]) for u in idx["urls"]])
         urls = parse_index(body.decode("utf-8", "replace"))
         out = []
         for u in urls:
             hit = pages.setdefault(u, {})
             raw, fresh = fetch.conditional(u, hit)
             if not fresh and "listing" in hit:
-                out.append(_from_dict(hit["listing"]))
+                out.append(cached_listing(hit["listing"]))
                 continue
             lst = parse_detail(u, raw.decode("utf-8", "replace"))
             hit["listing"] = asdict(lst)

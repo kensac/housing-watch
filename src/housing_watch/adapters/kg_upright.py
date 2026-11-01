@@ -18,7 +18,7 @@ import tempfile
 from urllib.parse import urljoin
 
 from .. import ami, fetch, parse
-from ..models import Band, Listing, Result, Snapshot, Unit
+from ..models import Listing, Result, Snapshot, Unit
 from ._page import COMMON_IGNORE, DOC_RE, PageAdapter
 
 URL = "https://kgupright.com/current-vacancies"
@@ -42,14 +42,6 @@ _SET_ASIDE = [
 def _set_aside(line: str) -> str | None:
     hits = [name for pat, name in _SET_ASIDE if re.search(pat, line, re.I)]
     return "/".join(hits) or None
-
-
-def infer_ami(bands: list[Band]) -> int | None:
-    """AMI % from a per-household cap when none is printed: only an exact HUD cap (any chart year) counts."""
-    for b in bands:
-        if b.income_max and (m := ami.match(b.income_max, b.household, sizes=[b.household])):
-            return m[2]
-    return None
 
 
 def units_from_lines(lines: list[str]) -> list[Unit]:
@@ -123,7 +115,7 @@ def units_from_lines(lines: list[str]) -> list[Unit]:
     close_hh()
     for u in units:
         if u.ami is None:
-            u.ami = infer_ami(u.bands)
+            u.ami = parse.infer_ami(u.bands)
     ami.stamp(units)
     return units
 

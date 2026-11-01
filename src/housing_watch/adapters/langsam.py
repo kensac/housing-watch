@@ -20,10 +20,6 @@ URL = "https://www.langsampropertyservices.com/affordable-rental-opportunities"
 _HH = re.compile(r"^(\d)\s*(?:persons?|people)$", re.I)
 
 
-def _slug(t: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", t.lower()).strip("-")
-
-
 def _key(t: str) -> str:
     """Building key from a document label or address: '603 Pontiac Place Application' -> '603 pontiac place'."""
     t = re.sub(r"\b(application|applicaion|attachment|f-2)\b.*$", "", t, flags=re.I)
@@ -98,7 +94,7 @@ def build_listings(page: dict, pdfs: dict[str, str], today: date | None = None) 
         out.append(
             Listing(
                 source="langsam",
-                ext_id=_slug(key),
+                ext_id=parse.slug(key),
                 title=key.title(),
                 url=URL,
                 address=address,
@@ -115,7 +111,7 @@ def build_listings(page: dict, pdfs: dict[str, str], today: date | None = None) 
         out.append(
             Listing(
                 source="langsam",
-                ext_id=_slug(inline_key),
+                ext_id=parse.slug(inline_key),
                 title=page["address"],
                 url=URL,
                 address=page["address"],

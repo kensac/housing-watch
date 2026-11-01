@@ -17,7 +17,7 @@ from dataclasses import asdict
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter
+from . import Adapter, cached_listing
 
 API = "https://api.iafford.webaryco.com/v2/projects/mini_lotteries/"
 
@@ -84,11 +84,6 @@ def parse_detail(source: str, site: str, rec: dict, today: dt.date | None = None
     )
 
 
-def _from_dict(d: dict) -> Listing:
-    units = [Unit(**{**u, "bands": [Band(**b) for b in u["bands"]]}) for u in d["units"]]
-    return Listing(**{**d, "units": units})
-
-
 class WebarycoAdapter(Adapter):
     """Shared by afny and iafford: list, then one detail call per listing (cached per list record per day)."""
 
@@ -110,7 +105,7 @@ class WebarycoAdapter(Adapter):
             stamp = today.isoformat() + _json.dumps(r, sort_keys=True)  # refetch when the card changes, or daily
             hit = cache.get(rid)
             if hit and hit.get("stamp") == stamp:
-                out.append(_from_dict(hit["listing"]))
+                out.append(cached_listing(hit["listing"]))
                 continue
             d = fetch.json(f"{API}{rid}/", headers=self._headers(f"/re-rentals/{rid}"))
             rec = (d.get("data") or {}).get("record")

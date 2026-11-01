@@ -26,14 +26,6 @@ def _rents(cell: str) -> list[float]:
     return [parse.money(m) for m in _MONEY.findall(cell)]
 
 
-def _infer_ami(bands: list[Band]) -> int | None:
-    """130 when the 1-person cap is $154,440 (or 2025's $147,420), etc.: only exact HUD caps count."""
-    for b in bands:
-        if b.income_max and (m := ami.match(b.income_max, b.household, sizes=[b.household])):
-            return m[2]
-    return None
-
-
 def _split_bands(hh: str, lo: str, hi: str, a: int | None) -> list[Band]:
     """Separate min/max columns; a household cell is normally one size but may be a range."""
     return parse.bands_from_row(hh, f"{parse.whole(lo) or ''} - {parse.whole(hi) or ''}", a)
@@ -96,7 +88,7 @@ def parse_table(desc: str) -> list[Unit]:
                 cur.bands.extend(new)
     for u in units:
         if u.ami is None:
-            u.ami = _infer_ami(u.bands)
+            u.ami = parse.infer_ami(u.bands)
     ami.stamp(units)
     return units
 

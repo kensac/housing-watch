@@ -70,10 +70,6 @@ def borough_of(addr: str) -> str | None:
     return parse.borough(addr) or KNOWN_BOROUGH.get(addr_key(addr))
 
 
-def _slug(s: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", s.lower()).strip("-")
-
-
 # ---------------------------------------------------------------- PNG table OCR (no image libraries)
 
 
@@ -318,7 +314,7 @@ def parse_form(form: dict, form_url: str, tables: dict[str, list[list[list[str]]
             if lst is None:
                 lst = buildings[key] = Listing(
                     source=SOURCE,
-                    ext_id=f"rerental-{_slug(key)}",
+                    ext_id=f"rerental-{parse.slug(key)}",
                     title=addr,
                     url=form_url,
                     address=addr,
@@ -437,7 +433,7 @@ def registration_listing(name: str, addr: str, link: str, target: str, cfg: dict
         window = f" Applications {cfg.get('link_opens_date') or '?'} to {cfg['link_closes_date']}."
     return Listing(
         source=SOURCE,
-        ext_id=_slug(name or addr),
+        ext_id=parse.slug(name or addr),
         title=name or addr,
         url=link,
         address=addr or None,

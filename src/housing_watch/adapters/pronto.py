@@ -21,7 +21,7 @@ from dataclasses import asdict
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter
+from . import Adapter, cached_listing
 
 SEARCH = "https://prontohousing.io/api/listings/search/?searchType=property"
 DETAIL = "https://prontohousing.io/api/listings/properties/{}/"
@@ -155,11 +155,6 @@ def parse_property(detail: dict) -> Listing | None:
     )
 
 
-def _from_dict(d: dict) -> Listing:
-    units = [Unit(**{**u, "bands": [Band(**b) for b in u["bands"]]}) for u in d["units"]]
-    return Listing(**{**d, "units": units})
-
-
 def _fingerprint(rec: dict) -> str:
     stable = {k: v for k, v in rec.items() if k not in _VOLATILE}
     return hashlib.sha256(json.dumps(stable, sort_keys=True, default=str).encode()).hexdigest()
@@ -188,7 +183,7 @@ class Pronto(Adapter):
             hit = cache.get(pid)
             if hit and hit.get("fp") == fp and now - hit.get("at", 0) < MAX_AGE:
                 if hit["listing"]:
-                    out.append(_from_dict(hit["listing"]))
+                    out.append(cached_listing(hit["listing"]))
                 continue
             lst = parse_property(fetch.json(DETAIL.format(pid)))
             cache[pid] = {"fp": fp, "at": now, "listing": asdict(lst) if lst else None}

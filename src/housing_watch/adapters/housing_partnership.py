@@ -20,7 +20,7 @@ from urllib.parse import urljoin
 
 from .. import fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter
+from . import Adapter, cached_listing
 
 INDEX = "https://www.housingpartnership.com/services/current-vacancies"
 EMAIL = "marketing@housingpartnership.com"
@@ -170,11 +170,6 @@ def parse_detail(url: str, html: str, active: bool = True, name: str | None = No
     )
 
 
-def _from_dict(d: dict) -> Listing:
-    units = [Unit(**{**u, "bands": [Band(**b) for b in u["bands"]]}) for u in d["units"]]
-    return Listing(**{**d, "units": units})
-
-
 class HousingPartnership(Adapter):
     name = "housing_partnership"
     title = "NYC Housing Partnership"
@@ -192,7 +187,7 @@ class HousingPartnership(Adapter):
             fp = hashlib.sha1(repr(sorted(c.items())).encode()).hexdigest()
             hit = cache.get(c["url"])
             if hit and hit["fp"] == fp and not c["active"] and now - hit["at"] < REFRESH_INACTIVE:
-                out.append(_from_dict(hit["listing"]))
+                out.append(cached_listing(hit["listing"]))
                 continue
             lst = parse_detail(c["url"], fetch.html(c["url"]), c["active"], c["name"])
             cache[c["url"]] = {"fp": fp, "at": now, "listing": asdict(lst)}
