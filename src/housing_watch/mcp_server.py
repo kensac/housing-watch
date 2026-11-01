@@ -45,7 +45,7 @@ from strawberry.types.graphql import OperationType as Op
 from . import filters as F
 from . import mcp_models as M
 from . import queries, tracker, views
-from .criteria import PROFILE, Profile
+from .eligibility import PROFILE, Profile
 from .models import NotFound
 from .notify import digest
 from .web.schema import context, schema

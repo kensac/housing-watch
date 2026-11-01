@@ -10,16 +10,17 @@ from typing import Annotated
 import strawberry
 from starlette.concurrency import run_in_threadpool
 
-from .. import applications, criteria, digest, models, queries, tracker, views
+from .. import applications, eligibility, models, queries, tracker, views
 from .. import commute as C
 from .. import filters as F
+from ..notify import digest
 from . import filter_types as FT
 from .derive import derive, enum_type, gql_name
 
 # --- enums: the domain's own constants ------------------------------------------------------------------
 
 # The Literal aliases of the read model become enums wherever derive() meets them; these give them descriptions.
-Verdict = enum_type(criteria.Verdict, "How a listing or unit fits the profile, judged at read time.")
+Verdict = enum_type(eligibility.Verdict, "How a listing or unit fits the profile, judged at read time.")
 Status = enum_type(queries.Status, "A listing's status as published; gone once its source dropped it.")
 enum_type(models.PublishedStatus, "A listing's status as its source publishes it.")
 enum_type(models.Size, "A unit size: a GraphQL name cannot start with a digit, so 1br is `_1br`.")
@@ -74,7 +75,7 @@ derive(tracker.Step, "StageStep", props=("group",))
 derive(tracker.Cell, "TrackerCell")
 derive(queries.TrackerRowView, "TrackerRow")
 Tracker = derive(queries.TrackerBoard, "Tracker")
-Profile = derive(criteria.Profile)
+Profile = derive(eligibility.Profile)
 
 
 @strawberry.type(description="A value an enum field can take.")
