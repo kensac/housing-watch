@@ -14,6 +14,19 @@ import pytest  # noqa: E402
 TEST_DB = os.environ.get("HW_TEST_DATABASE_URL")  # e.g. postgresql+psycopg://postgres:pg@127.0.0.1:5432/postgres
 
 
+def pytest_sessionfinish(session):
+    """A skipped test verified nothing, yet the run looks green. Name every skip; under CI, fail the run."""
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    skipped = reporter.stats.get("skipped", []) if reporter else []
+    if not skipped:
+        return
+    reasons = sorted({r.longrepr[2] for r in skipped if isinstance(r.longrepr, tuple)})
+    reporter.write("\n")
+    reporter.write_sep("!", f"{len(skipped)} tests SKIPPED, not verified: {'; '.join(reasons)}", red=True, bold=True)
+    if os.environ.get("CI"):
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
 @pytest.fixture(scope="session")
 def pg_url():
     """A throwaway database, migrated to head; dropped after the session. Skips without HW_TEST_DATABASE_URL."""
@@ -50,7 +63,8 @@ def pg(pg_url):
     from housing_watch import queries
     from housing_watch.orm import Base
 
-    queries._cache.clear()  # keyed by the database URL, which every test shares; seeds reuse the same timestamps
+    # keyed by the database URL, which every test shares; seeds reuse the same timestamps
+    queries._judging._cache.clear()
 
     eng = create_engine(pg_url)
     with eng.begin() as c:

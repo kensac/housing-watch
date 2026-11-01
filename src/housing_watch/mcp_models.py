@@ -1,5 +1,5 @@
 """Pydantic models for the MCP tools, derived like the GraphQL types: filters from filters.py's registry, sorts from
-queries.py's, results from the read-model dataclasses (minus `internal()` fields). They give every tool a typed
+queries/'s, results from the read-model dataclasses (minus `internal()` fields). They give every tool a typed
 JSON Schema for its parameters and its output, and never restate a field.
 
 A filter model dumps (`tree()`) to filters.py's JSON tree, the same shape the GraphQL input takes, except that enum
@@ -21,6 +21,8 @@ from pydantic.json_schema import SkipJsonSchema
 
 from . import filters as F
 from . import queries, views
+from .criteria import Verdict
+from .models import EventType
 from .web import filter_types as FT
 from .web.derive import comments, own_doc
 
@@ -174,11 +176,11 @@ class Change(BaseModel):
     """An event, with what it recorded for its type."""
 
     at: datetime
-    type: queries.EventType
+    type: EventType
     source: str
     key: str | None
     title: str | None
-    verdict: queries.Verdict | None
+    verdict: Verdict | None
     first_run: bool = Field(description="From a source's first run: starting inventory, not news.")
     changes: list[str] | None = Field(None, description="changed: the differences in words, most decisive first.")
     noise: bool | None = Field(None, description="changed: a status flap to or from unknown.")
@@ -214,7 +216,7 @@ class SearchResults(BaseModel):
 
 
 class FetchMetadata(BaseModel):
-    verdict: queries.Verdict
+    verdict: Verdict
 
 
 class Document(BaseModel):

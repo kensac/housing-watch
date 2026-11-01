@@ -1,4 +1,4 @@
-"""GraphQL filter, sort and column types, derived from filters.py's field registry and queries.py's sort registries.
+"""GraphQL filter, sort and column types, derived from filters.py's field registry and queries/'s sort registries.
 
 Every filterable field is a field of `ListingFilterInput` (or `EventFilterInput`), typed by its kind: text, a
 closed set (its own enum), number, time or bool. Unit fields sit under `units`, band fields under `units.bands`,
