@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from housing_watch import db
@@ -58,6 +58,21 @@ def test_unit_rows_untouched_when_nothing_moved(pg):
         db.record_listings(s, "t", [L(notes="new notes")])  # not part of the fingerprint
         assert s.scalars(select(UnitRow.id)).all() == before
         assert db.load_listing(s, "t:a").notes == "new notes"
+
+
+def test_chart_year_is_stamped_and_stored_without_an_event(pg):
+    from housing_watch.orm import UnitRow
+
+    def caps():  # 130% AMI caps for 1-2 people on HUD's 2025 chart
+        bands = [Band(1, None, 147_420), Band(2, None, 168_480)]
+        return Listing(source="t", ext_id="a", title="T", url="u", units=[Unit("studio", 2400.0, 130, "2A", bands)])
+
+    with Session(pg) as s, s.begin():
+        db.record_listings(s, "t", [caps()])
+        assert s.scalar(select(UnitRow.chart_year)) == 2025  # stamped from the printed caps
+        s.execute(update(UnitRow).values(chart_year=None))  # a row stored before its chart year was known
+        assert db.record_listings(s, "t", [caps()]) == 0
+        assert s.scalar(select(UnitRow.chart_year)) == 2025  # stored again, with no event
 
 
 def test_duplicate_listing_in_one_run_does_not_flap(pg):
