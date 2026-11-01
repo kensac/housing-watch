@@ -45,7 +45,7 @@ class ListingRow(Base):
     title: Mapped[str | None] = mapped_column(Text)
     url: Mapped[str | None] = mapped_column(Text)
     address: Mapped[str | None] = mapped_column(Text)
-    # info["values"]: the column's closed value set, so filters.py offers it as an enum
+    # info["values"]: the column's closed value set, so `filters` offers it as an enum
     borough: Mapped[str | None] = mapped_column(Text, index=True, info={"values": Borough})
     status: Mapped[str] = mapped_column(Text, index=True, info={"values": PublishedStatus})
     kind: Mapped[str] = mapped_column(Text, info={"values": Kind})

@@ -48,7 +48,7 @@ is the design; the topic documents below are the rules for changing it.
 - `src/housing_watch/fleet/`: the Procrastinate app and tasks (`tasks.py`),
   one run in one transaction (`runner.py`), the exporter (`metrics.py`).
   `fleet/__init__.py` is its public surface.
-- `src/housing_watch/queries.py`, `filters.py`, `views.py`, `changes.py`,
+- `src/housing_watch/queries.py`, `filters/`, `views.py`, `changes.py`,
   `digest.py`: the read model, the filter registry, saved views, change lines,
   the email.
 - `src/housing_watch/tracker.py`, `commute.py`, `applications.py`, `ami.py`,

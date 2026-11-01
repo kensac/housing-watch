@@ -1,8 +1,8 @@
-"""Pydantic models for the MCP tools, derived like the GraphQL types: filters from filters.py's registry, sorts from
+"""Pydantic models for the MCP tools, derived like the GraphQL types: filters from the `filters` registry, sorts from
 queries/'s, results from the read-model dataclasses (minus `internal()` fields). They give every tool a typed
 JSON Schema for its parameters and its output, and never restate a field.
 
-A filter model dumps (`tree()`) to filters.py's JSON tree, the same shape the GraphQL input takes, except that enum
+A filter model dumps (`tree()`) to the `filters` JSON tree, the same shape the GraphQL input takes, except that enum
 values are the data's own strings ("1br", "Staten Island"), not GraphQL names. Each model is a JSON Schema `$defs`
 entry, referenced wherever it is used (the server sends schemas unexpanded); an optional field is just not required,
 never `anyOf [X, null]`, and an unset one is left out of the output.
@@ -99,7 +99,7 @@ EventFilter = _container("EventFilter", F.EVENT_FIELDS, "", {"listing": ListingF
 
 
 def tree(m: BaseModel | None) -> dict:
-    """A filter model as filters.py's JSON tree."""
+    """A filter model as the `filters` JSON tree."""
     return m.model_dump(mode="json", by_alias=True, exclude_none=True) if m else {}
 
 
