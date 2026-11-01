@@ -63,8 +63,8 @@ def derive(dc: type, name: str | None = None, *, types: dict | None = None, prop
     for f in dataclasses.fields(dc):
         if f.name in exclude or f.metadata.get("internal"):
             continue
-        t, hint = _map(hints[f.name], types.get(f.name), f"{name}.{f.name}"), hints[f.name]
-        if _is_set(hint):
+        t = _map(hints[f.name], types.get(f.name), f"{name}.{f.name}")
+        if _is_set(hints[f.name]):
             ns[f.name] = strawberry.field(resolver=_sorted(f.name, t), description=notes.get(f.name))
         else:
             anns[f.name] = t

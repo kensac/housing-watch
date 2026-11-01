@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from housing_watch import filters as F
 from housing_watch import queries as Q
 from housing_watch import tasks
-from housing_watch.models import Band
-from housing_watch.orm import RunRow
+from housing_watch.models import Band, Listing, Unit
+from housing_watch.orm import ListingRow, RunRow
 from seed import seed, seed_jobs
 
 
@@ -228,3 +228,10 @@ def test_job_args_cover_every_task():
         params = set(inspect.signature(t.func).parameters) - {"context"}
         assert params <= names, (t.name, params - names)
     assert Q.JobArgs.of({"source": "a", "retry_note": 1}) == Q.JobArgs(source="a")  # unknown kwargs are left out
+
+
+def test_a_listings_sizes_follow_the_size_order():
+    lst = Listing("t", "1", "T", "u", units=[Unit("unknown"), Unit("6br"), Unit("5br"), Unit("studio")])
+    t = datetime(2026, 11, 1, tzinfo=UTC)
+    row = ListingRow(key=lst.key(), source="t", first_seen=t, last_changed=t)
+    assert Q._summary(row, lst, Q.PROFILE).sizes == ["studio", "5br", "6br", "unknown"]
