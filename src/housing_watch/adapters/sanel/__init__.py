@@ -39,7 +39,7 @@ from .. import (
     tax_solute,
 )
 from .. import settlement_housing_fund as shf
-from .page import PAGE_RE, _old_chart, _tiers, doc_links, parse_page
+from .page import PAGE_RE, doc_links, old_chart_note, parse_page, tier_units
 
 log = logging.getLogger("housing_watch")
 SITEMAP = "https://sanel.nyc/sitemap.xml"
@@ -49,6 +49,7 @@ REFRESH_SHARE = 8  # each run re-reads the stalest 1/8 of known pages (every 4h 
 MAX_FAILED = 20  # more fetch failures than this in one run = something is wrong with the site
 DOC_TTL_H = 24  # an official document (API answer, flyer, list) is re-read at most this often
 DOC_DROP_H = 7 * 24  # a document no listing has needed for this long leaves the cache
+UNIT_TITLE = re.compile(r"(.*?)\s*#\s*(\w+)\s*$")  # SANEL titles a single unit "<address> #<unit>"
 # sources with nothing public beyond SANEL's summary
 NOT_PUBLISHED = {
     "St. Nicks Alliance": "St. Nicks' waitlist application lists no rents or income limits (HUD-assisted).",
@@ -69,7 +70,7 @@ def _tokens(s: str) -> list[str]:
 
 def reside_match(title: str, urls: list[str]) -> str | None:
     """'346 Kent Ave #1001' -> the Reside page naming unit 1001 that shares the most (2+) address words."""
-    m = re.match(r"(.*?)\s*#\s*(\w+)\s*$", title)
+    m = UNIT_TITLE.match(title)
     if not m:
         return None
     want, unit = set(_tokens(m.group(1))), m.group(2).lower()
@@ -84,7 +85,7 @@ def reside_match(title: str, urls: list[str]) -> str | None:
 
 def reside_buildings(title: str, urls: list[str]) -> list[str]:
     """'1440 Amsterdam Avenue #1' -> Reside building pages (no unit in the url) with its numbers and 2+ words."""
-    m = re.match(r"(.*?)\s*#\s*\w+\s*$", title)
+    m = UNIT_TITLE.match(title)
     want = set(_tokens(m.group(1))) if m else set()
     nums = {t for t in want if t.isdigit()}
     found = []
@@ -207,7 +208,7 @@ class Sanel(Adapter):
             ocr = lambda img: shf.ocr_table(fetch.get(img).content)  # noqa: E731
             return [asdict(x) for x in shf.read_form(form_url, ocr)[0]] if form_url else []
 
-        m = re.match(r"(.*?)\s*#\s*(\w+)\s*$", lst.title)
+        m = UNIT_TITLE.match(lst.title)
         if m:
             key, no = shf.addr_key(m.group(1)), m.group(2).upper()
             for d in self._doc("shf", load):
@@ -271,7 +272,7 @@ class Sanel(Adapter):
         """A listing SANEL only summarises (no tier table) -> the official source's units, or a note why not.
         `prev` is the page's cached listing: when the official source cannot be read, its units and note stand
         (SANEL's summary units round rents and drop unit numbers, so swapping to them would flap every run)."""
-        if lst.status == "closed" or lst.kind == "homeownership" or _tiers(parse.soup(html)):
+        if lst.status == "closed" or lst.kind == "homeownership" or tier_units(parse.soup(html)):
             return lst
         try:
             units, note = self._official_units(lst, doc_links(html))
@@ -283,7 +284,7 @@ class Sanel(Adapter):
                 return lst
             units, note = None, "Official source unreadable this run; units are SANEL's summary."
         if units:
-            old = _old_chart(lst.units)
+            old = old_chart_note(lst.units)
             for u in units:
                 bands, year = ami.rows(u.bands, u.ami)  # Pronto stamps a unit's top cap on every household
                 u.bands, u.chart_year = bands, u.chart_year or year
@@ -295,7 +296,7 @@ class Sanel(Adapter):
                     u.bands = []  # rows without any income say nothing the printed AMI does not
             lst.units = units
             lst.notes = (lst.notes or "").replace(old, "") if old else lst.notes
-            note += _old_chart(units)
+            note += old_chart_note(units)
         elif all(u.size != "unknown" and any(b.income_max for b in u.bands) for u in lst.units):
             return lst  # the facts block already had every size and cap
         lst.notes = f"{lst.notes} {note}"

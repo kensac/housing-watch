@@ -66,12 +66,12 @@ def _date(text: str | None) -> str | None:
         return None
 
 
-def _old_chart(units: list[Unit]) -> str:
+def old_chart_note(units: list[Unit]) -> str:
     old = sorted({u.chart_year for u in units if u.chart_year and u.chart_year < ami.CURRENT_YEAR})
     return OLD_CHART.format("/".join(map(str, old)), ami.CURRENT_YEAR) if old else ""
 
 
-def _tiers(s) -> list[Unit]:
+def tier_units(s) -> list[Unit]:
     """Tier table rows (size, rent, AMI, household, income [, notes]) grouped into one Unit per tier."""
     units: dict[tuple, Unit] = {}
     for cells in parse.table_rows(s):
@@ -117,7 +117,7 @@ def _from_facts(f: dict[str, str]) -> list[Unit]:
         bands, year = ami.bands(hh, lo if single else None, hi, max(amis) if amis else None)
     else:  # no income: the household range can only prove a minimum, never a 1-person cap
         bands = [Band(h, None, None) for h in hh] if hh and min(hh) > 1 else []
-    units = [
+    return [
         Unit(
             size=z,
             rent=rents[0] if len(rents) == 1 and len(sizes) == 1 else None,
@@ -127,7 +127,6 @@ def _from_facts(f: dict[str, str]) -> list[Unit]:
         )
         for z in sizes
     ]
-    return units
 
 
 def doc_links(html: str) -> list[str]:
@@ -168,10 +167,10 @@ def parse_page(url: str, html: str) -> Listing:
     flat = " ".join(
         lines[: lines.index("About this opportunity") + 3] if "About this opportunity" in lines else lines[:60]
     )
-    units = _tiers(s) or _from_facts(f)
+    units = tier_units(s) or _from_facts(f)
     src = f.get("Source")
     official = ld.get("isBasedOn")
-    notes = f"Apply via the official source ({src or 'unknown'}): {official or url}." + _old_chart(units)
+    notes = f"Apply via the official source ({src or 'unknown'}): {official or url}." + old_chart_note(units)
     if "upcoming" in badge:
         notes = "Upcoming. " + notes
     return Listing(
