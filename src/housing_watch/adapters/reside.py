@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
@@ -38,16 +38,22 @@ _SIZES = re.compile(
     re.I,
 )
 _ASIDE = re.compile(r"\b(mi|mobility|hearing|visual|h/v|senior|62\+)\b", re.I)
-_STATUS = {
-    "open-market": "open",
-    "open-to-applications": "open",
-    "upcoming-project": "upcoming",
-    "closed-project": "closed",
+_STATUS = {  # WordPress terms on the property's <article>
+    "property-status-open-market": "open",
+    "property-status-open-to-applications": "open",
+    "property-status-upcoming-project": "upcoming",
+    "property-status-closed-project": "closed",
 }
+_LABEL = {"Open Market": "open", "Upcoming Project": "upcoming", "Closed Project": "closed"}
 
 
 def _n(x: str) -> int:
     return int(float(x.replace(",", "")))
+
+
+def _persons(word: str) -> int:
+    """'3' / 'three' -> 3."""
+    return int(word) if word.isdigit() else _W.index(word.lower()) + 1
 
 
 def _hh(text: str | None) -> list[int]:
@@ -56,7 +62,7 @@ def _hh(text: str | None) -> list[int]:
     if re.search(r"\d\s*[-–—]\s*\d", t):
         return parse.household_range(t)
     found = re.findall(_HHW, t, re.I)
-    return [int(w) if w.isdigit() else _W.index(w.lower()) + 1 for w in found] or parse.household_range(t)
+    return [_persons(w) for w in found] or parse.household_range(t)
 
 
 def _bands(hh_text: str | None, inc: str, a: int | None, lo_col: str | None = None) -> tuple[list[Band], int | None]:
@@ -70,7 +76,7 @@ def _bands(hh_text: str | None, inc: str, a: int | None, lo_col: str | None = No
         if len(caps) == 1 and len(_hh(hh_text)) > 1:  # one range over several household sizes
             hhs = _hh(hh_text)  # headers round caps by up to $60, so only the printed households are tried
             return ami.bands(hhs, *caps[0], a, sizes=hhs[::-1], tol=60)
-    hhs = [int(w) if w.isdigit() else _W.index(w.lower()) + 1 for w, _ in lab] or _hh(hh_text)
+    hhs = [_persons(w) for w, _ in lab] or _hh(hh_text)
     if len(hhs) != len(caps):  # unlabeled 'Maximum Income' list: the first cap names its household
         m = a and caps and ami.match(caps[0][1], ami=a)
         start = m[1] if m and m[2] == a else 1
@@ -160,6 +166,38 @@ def _unmangle(html: str) -> str:
     return re.sub(r"&#82(?:20|21|43);(?=[\s>])", '"', html)
 
 
+def _status(terms: list[str], title: str, flat: str) -> str:
+    """The page's property-status-* term, else the label it prints right before its title."""
+    if status := next((_STATUS[t] for t in terms if t in _STATUS), None):
+        return status
+    # the site menu also lists two of the labels, hence the title after it
+    lab = re.search("(" + "|".join(_LABEL) + r")\s+" + re.escape(title[:25]), flat)
+    # no term and no label: Reside has stopped marketing the unit (its application form drops it too)
+    return _LABEL[lab.group(1)] if lab else "unknown"
+
+
+def _zips(text: str) -> str:
+    return " ".join(re.findall(r"\b1[01]\d{3}\b", text))
+
+
+def _borough(terms: list[str], addr: str, title: str) -> str | None:
+    """The address's zip, then the title's, then the property-city-* terms (only if they name one borough), then
+    the names in the address or title."""
+    cities = {
+        parse.borough(t.removeprefix("property-city-").replace("-", " "))
+        for t in terms
+        if t.startswith("property-city-")
+    }
+    cities -= {None}
+    return (
+        parse.borough(_zips(addr))
+        or parse.borough(_zips(title))
+        or (cities.pop() if len(cities) == 1 else None)
+        or parse.borough(addr)
+        or parse.borough(title)
+    )
+
+
 def parse_page(url: str, html: str) -> Listing:
     s = parse.soup(_unmangle(html))
     title = (s.find("meta", property="og:title") or {}).get("content") or (s.title.string if s.title else url)
@@ -167,16 +205,7 @@ def parse_page(url: str, html: str) -> Listing:
     flat = re.sub(r"\s+", " ", parse.text(s))
     # WordPress terms on the property's <article>: property-status-*, property-city-* (borough or neighborhood)
     art = s.find(class_=re.compile(r"^property-(status|city)-"))
-    cls = art.get("class", []) if art else []
-    status = next((_STATUS[c[16:]] for c in cls if c[16:] in _STATUS and c.startswith("property-status-")), None)
-    if status is None:
-        # the page's own label sits right before its title; the site menu also lists two of the labels
-        lab = re.search(r"(Open Market|Upcoming Project|Closed Project)\s+" + re.escape(title[:25]), flat)
-        label = lab.group(1) if lab else ""
-        # no term and no label: Reside has stopped marketing the unit (its application form drops it too)
-        status = {"Upcoming Project": "upcoming", "Closed Project": "closed", "Open Market": "open"}.get(
-            label, "unknown"
-        )
+    terms = art.get("class", []) if art else []
     # header facts every page prints: Rent/ Month, Available Units, Household Size, Required Income
     box = {}
     for b in s.select(".elementor-icon-box-content"):
@@ -210,25 +239,15 @@ def parse_page(url: str, html: str) -> Listing:
     if avail:
         notes.append(avail.lower() if "unit" in avail.lower() else f"{avail} units available")
     notes.append(f"Apply: Airtable form {APPLY} (one unit per submission)")
-    # borough: the address's zip, then the title's, then the city terms (only if they name one borough), then names
     addr = _grab(r"Property Address (.*?)(?:\[reside_auto|Three Simple Steps)", flat)
-    zips = lambda t: " ".join(re.findall(r"\b1[01]\d{3}\b", t))  # noqa: E731
-    terms = {parse.borough(c[14:].replace("-", " ")) for c in cls if c.startswith("property-city-")} - {None}
-    borough = (
-        parse.borough(zips(addr))
-        or parse.borough(zips(title))
-        or (terms.pop() if len(terms) == 1 else None)
-        or parse.borough(addr)
-        or parse.borough(title)
-    )
     return Listing(
         source="reside",
         ext_id=slug,
         title=title,
         url=url,
         address=re.sub(r"\s*[,–—-]?\s*(Apartment|Apt\.?|Units?)\b.*$", "", title, flags=re.I),
-        borough=borough,
-        status=status,
+        borough=_borough(terms, addr, title),
+        status=_status(terms, title, flat),
         senior_only=bool(re.search(r"\bsenior\b|62 (years|and older)", flat[:4000], re.I)),
         units=units,
         notes="; ".join(notes),
@@ -292,17 +311,10 @@ def offered(lst: Listing, options: list[Option]) -> list[float | None]:
     return [r for a, u, r in options if keys & a and same(u, r)]
 
 
-def accepting(lst: Listing, options: list[Option]) -> bool:
-    """Whether the form offers this listing's unit."""
-    return bool(offered(lst, options))
-
-
 def with_form(lst: Listing, options: list[Option]) -> Listing:
     """Status from the form, which is what decides whether you can apply: a unit it offers is open whatever
     its page says; an "open" page whose unit it does not offer is unknown. Upcoming stays upcoming.
     On a multi-unit page whose units the form's rents pair off one to one, the units it no longer lists are taken."""
-    from dataclasses import replace
-
     if rents := offered(lst, options):
         note = "" if lst.status == "open" else f"page says {lst.status}, but Reside's application form offers this unit"
         units = lst.units

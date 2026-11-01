@@ -2,7 +2,7 @@
 
 The API is paid, so only eligible, still-listed listings are routed, each origin address once per destination
 (again after STALE; a failed one after a backoff). Routes are for a weekday 8:30 AM New York departure. Results
-are stored raw in `commutes`; queries.py attaches them to listings at read time.
+are stored raw in `commutes`; queries/ attaches them to listings at read time.
 """
 
 from __future__ import annotations

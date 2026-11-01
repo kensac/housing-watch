@@ -1,4 +1,4 @@
-"""Web UI: GraphQL at /graphql (schema.py) over queries.py, views.py and tracker.py, plus the React + Mantine
+"""Web UI: GraphQL at /graphql (schema.py) over queries/, views.py and tracker.py, plus the React + Mantine
 app that uses it.
 
 The app lives in `frontend/` and is built into `web/dist/` by the image (`npm run build`); every other path

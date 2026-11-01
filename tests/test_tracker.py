@@ -170,8 +170,8 @@ def test_link_and_unlink(synced, monkeypatch):
         T.unlink(synced, "a:1")
     T.link(synced, "a:1", sven)
     calls = []
-    judge = Q._judged
-    monkeypatch.setattr(Q, "_judged", lambda *a: calls.append(1) or judge(*a))
+    judge = Q._judging._judged
+    monkeypatch.setattr(Q._judging, "_judged", lambda *a: calls.append(1) or judge(*a))
     got = Q.tracker_link(synced, "a:1")
     assert (got.row_key, got.listing.tracker_match, len(calls)) == (sven, "manual", 1)  # one keyed lookup
     T.unlink(synced, "a:1")
