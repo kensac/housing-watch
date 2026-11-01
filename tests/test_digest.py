@@ -88,6 +88,17 @@ def test_possible_and_page_changes_alone_are_silent(pg, smtp):
     assert pending(pg) == 0
 
 
+def test_tail_counts_possible_apart_from_filtered_out(pg, smtp):
+    with Session(pg) as s, s.begin():
+        add_listing(s, L("t", "1", "Queens"))  # eligible: the digest goes out
+        add_listing(s, L("t", "2", "Brooklyn", units=[]))  # possible: shown in the UI, not filtered out
+        add_listing(s, L("t", "3", "Bronx"))  # excluded
+        for k in ("t:1", "t:2", "t:3"):
+            event(s, k, "new")
+    _, plain, _, _ = digest.build(pg)
+    assert "Also: 1 new listings filtered out, 1 new possible (in the web UI), 0 pages now watched." in plain
+
+
 def test_baseline_without_eligible_is_silent(pg, smtp):
     with Session(pg) as s, s.begin():
         add_listing(s, L("new_src", "2", "Brooklyn", units=[]))

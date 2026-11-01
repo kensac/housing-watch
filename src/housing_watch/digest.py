@@ -84,9 +84,10 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
         if r.type == "changed" and not queries.is_baseline(r.detail):
             changed.setdefault(r.key, []).extend(_changes(r.detail or {}))
     sections: dict[str, list[tuple[str, list[str]]]] = {
-        k: [] for k in ("eligible", "possible", "pages", "failed", "recovered", "closed")
+        k: [] for k in ("eligible", "pages", "failed", "recovered", "closed")
     }
-    excluded_new = watching = 0
+    new = {POSSIBLE: 0, EXCLUDED: 0}  # new listings not mailed, by verdict
+    watching = 0
     base = {"sources": set(), "listings": 0, ELIGIBLE: 0, POSSIBLE: 0, EXCLUDED: 0, "pages": 0}
     seen: set[str] = set()
     for r in reversed(rows):  # newest event per key wins
@@ -138,7 +139,7 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
         if v.verdict == ELIGIBLE:
             sections["eligible"].append((head, detail))
         elif typ == "new":
-            excluded_new += 1
+            new[v.verdict] += 1
     if not (sections["eligible"] or sections["closed"]):
         return "", "", "", ids  # nothing eligible happened (possible, page changes, failures alone): mark read
     subject = f"Housing watch: {len(sections['eligible'])} eligible"
@@ -174,8 +175,11 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
             f" {base['listings']} listings ({base[ELIGIBLE]} eligible, shown above; {base[POSSIBLE]} possible;"
             f" {base[EXCLUDED]} excluded), {base['pages']} pages now watched."
         )
-    if excluded_new or watching:
-        tail.append(f"Also: {excluded_new} new listings filtered out, {watching} pages now watched.")
+    if new[POSSIBLE] or new[EXCLUDED] or watching:
+        tail.append(
+            f"Also: {new[EXCLUDED]} new listings filtered out, {new[POSSIBLE]} new possible (in the web UI),"
+            f" {watching} pages now watched."
+        )
     plain += tail
     htm += [f"<p><small>{html.escape(t)}</small></p>" for t in tail]
     return subject, "\n".join(plain), "\n".join(htm), ids
