@@ -106,6 +106,14 @@ def test_failures_report_on_2nd_and_10th_then_recover(pg):
         assert st.consecutive_failures == 0 and st.failing_since is None and st.last_ok is not None
 
 
+def test_one_unreported_failure_recovers_silently(pg):
+    with Session(pg) as s, s.begin():
+        finish(s, "t", False, error="timed out")
+        finish(s, "t", True)
+        assert events(s, type="source_failed") == [] and events(s, type="source_recovered") == []
+        assert s.get(SourceStateRow, "t").failing_since is None
+
+
 def test_run_bookkeeping(pg):
     with Session(pg) as s, s.begin():
         run_id = db.start_run(s, "t", job_id=7, worker="oci")
