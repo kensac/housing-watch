@@ -71,7 +71,9 @@ def _polite(url: str) -> None:
 
 
 def get(url: str, *, headers: dict | None = None, retries: int = 2, allow_304: bool = False) -> httpx.Response:
-    """GET with retries. allow_304=True returns a 304 (send If-None-Match / If-Modified-Since in headers)."""
+    """GET, retrying 429s, 5xx and network errors; any other status is final.
+
+    allow_304=True returns a 304 (send If-None-Match / If-Modified-Since in headers)."""
     err: Exception | None = None
     for attempt in range(retries + 1):
         try:
@@ -86,6 +88,9 @@ def get(url: str, *, headers: dict | None = None, retries: int = 2, allow_304: b
             return r
         except httpx.HTTPError as e:
             err = e
+            code = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
+            if code is not None and code < 500 and code != 429:
+                break  # a 404 or 403 is the server's answer; asking again only waits for it
             if attempt < retries:
                 time.sleep(3 * (attempt + 1))
     raise FetchError(f"GET {url}: {err}")
