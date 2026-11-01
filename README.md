@@ -33,14 +33,10 @@ tables), so the same input always gives the same output.
   eligible unit is open, it sends right away instead. A change leads with what changed
   (`notify/changes.py`: "Rent: 1BR #8L $2,900 → $2,750"); a status flapping to "unknown" and
   back is noise and never mailed.
-- `mcp_server.py` is an MCP server with every read and write the web UI has (search, fetch,
-  find listings/units, recent changes, overview, sources, saved views and the tracker board;
-  create/change/duplicate/delete views, link/unlink tracker rows; `graphql`: read-only queries
-  against the web UI's schema; `graphql_mutation`: its mutations) for agents and chat apps, behind
-  OAuth via an upstream OIDC provider; it has no unauthenticated mode. Each write is logged with
-  its caller.
+- `mcp_server.py` serves the same reads and writes as the web UI over MCP, for agents and chat apps,
+  behind OAuth.
 
-`docs/ARCHITECTURE.md` is the full design.
+`docs/ARCHITECTURE.md` is the full design. Contributors and coding agents start at `AGENTS.md`.
 
 ## Configuration (environment)
 
@@ -81,21 +77,8 @@ python -m housing_watch worker               # a fleet worker
 python -m housing_watch serve                # migrate + worker + web: the image's default
 ```
 
-The web UI is `frontend/` (React + Mantine). `cd frontend && npm ci && npm run build` builds it into
-`src/housing_watch/web/dist/` for `serve`; `npm run dev` serves it with hot reload and proxies `/graphql`
-and `/api` to `HW_API` (a running `serve`). The UI's API is GraphQL at `/graphql` (Strawberry,
-`web/schema.py`; GraphiQL on GET), plus one REST route for the filled application PDF,
-`/api/listing/application`. Its types are derived from the read-model dataclasses in `queries.py` (closed
-value sets are `Literal` aliases, so enums), filter inputs from the field registry in `filters.py`, and the
-SDL is committed as `schema.graphql`; the UI's types are generated from it. A filter is an object with a key
-per field holding its operators, e.g.
-`listings(filter: { verdict: { in: [eligible] }, units: { rent: { le: 3000 }, size: { in: [studio, _1br] } } },
-sort: [{ field: rent }])`. After changing a dataclass, a column or the schema:
-
-```bash
-python -m housing_watch schema           # rewrite schema.graphql (CI fails when it is stale)
-cd frontend && npm run codegen           # rewrite src/gql/ (CI fails when it is stale or a query is invalid)
-```
+The web UI is `frontend/` (React + Mantine) on a GraphQL API at `/graphql` (GraphiQL on GET).
+`cd frontend && npm ci && npm run build` builds it into `src/housing_watch/web/dist/` for `serve`.
 
 The image is `ghcr.io/kensac/housing-watch` (amd64 and arm64), built on every
 push to `main`. Its entrypoint is `python -m housing_watch`, with `serve` as the
