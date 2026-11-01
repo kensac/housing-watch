@@ -86,8 +86,9 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 - **Tasks:**
   - `tick` (periodic, every minute; Procrastinate defers it once per minute fleet-wide): claims sources
     whose `source_state.next_due` has passed (pushing it a full cycle ahead) and defers `source_run` for
-    each; fails runs left unfinished for `HW_RUN_TIMEOUT_HOURS` (6); re-queues merges that were never
-    deferred; defers `digest(scheduled=True)` at minute 0 of each `HW_DIGEST_HOURS` hour.
+    each; fails runs left unfinished for `HW_RUN_TIMEOUT_HOURS` (6) (when a newer run of the source has
+    finished, as after a retried job, only the old run's row changes, not `source_state`); re-queues merges
+    that were never deferred; defers `digest(scheduled=True)` at minute 0 of each `HW_DIGEST_HOURS` hour.
   - `source_run(source)` (`queueing_lock` `run:<source>`, `lock` `source:<source>`): plans chunks with
     `Adapter.chunks()`. With one chunk it fetches and records inline. Otherwise it writes the plan
     (keys plus the cache every chunk starts from) to `runs.plan` and defers one `source_chunk` per key;
