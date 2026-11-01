@@ -88,3 +88,22 @@ def test_closed_record_and_change_detection(store):
     closed = nys.to_listing(r, rules)
     assert closed.status == "closed"
     assert db.record_listings(c, "nys_housing_search", [closed]) == 1
+
+
+def test_fetch_posts_through_fetch_and_builds_the_fixture_listings(monkeypatch):
+    page = '"fwuid":"FW" "APPLICATION@markup://siteforce:communityApp":"1"'
+    monkeypatch.setattr(nys.fetch, "html", lambda url: page)
+
+    def post_json(url, *, data, timeout):
+        actions = json.loads(data["message"])["actions"]
+        reply = []
+        for a in actions:
+            p = a["params"]
+            rv = RECORDS if p["method"] == "getWaitListRecords" else RULES.get(p["params"]["waitlistId"])
+            reply.append({"id": a["id"], "state": "SUCCESS", "returnValue": {"returnValue": rv}})
+        return {"actions": reply[::-1]}  # the reply order is not the request order
+
+    monkeypatch.setattr(nys.fetch, "post_json", post_json)
+    got = nys.NysHousingSearch().fetch().listings
+    want = [nys.to_listing(r, RULES.get(r["Id"]) or []) for r in RECORDS if nys.borough(r["County"])]
+    assert got == want and len(got) == 51

@@ -29,8 +29,6 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime
 
-import httpx
-
 from .. import fetch, parse
 from ..eligibility import ami
 from ..models import Band, Listing, Result, Unit
@@ -226,11 +224,9 @@ class Aura:
             "aura.token": "null",
         }
         try:
-            r = httpx.post(url, data=data, headers={"User-Agent": fetch.UA}, timeout=90)
-            r.raise_for_status()
-            got = r.json()["actions"]
-        except (httpx.HTTPError, ValueError, KeyError) as e:
-            raise fetch.FetchError(f"aura {url}: {e}") from e
+            got = fetch.post_json(url, data=data, timeout=90)["actions"]
+        except KeyError as e:
+            raise fetch.FetchError(f"aura {url}: no {e} in reply") from e
         out = []
         for a in sorted(got, key=lambda a: int(a["id"].split(";")[0])):
             if a.get("state") != "SUCCESS":
