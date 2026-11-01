@@ -1,0 +1,222 @@
+"""Turn un-notified events into one email. It goes out only when an eligible listing is new, changed or closed.
+
+Possible verdicts and watched-page changes are read in the web UI, not mailed; source failures ride along
+in a digest that is going out anyway. A changed listing leads with what changed (changes.py), every pending
+change to it in order; a status flapping to "unknown" and back is noise, marked read and never mailed.
+A source's first run (events marked `baseline`) is its starting inventory, not news: it becomes one summary
+line with counts, and only its eligible listings are shown.
+"""
+
+from __future__ import annotations
+
+import html
+import os
+import smtplib
+from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
+
+from sqlalchemy import func, select, update
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
+
+from .. import queries
+from ..eligibility.criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, listing_verdict, unit_verdict
+from ..models import Listing
+from ..orm import EventRow
+from . import changes
+
+SMTP_HOST = os.environ.get("SMTP_HOST", "localhost")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+
+TITLES = {"new": "New", "reopened": "Reopened", "changed": "Changed", "closed": "Closed", "gone": "Removed"}
+SECTIONS = {  # the email's sections, in order
+    "eligible": "Eligible",
+    "closed": "Closed or removed (were eligible)",
+    "failed": "Sources failing",
+    "recovered": "Sources recovered",
+}
+
+
+def _units(lst: Listing, p: Profile) -> list[str]:
+    out = []
+    for unit in lst.units:
+        v, why = unit_verdict(unit, p)
+        band = next((b for b in unit.bands if b.household == p.household), None)
+        inc = f"${band.income_min or 0:,}-${band.income_max or 0:,}" if band else f"no {p.household}-person band"
+        rent = f"${unit.rent:,.0f}" if unit.rent else "rent ?"
+        out.append(
+            f"{v.upper():8} {unit.size} {('#' + unit.unit_no) if unit.unit_no else ''} {rent}"
+            f" {str(unit.ami) + '% AMI' if unit.ami else ''} {inc} ({why})".replace("  ", " ")
+        )
+    return out
+
+
+def _noise(r: EventRow) -> bool:
+    d = r.detail or {}
+    if r.type != "changed":
+        return False
+    return bool(d.get("noise") or (d.get("before") and changes.is_noise(d["before"], d["after"])))
+
+
+def _changes(d: dict) -> list[str]:
+    return d.get("changes") or changes.describe(d.get("before") or {}, d.get("after") or {})
+
+
+def _names(xs: set[str], n: int = 6) -> str:
+    xs = sorted(xs)
+    return ", ".join(xs[:n]) + (f" and {len(xs) - n} more" if len(xs) > n else "")
+
+
+def urgent(engine: Engine, p: Profile = PROFILE) -> bool:
+    """An open listing became eligible and nobody was told yet: first come, first served, so mail now."""
+    with Session(engine) as s:
+        rows = s.scalars(
+            select(EventRow).where(EventRow.notified.is_(None), EventRow.type.in_(("new", "reopened", "changed")))
+        ).all()
+        lsts = queries.load_listings(s, {r.key for r in rows if not _noise(r)}).values()
+    return any(lst.status == "open" and listing_verdict(lst, p).verdict == ELIGIBLE for lst in lsts)
+
+
+def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int]] | None:
+    """(subject, plain, html, event ids) for the pending events; subject "" means mark read, send nothing."""
+    with Session(engine) as s:
+        rows = queries.pending_events(s)
+        if not rows:
+            return None
+        listings = queries.load_listings(s, (r.key for r in rows if r.type in queries.LISTING_EVENTS))
+    ids = [r.id for r in rows]
+    rows = [r for r in rows if not _noise(r)]
+    changed: dict[str, list[str]] = {}  # key -> what changed, over every pending change, oldest first
+    for r in rows:
+        if r.type == "changed" and not queries.is_baseline(r.detail):
+            changed.setdefault(r.key, []).extend(_changes(r.detail or {}))
+    sections: dict[str, list[tuple[str, list[str]]]] = {k: [] for k in SECTIONS}  # (headline, lines)
+    new = {POSSIBLE: 0, EXCLUDED: 0}  # new listings not mailed, by verdict
+    watching = 0
+    base = {"sources": set(), "listings": 0, ELIGIBLE: 0, POSSIBLE: 0, EXCLUDED: 0, "pages": 0}
+    seen: set[str] = set()
+    for r in reversed(rows):  # newest event per key wins
+        if r.key:
+            if r.key in seen:
+                continue
+            seen.add(r.key)
+        typ, d, baseline = r.type, r.detail or {}, queries.is_baseline(r.detail)
+        if baseline:
+            base["sources"].add(r.source)
+        if typ in ("watching", "page_changed") and baseline:  # a first run's pages: counted, not listed
+            base["pages"] += 1
+            continue
+        if typ == "watching":
+            watching += 1
+            continue
+        if typ == "source_failed":
+            sections["failed"].append((f"{r.source}: {d.get('fails')} failures in a row: {d.get('error')}", []))
+            continue
+        if typ == "source_recovered":
+            sections["recovered"].append((f"{r.source}: working again", []))
+            continue
+        if typ == "page_changed":  # read in the web UI, never mailed
+            continue
+        lst = listings.get(r.key)
+        if lst is None:
+            continue
+        v = listing_verdict(lst, p)  # business rule applied now, to stored data
+        if baseline:
+            base["listings"] += 1
+            base[v.verdict] += 1
+            if v.verdict != ELIGIBLE:
+                continue
+        label = "First seen" if baseline else TITLES.get(typ, typ)
+        head = f"[{label}] {lst.title} ({lst.borough or 'borough ?'}) {lst.url}"
+        if typ in ("closed", "gone"):
+            if listing_verdict(queries.as_open(lst), p).verdict == ELIGIBLE:  # was it worth knowing about?
+                sections["closed"].append((head, []))
+            continue
+        detail = [f"changed: {x}" for x in dict.fromkeys(changed.get(r.key, []))] if typ == "changed" else []
+        detail.append(f"source: {r.source}  verdict: {v.verdict} ({v.reason})  status: {lst.status}")
+        if lst.deadline:
+            detail.append(f"deadline: {lst.deadline}")
+        if lst.notes:
+            detail.append(lst.notes)
+        detail += _units(lst, p)
+        if v.verdict == ELIGIBLE:
+            sections["eligible"].append((head, detail))
+        elif typ == "new":
+            new[v.verdict] += 1
+    if not (sections["eligible"] or sections["closed"]):
+        return "", "", "", ids  # nothing eligible happened (possible, page changes, failures alone): mark read
+    subject = _subject(sections)
+    plain, htm = _render(subject, sections, _footnotes(base, new, watching))
+    return subject, plain, htm, ids
+
+
+def _subject(sections: dict[str, list]) -> str:
+    subject = f"Housing watch: {len(sections['eligible'])} eligible"
+    if sections["closed"]:
+        subject += f", {len(sections['closed'])} closed"
+    if sections["failed"]:
+        n = len(sections["failed"])
+        subject += f", {n} source{'s' if n != 1 else ''} failing"
+    return subject
+
+
+def _footnotes(base: dict, new: dict[str, int], watching: int) -> list[str]:
+    """The small print: what first runs and new listings that were not mailed amount to."""
+    out = []
+    if base["sources"]:
+        out.append(
+            f"First run of {len(base['sources'])} source(s) ({_names(base['sources'])}):"
+            f" {base['listings']} listings ({base[ELIGIBLE]} eligible, shown above; {base[POSSIBLE]} possible;"
+            f" {base[EXCLUDED]} excluded), {base['pages']} pages now watched."
+        )
+    if new[POSSIBLE] or new[EXCLUDED] or watching:
+        out.append(
+            f"Also: {new[EXCLUDED]} new listings filtered out, {new[POSSIBLE]} new possible (in the web UI),"
+            f" {watching} pages now watched."
+        )
+    return out
+
+
+def _render(subject: str, sections: dict[str, list[tuple[str, list[str]]]], tail: list[str]) -> tuple[str, str]:
+    """(plain, html) of the email."""
+    plain, htm = [subject, ""], [f"<h2>{html.escape(subject)}</h2>"]
+    for k, title in SECTIONS.items():
+        if not sections[k]:
+            continue
+        plain += [f"== {title} ({len(sections[k])})"]
+        htm += [f"<h3>{html.escape(title)} ({len(sections[k])})</h3><ul>"]
+        for head, lines in sections[k]:
+            plain += [f"* {head}"] + [f"    {x}" for x in lines] + [""]
+            htm += [
+                f"<li><b>{html.escape(head)}</b><br>"
+                + "<br>".join(f"<code>{html.escape(x)}</code>" for x in lines)
+                + "</li>"
+            ]
+        htm += ["</ul>"]
+    plain += tail
+    htm += [f"<p><small>{html.escape(t)}</small></p>" for t in tail]
+    return "\n".join(plain), "\n".join(htm)
+
+
+def send(engine: Engine, dry_run: bool = False) -> str:
+    built = build(engine)
+    if built is None:
+        return "no events"
+    subject, plain, htm, ids = built
+    if subject and not dry_run:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = os.environ.get("HW_DIGEST_FROM") or os.environ["SMTP_USER"]
+        msg["To"] = os.environ["HW_DIGEST_TO"]
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain=msg["From"].rpartition("@")[2].strip("> ") or None)
+        msg.set_content(plain)
+        msg.add_alternative(htm, subtype="html")
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=60) as s:
+            s.starttls()
+            s.login(os.environ["SMTP_USER"], os.environ["SMTP_PASS"])
+            s.send_message(msg)
+    if not dry_run:
+        with Session(engine) as s, s.begin():
+            s.execute(update(EventRow).where(EventRow.id.in_(ids)).values(notified=func.now()))
+    return plain if dry_run else (f"sent: {subject}" if subject else "nothing notable; events marked read")
