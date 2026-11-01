@@ -157,7 +157,9 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   applied in order so later fields break ties.
 - `web/app.py` serves GraphQL at `/graphql` (Strawberry; the schema is `web/schema.py`, snake_case fields,
   GraphiQL on GET) over `queries.py`, `views.py` and `tracker.py`, plus one REST route,
-  `/api/listing/application`, for the filled application PDF (a binary download).
+  `/api/listing/application`, for the filled application PDF (a binary download). GraphQL is HTTP only: the
+  schema has no subscriptions, and a WebSocket to `/graphql` is closed with 1008, since WebSockets skip CORS and
+  any site could read through one.
   - Types: one source of truth, the read model's dataclasses. `web/derive.py` turns each into a Strawberry
     type (nested dataclasses, optionals, lists; a field's trailing comment is its description), so a field
     added to a dataclass is in the API with no other change. Fields made with `queries.internal()`
