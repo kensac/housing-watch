@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from housing_watch import applications, queries
 from housing_watch.orm import SavedViewRow
 from housing_watch.web.app import create_app
-from housing_watch.web.schema import schema
+from housing_watch.web.schema import Loaders, schema
 from seed import L, add_listing, event, gql, gql_code, gql_error, nodes, seed, seed_jobs
 
 SAME = {"origin": "http://testserver"}
@@ -196,13 +196,19 @@ def test_event_detail_and_listing(pg):
 
 def test_event_listings_load_in_one_batch(pg, monkeypatch):
     seed(pg)
-    calls = []
-    judged = queries.judged
-    monkeypatch.setattr(queries, "judged", lambda *a, **kw: calls.append(1) or judged(*a, **kw))
+    batches = []
+    load = Loaders._listings
+
+    async def counted(self, keys):
+        batches.append(sorted(keys))
+        return await load(self, keys)
+
+    monkeypatch.setattr(Loaders, "_listings", counted)
     q = "{ events { edges { node { listing { key } } } } }"
     res = gql(TestClient(create_app(pg)), q)
-    assert len([n for n in nodes(res["data"]["events"]) if n["listing"]]) == 5  # b:3 is gone but stored
-    assert len(calls) <= 2  # the events' titles, then one batch for every listing
+    got = sorted({n["listing"]["key"] for n in nodes(res["data"]["events"]) if n["listing"]})
+    assert len(got) == 5  # b:3 is gone but stored
+    assert batches == [got]  # every event's listing in one load
 
 
 def test_get_queries_work(client):
