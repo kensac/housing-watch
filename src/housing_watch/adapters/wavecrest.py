@@ -181,9 +181,10 @@ class Wavecrest(PageAdapter):
     min_listings = 1
 
     def fetch(self) -> Result:
-        snaps = super().fetch().snapshots
+        body = fetch.html(INDEX)
+        snaps = [self.snapshot(INDEX, body)]
         out, seen = [], set()
-        for heading, url, blurb in index_links(fetch.html(INDEX)):
+        for heading, url, blurb in index_links(body):
             seen.add(url)
             out.append(parse_flyer(heading, url, blurb, pdf_cached(self.cache, url)))
         prune(self.cache.get("pdf", {}), seen)

@@ -149,8 +149,8 @@ class MickiGarcia(PageAdapter):
     ignore = [r"press to zoom", r"\d+/\d+"]
 
     def fetch(self) -> Result:
-        snaps = super().fetch().snapshots
-        home = fetch.html(URL)
+        home, sales_page = fetch.html(URL), fetch.html(SALES)
+        snaps = [self.snapshot(URL, home), self.snapshot(SALES, sales_page)]
         pages = page_map(home)
         portfolio = next((p for p in pages.values() if p["slug"] == "portfolio"), None)
         if portfolio is None:
@@ -159,7 +159,7 @@ class MickiGarcia(PageAdapter):
         if len(items) < 12:
             raise RuntimeError(f"micki_garcia: only {len(items)} portfolio items")
         listings = [parse_project(t, u, fetch.html(u)) for t, u in items]
-        sales = parse.text(fetch.html(SALES))
+        sales = parse.text(sales_page)
         for p in pages.values():
             if re.search(r"income requirements", p["title"], re.I):
                 u = f"{BASE}/{p['slug']}"

@@ -7,8 +7,11 @@ Declare one subclass per source with `pages` (and `render=True` for JS/Cloudflar
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from typing import ClassVar
 from urllib.parse import urljoin
+
+from bs4 import BeautifulSoup
 
 from .. import fetch, parse
 from ..models import Result, Snapshot
@@ -32,6 +35,13 @@ COMMON_IGNORE = [
 ]
 
 
+def visible_text(root, ignore: Iterable[str]) -> str:
+    """parse.text of a soup, html or tag, minus lines matching COMMON_IGNORE or `ignore` (case-insensitive)."""
+    pats = [re.compile(p, re.I) for p in [*COMMON_IGNORE, *ignore]]
+    src = root if isinstance(root, BeautifulSoup | str) else str(root)  # parse.text takes a soup or html
+    return "\n".join(ln for ln in parse.text(src).splitlines() if not any(p.fullmatch(ln.strip()) for p in pats))
+
+
 class PageAdapter(Adapter):
     pages: ClassVar[list[str]] = []
     render: ClassVar[bool] = False
@@ -41,21 +51,24 @@ class PageAdapter(Adapter):
 
     def fetch(self) -> Result:
         snaps = []
-        pats = [re.compile(p, re.I) for p in COMMON_IGNORE + self.ignore]
         for url in self.pages:
             body = fetch.rendered(url) if self.render else fetch.html(url)
-            s = parse.soup(body)
-            links = set()
-            for a in s.find_all("a", href=True):
-                href = urljoin(url, a["href"].strip())
-                if DOC_RE.search(href) or (self.link_re and self.link_re.search(href)):
-                    links.add(href.split("#")[0])
-            for img in s.find_all("img", src=True):
-                src = urljoin(url, img["src"])
-                if self.link_re and self.link_re.search(src):
-                    links.add(src)
-            txt = "\n".join(ln for ln in parse.text(s).splitlines() if not any(p.fullmatch(ln.strip()) for p in pats))
-            if len(txt) < self.min_text:
-                raise RuntimeError(f"{url}: only {len(txt)} chars of text (blocked or JS not rendered?)")
-            snaps.append(Snapshot(source=self.name, ext_id=url, url=url, text=txt, links=sorted(links)))
+            snaps.append(self.snapshot(url, body))
         return Result(snapshots=snaps)
+
+    def snapshot(self, url: str, body: str) -> Snapshot:
+        """One page's Snapshot from html already in hand: its visible text and document (or link_re) links."""
+        s = parse.soup(body)
+        links = set()
+        for a in s.find_all("a", href=True):
+            href = urljoin(url, a["href"].strip())
+            if DOC_RE.search(href) or (self.link_re and self.link_re.search(href)):
+                links.add(href.split("#")[0])
+        for img in s.find_all("img", src=True):
+            src = urljoin(url, img["src"])
+            if self.link_re and self.link_re.search(src):
+                links.add(src)
+        txt = visible_text(s, self.ignore)
+        if len(txt) < self.min_text:
+            raise RuntimeError(f"{url}: only {len(txt)} chars of text (blocked or JS not rendered?)")
+        return Snapshot(source=self.name, ext_id=url, url=url, text=txt, links=sorted(links))

@@ -133,8 +133,9 @@ class Langsam(PageAdapter):
     min_listings = 1
 
     def fetch(self) -> Result:
-        snaps = super().fetch().snapshots
-        page = parse_page(fetch.html(URL))
+        body = fetch.html(URL)
+        snaps = [self.snapshot(URL, body)]
+        page = parse_page(body)
         urls = {u for d in page["docs"].values() for u in d.values()}
         pdfs = {u: pdf_cached(self.cache, u) for u in sorted(urls)}
         prune(self.cache.get("pdf", {}), urls)

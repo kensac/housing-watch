@@ -133,9 +133,10 @@ class StNicks(PageAdapter):
     min_listings = 1
 
     def fetch(self) -> Result:
-        snaps = super().fetch().snapshots
+        body = fetch.html(INDEX)
+        snaps = [self.snapshot(INDEX, body)]
         out, seen = [], set()
-        for label, url in openings(fetch.html(INDEX)):
+        for label, url in openings(body):
             if not url.lower().endswith(".pdf"):
                 out.append(Listing(source=self.name, ext_id=url, title=label, url=url, borough=parse.borough(label)))
                 continue

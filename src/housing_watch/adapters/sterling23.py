@@ -13,8 +13,7 @@ import re
 from urllib.parse import urljoin
 
 from .. import fetch, parse
-from ..models import Listing, Result, Snapshot, Unit
-from . import _page
+from ..models import Listing, Result, Unit
 from ._page import PageAdapter
 
 URL = "https://www.sterling23.com/?page=affordable"
@@ -108,21 +107,6 @@ def _set_aside(text: str) -> str | None:
     return {"62+": "senior", "mi": "mobility", "m/i": "mobility"}.get(w, w)
 
 
-def snapshot(adapter: PageAdapter, url: str, body: str) -> Snapshot:
-    """PageAdapter's snapshot logic for HTML already in hand (avoids a second Cloudflare render)."""
-    pats = [re.compile(p, re.I) for p in _page.COMMON_IGNORE + adapter.ignore]
-    s = parse.soup(body)
-    links = set()
-    for a in s.find_all("a", href=True):
-        href = urljoin(url, a["href"].strip())
-        if _page.DOC_RE.search(href) or (adapter.link_re and adapter.link_re.search(href)):
-            links.add(href.split("#")[0])
-    txt = "\n".join(ln for ln in parse.text(s).splitlines() if not any(p.fullmatch(ln.strip()) for p in pats))
-    if len(txt) < adapter.min_text:
-        raise RuntimeError(f"{url}: only {len(txt)} chars of text (blocked or JS not rendered?)")
-    return Snapshot(source=adapter.name, ext_id=url, url=url, text=txt, links=sorted(links))
-
-
 class Sterling23(PageAdapter):
     name = "sterling23"
     title = "Sterling23"
@@ -134,7 +118,7 @@ class Sterling23(PageAdapter):
 
     def fetch(self) -> Result:
         body = fetch.rendered(URL, wait_ms=6000)
-        snap = snapshot(self, URL, body)
+        snap = self.snapshot(URL, body)  # from the same render: a second one may hit the Cloudflare challenge
         if "Affordable Housing Re-Rental" not in snap.text:
             raise RuntimeError("sterling23: affordable page not rendered (Cloudflare challenge?)")
         return Result(listings=parse_page(body), snapshots=[snap])

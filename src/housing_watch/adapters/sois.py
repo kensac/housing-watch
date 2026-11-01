@@ -218,9 +218,10 @@ class Sois(PageAdapter):
     min_listings = 1
 
     def fetch(self) -> Result:
-        snaps = super().fetch().snapshots
+        body = fetch.html(URL)
+        snaps = [self.snapshot(URL, body)]
         out, seen = [], set()
-        for card in parse_cards(fetch.html(URL)):
+        for card in parse_cards(body):
             txt = None
             if card["pdf"]:
                 seen.add(card["pdf"])
