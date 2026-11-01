@@ -18,8 +18,16 @@ def state(tree=None, page="listings", **kw):
     return V.State(page, F.from_tree(tree, V.FIELDS[page]), **kw)
 
 
+def names(pg, page):
+    return [v.name for v in V.list_views(pg) if v.page == page]
+
+
+def default(pg, page):
+    return next((v.id for v in V.list_views(pg) if v.page == page and v.is_default), None)
+
+
 def test_nothing_is_seeded(pg):
-    assert V.list_views(pg) == [] and V.default(pg, "listings") is None
+    assert V.list_views(pg) == []
 
 
 def test_crud(pg):
@@ -30,9 +38,9 @@ def test_crud(pg):
     b = V.create(pg, state({"type": {"in": ["new"]}}, page="events"), "New events")
     c = V.create(pg, state(q="loft"), "Lofts")
     assert c.state.sort == Q.DEFAULT_SORT and c.state.columns == V.DEFAULT_COLUMNS["listings"]  # defaults fill in
-    assert [v.name for v in V.list_views(pg, "listings")] == ["Queens", "Lofts"]
+    assert names(pg, "listings") == ["Queens", "Lofts"]
     V.change(pg, c.id, move=-1)
-    assert [v.name for v in V.list_views(pg, "listings")] == ["Lofts", "Queens"]
+    assert names(pg, "listings") == ["Lofts", "Queens"]
     cheap = queens | {"units": {"rent": {"le": 2500.0}}}
     V.change(pg, a.id, name="  Queens   only ", state=state(cheap))
     got = V.get(pg, a.id)
@@ -100,12 +108,12 @@ def test_one_default_per_page(pg):
     a = V.create(pg, state(), "A", is_default=True)
     b = V.create(pg, state(), "B")
     e = V.create(pg, state(page="events"), "E", is_default=True)
-    assert V.default(pg, "listings").id == a.id
+    assert default(pg, "listings") == a.id
     V.change(pg, b.id, is_default=True)
-    assert V.default(pg, "listings").id == b.id and not V.get(pg, a.id).is_default
-    assert V.default(pg, "events").id == e.id  # other pages keep theirs
+    assert default(pg, "listings") == b.id and not V.get(pg, a.id).is_default
+    assert default(pg, "events") == e.id  # other pages keep theirs
     V.change(pg, b.id, is_default=False)
-    assert V.default(pg, "listings") is None
+    assert default(pg, "listings") is None
 
 
 def test_stale_parts_degrade_with_a_warning(pg):

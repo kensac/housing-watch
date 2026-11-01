@@ -131,21 +131,15 @@ def _view(r: SavedViewRow) -> View:
     return View(r.id, r.page, r.name, r.position, r.is_default, st, warnings, r.updated)
 
 
-def list_views(engine: Engine, page: str | None = None) -> list[View]:
+def list_views(engine: Engine) -> list[View]:
     with Session(engine) as s:
-        q = select(SavedViewRow).order_by(SavedViewRow.page, SavedViewRow.position, SavedViewRow.id)
-        return [_view(r) for r in s.scalars(q.where(SavedViewRow.page == page) if page else q)]
+        return [_view(r) for r in s.scalars(select(SavedViewRow).order_by(SavedViewRow.page, SavedViewRow.position,
+                                                                            SavedViewRow.id))]  # fmt: skip
 
 
 def get(engine: Engine, view_id: int) -> View | None:
     with Session(engine) as s:
         r = s.get(SavedViewRow, view_id)
-        return _view(r) if r else None
-
-
-def default(engine: Engine, page: str) -> View | None:
-    with Session(engine) as s:
-        r = s.scalar(select(SavedViewRow).where(SavedViewRow.page == page, SavedViewRow.is_default))
         return _view(r) if r else None
 
 
