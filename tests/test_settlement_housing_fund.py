@@ -1,13 +1,9 @@
 import json
-import shutil
 from pathlib import Path
-
-import pytest
 
 from housing_watch.adapters.settlement_housing_fund import (
     form_api_url,
     index_links,
-    ocr_table,
     parse_form,
     parse_pronto,
     read_blocks,
@@ -44,13 +40,12 @@ def test_form_without_tables_still_lists_units():
     assert listing_verdict(by["515 W 36th Street"]).verdict == "possible"  # 130% but no income table
 
 
-@pytest.mark.skipif(not shutil.which("tesseract"), reason="tesseract not installed")
-def test_form_with_ocr_tables():
+def test_form_with_ocr_tables(shf_tables):
     imgs = {}
     for q in FORM["questions"]:
         if q["type"] == "Question.Choice" and q["image"]["resourceUrl"]:
             png = "table-130.png" if "130%" in q["title"] else "table-40-60.png"
-            imgs[q["image"]["resourceUrl"]] = ocr_table((F / png).read_bytes())
+            imgs[q["image"]["resourceUrl"]] = shf_tables[png]
     by = {lst.title: lst for lst in parse_form(FORM, FORM_URL, imgs)}
     assert len(by) == 7
     want = {  # (title, unit): (size, rent, min income, 1-person max)

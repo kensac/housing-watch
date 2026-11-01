@@ -308,7 +308,7 @@ def test_reside_building_tier_at_unit_rent(monkeypatch):
 
 
 @pytest.mark.skipif(not shutil.which("tesseract"), reason="tesseract not installed")
-def test_shf_unit_from_re_rental_form(monkeypatch):
+def test_shf_unit_from_re_rental_form(monkeypatch, shf_tables):
     shf = Path(__file__).parent / "fixtures" / "settlement_housing_fund"
     form = json.loads((shf / "form.json").read_text())
     pngs = {
@@ -316,7 +316,8 @@ def test_shf_unit_from_re_rental_form(monkeypatch):
         for q in form["questions"]
         if q["type"] == "Question.Choice" and q["image"]["resourceUrl"]
     }
-    monkeypatch.setattr(sanel.fetch, "get", lambda u, **kw: SimpleNamespace(content=(shf / pngs[u]).read_bytes()))
+    monkeypatch.setattr(sanel.fetch, "get", lambda u, **kw: SimpleNamespace(content=pngs[u]))
+    monkeypatch.setattr(sanel.shf, "ocr_table", shf_tables.__getitem__)  # the OCR itself is tested in its own file
     docs = {
         "find-housing": "../settlement_housing_fund/find-housing.html",
         "formapi": "../settlement_housing_fund/form.json",

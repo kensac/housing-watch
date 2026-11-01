@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import json
 
 import pytest
@@ -9,11 +10,17 @@ from housing_watch.orm import TrackerRow
 from seed import Session, seed
 
 
+@functools.cache
+def server(eng):
+    """One server per test's engine: building it costs more than most tool calls."""
+    return mcp_server.build(eng)
+
+
 def call(eng, tool: str, **args):
     from fastmcp import Client
 
     async def go():
-        async with Client(mcp_server.build(eng)) as c:
+        async with Client(server(eng)) as c:
             return (await c.call_tool(tool, args)).structured_content
 
     return asyncio.run(go())
@@ -23,7 +30,7 @@ def tools(eng) -> dict:
     from fastmcp import Client
 
     async def go():
-        async with Client(mcp_server.build(eng)) as c:
+        async with Client(server(eng)) as c:
             return {t.name: t for t in await c.list_tools()}
 
     return asyncio.run(go())
