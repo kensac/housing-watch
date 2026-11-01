@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field, fields, replace
 from datetime import UTC, date, datetime, timedelta
@@ -269,17 +270,22 @@ def judged_listing(engine: Engine, key: str, p: Profile = PROFILE) -> ListingSum
     return _judged(engine, p).by_key.get(key)
 
 
+def _store_version(s: Session) -> tuple:
+    """Moves whenever a judged listing could read differently: its listing, commute or tracker row changed."""
+    parts = [
+        # a sum, not a max: runs commit out of order, so a row can move to an older `updated` than the newest
+        select(func.count(), func.sum(func.extract("epoch", ListingRow.updated))),
+        select(func.count(), func.max(CommuteRow.computed)),
+        select(func.count(), func.max(TrackerRow.synced)),
+        select(func.count(), func.max(TrackerLinkRow.created)),
+        select(func.max(TrackerEventRow.id)),
+    ]
+    return tuple(v for q in parts for v in s.execute(q).one())
+
+
 def _judged(engine: Engine, p: Profile) -> _Judged:
     with Session(engine) as s:
-        version = tuple(
-            s.execute(
-                # a sum, not a max: runs commit out of order, so a row can move to an older `updated` than the newest
-                select(func.count(), func.sum(func.extract("epoch", ListingRow.updated)))
-            ).one()
-        ) + tuple(s.execute(select(func.count(), func.max(CommuteRow.computed))).one())
-        version += tuple(s.execute(select(func.count(), func.max(TrackerRow.synced))).one())
-        version += tuple(s.execute(select(func.count(), func.max(TrackerLinkRow.created))).one())
-        version += tuple(s.execute(select(func.max(TrackerEventRow.id))).one())
+        version = _store_version(s)
         ck = (str(engine.url), p)
         hit = _cache.get(ck)
         if hit and hit[0] == version:
@@ -358,7 +364,7 @@ def _name(f: F.Field) -> str:
 
 def hides_gone(conds: list[F.Cond]) -> bool:
     """Removed listings stay out of the way unless a filter asks about removal."""
-    return not any(c.field.name.removeprefix("listing.") == "gone_since" for c in conds)
+    return not any(_name(c.field) == "gone_since" for c in conds)
 
 
 def filter_listings(
@@ -988,14 +994,12 @@ def _adapters() -> dict:
 
 
 def sources(engine: Engine, p: Profile = PROFILE) -> list[SourceHealth]:
-    allx = judged(engine, p)
-    per: dict[str, list[int]] = {}
-    for x in allx:
+    listed, eligible, possible = Counter(), Counter(), Counter()  # by source, gone listings left out
+    for x in judged(engine, p):
         if x.status != "gone":
-            c = per.setdefault(x.source, [0, 0, 0])
-            c[0] += 1
-            c[1] += x.verdict == ELIGIBLE
-            c[2] += x.verdict == POSSIBLE
+            listed[x.source] += 1
+            eligible[x.source] += x.verdict == ELIGIBLE
+            possible[x.source] += x.verdict == POSSIBLE
     with Session(engine) as s:
         state = {r.source: r for r in s.scalars(select(SourceStateRow))}
         last = {
@@ -1013,7 +1017,7 @@ def sources(engine: Engine, p: Profile = PROFILE) -> list[SourceHealth]:
         }
     ads = _adapters()
     out = []
-    for name in sorted(set(state) | set(last) | set(per) | set(ads)):
+    for name in sorted(set(state) | set(last) | set(listed) | set(ads)):
         st, run, ad = state.get(name), last.get(name), ads.get(name)
         fails = st.consecutive_failures if st else 0
         dur = (run.finished - run.started).total_seconds() if run and run.finished else None
@@ -1032,9 +1036,9 @@ def sources(engine: Engine, p: Profile = PROFILE) -> list[SourceHealth]:
                 last_duration=dur,
                 last_error=run.error if run and not run.ok else None,
                 last_events=run.events if run else None,
-                listings=per.get(name, [0])[0],
-                eligible=per.get(name, [0, 0])[1],
-                possible=per.get(name, [0, 0, 0])[2],
+                listings=listed[name],
+                eligible=eligible[name],
+                possible=possible[name],
                 workers=workers.get(name, []),
             )
         )
