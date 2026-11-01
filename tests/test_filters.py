@@ -5,6 +5,7 @@ from sqlalchemy import Boolean, Column, MetaData, Table
 from sqlalchemy.dialects import postgresql
 
 from housing_watch import filters as F
+from housing_watch.filters.evaluate import _bounds
 from housing_watch.orm import ListingRow
 
 FS = F.LISTING_FIELDS
@@ -168,5 +169,5 @@ def test_saved_trees_degrade():
 
 
 def test_last_is_relative_to_now():
-    lo, hi = F._bounds(one({"first_seen": {"last": {"amount": 2, "unit": "hours"}}}))
+    lo, hi = _bounds(one({"first_seen": {"last": {"amount": 2, "unit": "hours"}}}))
     assert hi is None and abs((datetime.now(UTC) - lo).total_seconds() - 7200) < 5
