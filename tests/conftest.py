@@ -44,10 +44,13 @@ def pg_url():
 
 @pytest.fixture
 def pg(pg_url):
-    """An engine on the migrated test database, with every app table emptied first."""
+    """An engine on the migrated test database, with every app table emptied first, and nothing cached from it."""
     from sqlalchemy import create_engine, text
 
+    from housing_watch import queries
     from housing_watch.orm import Base
+
+    queries._cache.clear()  # keyed by the database URL, which every test shares; seeds reuse the same timestamps
 
     eng = create_engine(pg_url)
     with eng.begin() as c:
