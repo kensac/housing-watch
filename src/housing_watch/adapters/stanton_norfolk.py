@@ -22,7 +22,7 @@ from urllib.parse import urljoin, urlparse
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter
+from . import Adapter, prune
 
 HUB = "https://stanton-norfolk.rentcafewebsite.com/"
 _REFRESH = 7 * 86400
@@ -256,6 +256,5 @@ class StantonNorfolk(Adapter):
                 fp = None
             out.append(parse_site(base, home, fp, self._ad(ad) if ad else None, ad))
         ads = self.cache.get("ads", {})
-        for k in [k for k in ads if k not in self._seen]:
-            del ads[k]
+        prune(ads, self._seen)
         return Result(listings=out)

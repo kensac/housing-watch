@@ -20,7 +20,7 @@ from urllib.parse import urljoin
 
 from .. import fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter, cached_listing
+from . import Adapter, cached_listing, prune
 
 INDEX = "https://www.housingpartnership.com/services/current-vacancies"
 EMAIL = "marketing@housingpartnership.com"
@@ -193,6 +193,5 @@ class HousingPartnership(Adapter):
             cache[c["url"]] = {"fp": fp, "at": now, "listing": asdict(lst)}
             out.append(lst)
         live = {c["url"] for c in cards}
-        for u in [u for u in cache if u not in live]:
-            del cache[u]
+        prune(cache, live)
         return Result(listings=out)

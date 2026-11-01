@@ -16,7 +16,7 @@ from dataclasses import asdict
 
 from .. import fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter, cached_listing
+from . import Adapter, cached_listing, prune
 
 API = "https://a806-housingconnectapi.nyc.gov/HPDPublicAPI/api/Lottery"
 SEARCH_BODY = {
@@ -130,6 +130,5 @@ class HousingConnect(Adapter):
             cache[lid] = {"fp": fp, "listing": asdict(lst)}
             out.append(lst)
         live = {str(r["lotteryId"]) for r, _ in recs}
-        for k in [k for k in cache if k not in live]:
-            del cache[k]
+        prune(cache, live)
         return Result(listings=out)

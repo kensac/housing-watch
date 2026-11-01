@@ -18,7 +18,7 @@ from urllib.parse import unquote, urljoin
 
 from .. import fetch, parse
 from ..models import Listing, Result, Unit
-from . import Adapter, cached_listing
+from . import Adapter, cached_listing, prune
 
 BASE = "https://www.acjinternationalrealty.com"
 INDEX = f"{BASE}/affordable-re-rentals"
@@ -143,6 +143,5 @@ class ACJ(Adapter):
             hit["listing"] = asdict(lst)
             out.append(lst)
         idx["urls"] = urls
-        for u in [u for u in pages if u not in urls]:
-            del pages[u]
+        prune(pages, urls)
         return Result(listings=out)

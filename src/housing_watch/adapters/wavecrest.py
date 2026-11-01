@@ -13,8 +13,8 @@ from urllib.parse import urljoin
 
 from .. import fetch, parse
 from ..models import Band, Listing, Result, Unit
+from . import pdf_cached, prune
 from ._page import PageAdapter
-from .sois import pdf_cached
 
 INDEX = "https://wavecrestrentals.com/opportunities.php"
 OFFICE = re.compile(r"87-14\s*116\s*(?:th)?\s*Street,?\s*(?:\n\s*)?Richmond Hill,?\s*NY\s*11418", re.I)
@@ -186,6 +186,5 @@ class Wavecrest(PageAdapter):
         for heading, url, blurb in index_links(fetch.html(INDEX)):
             seen.add(url)
             out.append(parse_flyer(heading, url, blurb, pdf_cached(self.cache, url)))
-        for u in [u for u in self.cache.get("pdf", {}) if u not in seen]:
-            del self.cache["pdf"][u]
+        prune(self.cache.get("pdf", {}), seen)
         return Result(listings=out, snapshots=snaps)

@@ -10,7 +10,6 @@ its place, the image is OCR'd (cached by URL + sha256) and fed to the same token
 
 from __future__ import annotations
 
-import hashlib
 import os
 import re
 import subprocess
@@ -19,6 +18,7 @@ from urllib.parse import urljoin
 
 from .. import ami, fetch, parse
 from ..models import Listing, Result, Snapshot, Unit
+from . import by_content, prune
 from ._page import COMMON_IGNORE, DOC_RE, PageAdapter
 
 URL = "https://kgupright.com/current-vacancies"
@@ -225,21 +225,18 @@ def _run(cmd: list[str]) -> str:
     return subprocess.run(cmd, capture_output=True, text=True, timeout=180).stdout
 
 
-def _cached(cache: dict, kind: str, url: str, seen: set[str], convert) -> str:
-    data = fetch.get(url).content
-    h = hashlib.sha256(data).hexdigest()
-    store = cache.setdefault(kind, {})
-    seen.add(f"{kind}:{url}")
-    hit = store.get(url)
-    if hit and hit.get("sha") == h:
-        return hit["text"]
-    with tempfile.TemporaryDirectory() as d:
-        p = os.path.join(d, "f" + (os.path.splitext(url.split("?")[0])[1] or ".bin"))
-        with open(p, "wb") as f:
-            f.write(data)
-        text = convert(p)
-    store[url] = {"sha": h, "text": text}
-    return text
+def _cached(cache: dict, kind: str, url: str, seen: dict[str, set[str]], convert) -> str:
+    """convert(path) of the file at url, kept in cache[kind] by content hash."""
+
+    def extract(data: bytes) -> dict:
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "f" + (os.path.splitext(url.split("?")[0])[1] or ".bin"))
+            with open(p, "wb") as f:
+                f.write(data)
+            return {"text": convert(p)}
+
+    seen[kind].add(url)
+    return by_content(cache.setdefault(kind, {}), url, extract)["text"]
 
 
 class KgUpright(PageAdapter):
@@ -252,7 +249,7 @@ class KgUpright(PageAdapter):
     def fetch(self) -> Result:
         html = fetch.html(URL)
         snap = snapshot(html, self.name)
-        seen: set[str] = set()
+        seen: dict[str, set[str]] = {"pdf": set(), "ocr": set()}
         app = next((u for u in snap.links if "application" in u.lower() and ".pdf" in u.lower()), None)
         email = None
         if app:
@@ -263,8 +260,6 @@ class KgUpright(PageAdapter):
             return _cached(self.cache, "ocr", u, seen, lambda p: _run(["tesseract", p, "-", "--psm", "6"]))
 
         listings = parse_page(html, ocr, email)
-        for kind in ("pdf", "ocr"):
-            store = self.cache.setdefault(kind, {})
-            for u in [u for u in store if f"{kind}:{u}" not in seen]:
-                del store[u]
+        for kind, used in seen.items():
+            prune(self.cache.setdefault(kind, {}), used)
         return Result(listings=listings, snapshots=[snap])

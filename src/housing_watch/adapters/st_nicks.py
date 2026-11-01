@@ -7,7 +7,6 @@ page 1 says where to mail it. PDF text is cached by URL + sha256 so unchanged fl
 
 from __future__ import annotations
 
-import hashlib
 import re
 import shutil
 import subprocess
@@ -16,6 +15,7 @@ from urllib.parse import urljoin
 
 from .. import fetch, parse
 from ..models import Band, Listing, Result, Unit
+from . import by_content, prune
 from ._page import PageAdapter
 
 INDEX = "https://stnicksalliance.org/get-help-affordable-housing/"
@@ -34,16 +34,9 @@ def _pdf_extract(data: bytes) -> dict:
     return {"text": fetch.pdf_bytes_text(data), "links": links}
 
 
-def pdf_cached(cache: dict, url: str) -> dict:
-    """{'text', 'links'} of a PDF; re-extracted only when its bytes change."""
-    data = fetch.get(url).content
-    h = hashlib.sha256(data).hexdigest()
-    store = cache.setdefault("pdf", {})
-    hit = store.get(url)
-    if hit and hit.get("sha") == h:
-        return hit
-    store[url] = {"sha": h, **_pdf_extract(data)}
-    return store[url]
+def pdf_with_links(cache: dict, url: str) -> dict:
+    """{'text', 'links'} of a PDF, kept in cache["pdf"] by content hash."""
+    return by_content(cache.setdefault("pdf", {}), url, _pdf_extract)
 
 
 def openings(html: str) -> list[tuple[str, str]]:
@@ -146,14 +139,13 @@ class StNicks(PageAdapter):
             if not url.lower().endswith(".pdf"):
                 out.append(Listing(source=self.name, ext_id=url, title=label, url=url, borough=parse.borough(label)))
                 continue
-            flyer = pdf_cached(self.cache, url)
+            flyer = pdf_with_links(self.cache, url)
             seen.add(url)
             apply_url = next((u for u in flyer["links"] if u.lower().endswith(".pdf")), None)
             app_text = ""
             if apply_url:
-                app_text = pdf_cached(self.cache, apply_url)["text"]
+                app_text = pdf_with_links(self.cache, apply_url)["text"]
                 seen.add(apply_url)
             out.append(parse_flyer(label, url, flyer["text"], apply_url, app_text))
-        for u in [u for u in self.cache.get("pdf", {}) if u not in seen]:
-            del self.cache["pdf"][u]
+        prune(self.cache.get("pdf", {}), seen)
         return Result(listings=out, snapshots=snaps)

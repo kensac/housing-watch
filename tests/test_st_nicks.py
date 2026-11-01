@@ -43,9 +43,9 @@ def test_pdf_cache_skips_unchanged_bytes(monkeypatch):
     monkeypatch.setattr(st_nicks.fetch, "get", lambda url: SimpleNamespace(content=body["v"]))
     monkeypatch.setattr(st_nicks, "_pdf_extract", lambda data: calls.append(data) or {"text": "t", "links": []})
     cache: dict = {}
-    st_nicks.pdf_cached(cache, FLYER)
-    st_nicks.pdf_cached(cache, FLYER)
+    st_nicks.pdf_with_links(cache, FLYER)
+    st_nicks.pdf_with_links(cache, FLYER)
     assert len(calls) == 1
     body["v"] = b"%PDF-2"
-    st_nicks.pdf_cached(cache, FLYER)
+    st_nicks.pdf_with_links(cache, FLYER)
     assert len(calls) == 2

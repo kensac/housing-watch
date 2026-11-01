@@ -21,7 +21,7 @@ from dataclasses import asdict
 
 from .. import ami, fetch, parse
 from ..models import Band, Listing, Result, Unit
-from . import Adapter, cached_listing
+from . import Adapter, cached_listing, prune
 
 SEARCH = "https://prontohousing.io/api/listings/search/?searchType=property"
 DETAIL = "https://prontohousing.io/api/listings/properties/{}/"
@@ -190,6 +190,5 @@ class Pronto(Adapter):
             if lst:
                 out.append(lst)
         live = {str(r["id"]) for r in recs}
-        for k in [k for k in cache if k not in live]:
-            del cache[k]
+        prune(cache, live)
         return Result(listings=out)
