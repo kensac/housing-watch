@@ -160,7 +160,7 @@ export function OverviewPage() {
           </Group>
           {o.digest ? (
             <Stack gap="xs"><Text size="sm" fw={500}>{o.digest.subject || 'Nothing to mail; these events are marked read'}</Text>
-              <Code block mah={320} style={{ overflow: 'auto', whiteSpace: 'pre-wrap' }}>{o.digest.text}</Code></Stack>
+              {o.digest.text && <Code block mah={320} style={{ overflow: 'auto', whiteSpace: 'pre-wrap' }}>{o.digest.text}</Code>}</Stack>
           ) : <Text size="sm" c="dimmed">Nothing pending. The next digest collects events as sources run.</Text>}
         </Card>
       </SimpleGrid>
