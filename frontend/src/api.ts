@@ -45,6 +45,9 @@ export class ApiError extends Error {
   }
 }
 
+/** What a caught error says, for a notification or an error panel. */
+export const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e))
+
 const printed = new WeakMap<object, string>()
 type Vars<V> = V extends Record<string, never> ? [variables?: V] : [variables: V]
 
@@ -64,15 +67,6 @@ export async function request<R, V>(doc: TypedDocumentNode<R, V>, ...[variables]
   return res.data as R
 }
 
-export function qs(params: Record<string, string | number | string[] | null | undefined>): string {
-  const u = new URLSearchParams()
-  for (const [k, v] of Object.entries(params)) {
-    if (v === null || v === undefined || v === '') continue
-    for (const x of Array.isArray(v) ? v : [v]) u.append(k, String(x))
-  }
-  const s = u.toString()
-  return s ? `?${s}` : ''
-}
 
 // --- shared fragments ---------------------------------------------------------------------------------
 
