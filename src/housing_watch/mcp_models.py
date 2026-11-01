@@ -186,7 +186,7 @@ class Change(BaseModel):
     noise: bool | None = Field(None, description="changed: a status flap to or from unknown.")
     added: list[str] | None = Field(None, description="page_changed: new lines of text (the first 15).")
     new_links: list[str] | None = None
-    error: str | None = Field(None, description="source_failed / source_recovered.")
+    error: str | None = Field(None, description="source_failed: the error.")
 
 
 class Changes(BaseModel):

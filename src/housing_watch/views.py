@@ -91,11 +91,15 @@ def sorts(page: Page, given) -> tuple[queries.Sort, ...]:
     return out or DEFAULT_SORT[page]
 
 
+def conds(page: Page, tree: dict | None) -> list[F.Cond]:
+    """A page's filter tree as conditions; FilterError lists every problem."""
+    return F.from_tree(tree, FIELDS[page])
+
+
 def make_state(page: Page, filter: dict | None = None, q: str = "", sort=(), columns=()) -> State:
     """A page's state from what the API and the MCP tools take: the filter's JSON tree, (field, direction or
     None) sort pairs, column names. FilterError or ViewError says what is wrong."""
-    conds = F.from_tree(filter, FIELDS[page])
-    return State(page, conds, q, sorts(page, sort) if page != "events" else (), tuple(columns))
+    return State(page, conds(page, filter), q, sorts(page, sort) if page != "events" else (), tuple(columns))
 
 
 def state_from_json(page: Page, saved: dict) -> tuple[State, list[str]]:
