@@ -121,7 +121,9 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   unit search (one row per unit), listing detail with units/bands/events, the per-source health table,
   event feed, overview counts.
   It attaches verdicts by calling `criteria` at read time.
-  Every listing is judged once per store version and cached in memory, so pages filter in Python.
+  Every listing is judged once per store version and cached in memory, so pages filter in Python. The version is
+  the sum of `listings.updated` (set by `record_listings` whenever a stored field moves, with or without an
+  event; never by a scrape that only moves `last_seen`) plus the commute and tracker tables' counts and newest rows.
 - `changes.py` turns a `changed` event's `before`/`after` into lines (status, deadline, units relabeled,
   added or removed, rent, availability, income limits) and flags noise: a status moving to "unknown", or
   back from it to what it was, with nothing else changed. `db.py` stores both in the event's detail.
@@ -209,7 +211,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   re-validated against the registries on load; alembic 0010 converted version 1's `field.op.values` strings) and manual tracker links, through mutations that refuse anything not same-origin.
   Nothing is seeded.
 - `commute.py` routes eligible, listed listings to `HW_COMMUTE_TO` by transit (Google Routes API, weekday
-  8:30 AM), each origin address once per destination (again after 60 days), into `commutes`; a periodic
+  8:30 AM), each origin address once per destination (again after 60 days; a failed one after 10 minutes,
+  doubling with each failure in a row up to ~21 h), into `commutes`; a periodic
   `commute` task on the digest worker does it. queries.py attaches the minutes and lines at read time
   (`commute` filter field, sort and column).
 - `tracker.py` copies the owner's application tracker sheet (the source of truth for application status

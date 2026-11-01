@@ -250,7 +250,7 @@ _lock = threading.Lock()
 
 
 def judged(engine: Engine, p: Profile = PROFILE) -> list[ListingSummary]:
-    """Every listing, summarized and judged; recomputed only when the listings table moved."""
+    """Every listing, summarized and judged; recomputed only when a listing, commute or tracker row changed."""
     return _judged(engine, p).listings
 
 
@@ -273,12 +273,8 @@ def _judged(engine: Engine, p: Profile) -> _Judged:
     with Session(engine) as s:
         version = tuple(
             s.execute(
-                select(
-                    func.count(),
-                    func.max(ListingRow.last_seen),
-                    func.max(ListingRow.last_changed),
-                    func.count(ListingRow.gone_since),
-                )
+                # a sum, not a max: runs commit out of order, so a row can move to an older `updated` than the newest
+                select(func.count(), func.sum(func.extract("epoch", ListingRow.updated)))
             ).one()
         ) + tuple(s.execute(select(func.count(), func.max(CommuteRow.computed))).one())
         version += tuple(s.execute(select(func.count(), func.max(TrackerRow.synced))).one())
