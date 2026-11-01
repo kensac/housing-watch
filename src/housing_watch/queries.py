@@ -920,7 +920,7 @@ class TrackerRowView:
 @dataclass
 class TrackerBoard:
     configured: bool  # HW_TRACKER_SHEET is set
-    synced: datetime | None
+    synced: datetime | None  # when the sheet last changed (read every 5 minutes; an unchanged read keeps this)
     rows: list[TrackerRowView]  # by stage, then longest in it
 
 

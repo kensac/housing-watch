@@ -1402,6 +1402,10 @@ input TimeFilterInput {
 type Tracker {
   """HW_TRACKER_SHEET is set"""
   configured: Boolean!
+
+  """
+  When the sheet last changed (read every 5 minutes; an unchanged read keeps this)
+  """
   synced: DateTime
 
   """By stage, then longest in it"""
