@@ -16,7 +16,7 @@ dependencies = [
     "prometheus-client==0.26.0",
     "pypdf==6.21.4",
     "reportlab==5.1.0",
-    "google-auth[requests]==2.62.0",
+    "google-auth[requests]==2.62.1",
     "playwright==1.64.1",
     "fastmcp==4.1.6",
     "strawberry-graphql==0.339.1",
