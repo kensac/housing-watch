@@ -7,7 +7,11 @@ listings) is market-rate or voucher-oriented and is deliberately not collected.
 
 Cards give rent, beds, availability and address; the detail page adds the free-text description (where
 owners type AMI % and income limits), the Age Restrictions flag and per-model rows for buildings. A
-detail page is re-read only when its card changes or the cached copy is a week old.
+detail page is re-read only when its card changes or the cached copy is 7-10 days old (spread per listing).
+
+The site's Azure Front Door rate-limits a burst of detail pages with 403s, so at most REFRESH_PER_RUN cached
+pages are re-read per run (new listings always are) and a refusal keeps the cached copies for this run. Only
+a refused new listing, or a copy past STALE_LIMIT, fails the run (and the scheduler then backs off).
 """
 
 from __future__ import annotations
@@ -27,6 +31,8 @@ BASE = "https://www.affordablehousing.com"
 COUNTIES = ["new-york-county-ny", "kings-county-ny", "queens-county-ny", "bronx-county-ny", "richmond-county-ny"]
 PER_PAGE = 42
 MAX_AGE = timedelta(days=7)
+REFRESH_PER_RUN = 8  # cached detail pages re-read per run; hourly runs refresh ~190 a day
+STALE_LIMIT = timedelta(days=21)  # a cached copy older than this is not served when the site refuses a refresh
 
 _AMI = re.compile(
     r"(\d{2,3})\s*%\s*(?:of\s+)?(?:the\s+)?(?:AMI|area median)|\bAMI\s*(?:of\s*|at\s*|:\s*)?(\d{2,3})\s*%", re.I
@@ -244,16 +250,33 @@ class AffordableHousingCom(Adapter):
 
         cache: dict = self.cache.setdefault("detail", {})
         now = datetime.now(UTC)
-        out = []
-        for cid, card in cards.items():
-            stamp = _stamp(card)
-            hit = cache.get(cid)
-            if hit and hit["stamp"] == stamp and now - datetime.fromisoformat(hit["fetched"]) < MAX_AGE:
-                lst = cached_listing(hit["listing"]) if hit["listing"] else None
-            else:
+
+        def age(cid: str) -> timedelta:
+            return now - datetime.fromisoformat(cache[cid]["fetched"])
+
+        def due(cid: str, card: dict) -> bool:
+            # expiry spread over 3 days per listing, so a cache filled in one run does not expire in one run
+            spread = timedelta(hours=int(hashlib.sha1(cid.encode()).hexdigest()[:4], 16) % 72)
+            return cache[cid]["stamp"] != _stamp(card) or age(cid) >= MAX_AGE + spread
+
+        new = [cid for cid in cards if cid not in cache]
+        stale = [cid for cid in cards if cid in cache and due(cid, cards[cid])]
+        stale.sort(
+            key=lambda cid: (cache[cid]["stamp"] == _stamp(cards[cid]), -age(cid).total_seconds())
+        )  # changed first
+        refused = False
+        for cid in new + stale[:REFRESH_PER_RUN]:
+            if refused and cid in cache and age(cid) < STALE_LIMIT:
+                continue  # refused once this run: the rest keep their cached copies until a later run
+            card = cards[cid]
+            try:
                 lst = parse_detail(card, fetch.html(card["url"]))
-                cache[cid] = {"stamp": stamp, "fetched": now.isoformat(), "listing": asdict(lst) if lst else None}
-            if lst:
-                out.append(lst)
+            except fetch.Blocked:
+                if cid not in cache or age(cid) >= STALE_LIMIT:
+                    raise
+                refused = True
+                continue
+            cache[cid] = {"stamp": _stamp(card), "fetched": now.isoformat(), "listing": asdict(lst) if lst else None}
+        out = [cached_listing(cache[cid]["listing"]) for cid in cards if cache[cid]["listing"]]
         prune(cache, cards)
         return Result(listings=out)

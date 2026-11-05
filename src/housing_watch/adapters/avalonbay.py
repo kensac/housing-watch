@@ -160,4 +160,15 @@ class AvalonBay(Adapter):
         urls = parse_list(fetch.html(LIST))
         if len(urls) < self.min_listings:
             raise RuntimeError(f"{LIST}: only {len(urls)} NYC program links (layout changed?)")
-        return Result(listings=[parse_page(u, fetch.html(u)) for u in urls])
+        return Result(listings=[_page(u) for u in urls])
+
+
+def _page(url: str) -> Listing:
+    """parse_page, reading the page once more when the tiers are missing: the site now and then serves a page
+    without them (Avalon West Chelsea, 2026-11-05) that is whole again on the next request."""
+    try:
+        return parse_page(url, fetch.html(url))
+    except RuntimeError as e:
+        if "PROGRAM' blocks" not in str(e):
+            raise
+        return parse_page(url, fetch.html(url))

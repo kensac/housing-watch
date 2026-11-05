@@ -120,6 +120,10 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   infrastructure trouble and chunk errors. A failed run increments `source_state.consecutive_failures`
   and emits `source_failed` on the 2nd and 10th consecutive failure; the success after a reported
   failure emits `source_recovered`.
+- **Refusals back off:** a 403, or a 429 after retries, raises `fetch.Blocked`; a run that fails with it
+  pushes `next_due` out by `every_hours` doubled per consecutive failure, capped at 24 h, since hourly
+  retries only keep a rate limit tripped. Adapters that fetch many detail pages should cap re-reads per
+  run and serve cached copies on a refusal (`affordablehousing_com`).
 - **Metrics** (`fleet/metrics.py`, `:9091`, `HW_METRICS_PORT`): `hw_source_run_seconds` and
   `hw_source_failures_total` are per worker; `hw_jobs{task,status}`,
   `hw_source_last_success_timestamp_seconds` and `hw_source_consecutive_failures` are read from the

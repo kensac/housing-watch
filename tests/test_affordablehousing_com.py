@@ -135,3 +135,62 @@ def test_fetch_paginates_caches_and_drops_unrestricted(monkeypatch):
     assert {lst.ext_id for lst in again.listings} == got
     sea = next(x for x in again.listings if x.ext_id == "980978")
     assert sea.units[0].bands[0].income_max == 68040
+
+
+def _site(calls, refuse=()):
+    def fake_html(url, **kw):
+        calls.append(url)
+        for county in ("kings-county-ny", "bronx-county-ny"):
+            if url == f"{ah.BASE}/{county}/income-restricted/":
+                return (F / f"{county}.html").read_text()
+        if "/income-restricted/" in url:
+            return '<h1 id="MainContentPlaceHolder_lblHeading">Income Restricted Rental Properties</h1>0 Rentals'
+        cid = url.rstrip("/").rsplit("-", 1)[-1]
+        if cid in refuse or "*" in refuse:
+            raise ah.fetch.Blocked(f"GET {url}: Client error '403 Forbidden'")
+        p = F / f"{cid}.html"
+        return (
+            p.read_text() if p.exists() else "<script>propertyDetailsModel.domain.isIncomeRestricted(false);</script>"
+        )
+
+    return fake_html
+
+
+def _aged(cache, days):
+    for hit in cache["detail"].values():
+        hit["fetched"] = (ah.datetime.now(ah.UTC) - ah.timedelta(days=days)).isoformat()
+
+
+def test_refreshes_are_spread_over_runs(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ah.fetch, "html", _site(calls))
+    a = ah.AffordableHousingCom()
+    got = {lst.ext_id for lst in a.fetch().listings}
+    _aged(a.cache, 11)  # past MAX_AGE plus any spread: every copy is due
+    calls.clear()
+    again = ah.AffordableHousingCom(a.cache).fetch()
+    assert len(calls) == 5 + ah.REFRESH_PER_RUN  # no burst of 30 detail pages
+    assert {lst.ext_id for lst in again.listings} == got
+
+
+def test_a_refused_refresh_serves_the_cache(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ah.fetch, "html", _site(calls))
+    a = ah.AffordableHousingCom()
+    got = {lst.ext_id for lst in a.fetch().listings}
+    _aged(a.cache, 11)
+    calls.clear()
+    monkeypatch.setattr(ah.fetch, "html", _site(calls, refuse={"*"}))
+    again = ah.AffordableHousingCom(a.cache).fetch()
+    assert len(calls) == 5 + 1  # stops refreshing at the first refusal
+    assert {lst.ext_id for lst in again.listings} == got
+
+    _aged(a.cache, 30)  # past STALE_LIMIT: too old to serve, so the refusal fails the run
+    with pytest.raises(ah.fetch.Blocked):
+        ah.AffordableHousingCom(a.cache).fetch()
+
+
+def test_a_refused_new_listing_fails_the_run(monkeypatch):
+    monkeypatch.setattr(ah.fetch, "html", _site([], refuse={"980978"}))
+    with pytest.raises(ah.fetch.Blocked):
+        ah.AffordableHousingCom().fetch()

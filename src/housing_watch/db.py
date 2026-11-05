@@ -42,6 +42,7 @@ from .orm import (
 DATABASE_URL = os.environ.get("HW_DATABASE_URL", "")
 MIGRATE_LOCK = 0x68770001  # pg advisory lock id held while migrating
 DUE_SLACK = timedelta(seconds=60)  # a run finishing a little late still counts as on schedule
+BLOCK_BACKOFF_MAX = timedelta(hours=24)  # a source the site keeps refusing is retried at least daily
 REPORT_FAILURE_AT = (2, 10)  # consecutive failures that emit source_failed; one transient failure is noise
 
 
@@ -304,6 +305,10 @@ def finish_run(
         return
     st.consecutive_failures += 1
     st.failing_since = st.failing_since or now
+    if every_hours is not None and error and "Blocked: " in error:
+        # the site refused us: retrying hourly only keeps us blocked, so double the wait per refusal (1h, 2h, 4h, ...)
+        wait = timedelta(hours=every_hours) * 2 ** min(st.consecutive_failures - 1, 10)
+        st.next_due = now + min(wait, BLOCK_BACKOFF_MAX) - DUE_SLACK
     if st.consecutive_failures in REPORT_FAILURE_AT:
         detail = {"error": (error or "")[:500], "fails": st.consecutive_failures}
         _event(s, source, None, "source_failed", source, detail=detail, now=now)

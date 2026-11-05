@@ -108,6 +108,7 @@ def test_get_retries_only_what_can_change(monkeypatch, status, calls):
 
     monkeypatch.setattr(fetch._client, "get", get)
     monkeypatch.setattr(fetch.time, "sleep", lambda s: None)
-    with pytest.raises(fetch.FetchError, match=str(status)):
+    with pytest.raises(fetch.FetchError, match=str(status)) as e:
         fetch.get("https://a.example/x")
     assert len(seen) == calls
+    assert isinstance(e.value, fetch.Blocked) == (status in (403, 429))  # a refusal, which the scheduler backs off
