@@ -71,3 +71,12 @@ def test_tier_status_labels():
     assert tier_status("Waitlist Closed") == "closed"
     assert tier_status("Join Waitlist") == "waitlist"
     assert tier_status("Apply Now") == "open"
+
+
+def test_a_page_served_without_tiers_is_read_once_more(monkeypatch):
+    from housing_watch.adapters import avalonbay
+
+    url = f"{NYC}avalon-west-chelsea-affordable-program/"
+    pages = iter(["<html><title>Avalon West Chelsea</title></html>", (F / "avalon-west-chelsea.html").read_text()])
+    monkeypatch.setattr(avalonbay.fetch, "html", lambda u, **kw: next(pages))
+    assert avalonbay._page(url).ext_id == "avalon-west-chelsea"

@@ -40,6 +40,13 @@ class FetchError(RuntimeError):
     pass
 
 
+class Blocked(FetchError):
+    """The site refused us (403, or 429 after retries): the scheduler backs the source off, see db.finish_run."""
+
+
+BLOCKED_STATUS = (403, 429)
+
+
 class NeedsByparr(Exception):
     """fetch.rendered() was called on a worker without BYPARR_URL; the fleet re-queues the job on `byparr`.
 
@@ -92,7 +99,8 @@ def get(url: str, *, headers: dict | None = None, retries: int = 2, allow_304: b
                 break  # a 404 or 403 is the server's answer; asking again only waits for it
             if attempt < retries:
                 time.sleep(3 * (attempt + 1))
-    raise FetchError(f"GET {url}: {err}")
+    code = err.response.status_code if isinstance(err, httpx.HTTPStatusError) else None
+    raise (Blocked if code in BLOCKED_STATUS else FetchError)(f"GET {url}: {err}")
 
 
 def post_json(

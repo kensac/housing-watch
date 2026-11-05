@@ -240,3 +240,20 @@ def test_unchanged_scrape_keeps_the_judged_cache(pg):
     with Session(pg) as s, s.begin():  # a run that started earlier commits later, with an older timestamp
         db.record_listings(s, "t", [replace(L(), title="T3")], now=db.utcnow() - timedelta(minutes=5))
     assert [x.title for x in queries.judged(pg) if x.source == "t"] == ["T3"]
+
+
+def test_a_blocked_source_backs_off_and_resets_on_success(pg):
+    def gap(s):
+        return (s.get(SourceStateRow, "t").next_due - db.utcnow()).total_seconds() / 3600
+
+    with Session(pg) as s, s.begin():
+        waits = []
+        for _ in range(7):
+            finish(s, "t", False, error="Blocked: GET https://x/: Client error '403 Forbidden'", every_hours=1)
+            waits.append(round(gap(s)))
+        assert waits == [1, 2, 4, 8, 16, 24, 24]  # doubled per refusal, capped at a day
+        finish(s, "t", False, error="RuntimeError: layout changed?", every_hours=1)
+        assert round(gap(s)) == 1  # only a refusal backs off
+        finish(s, "t", True, every_hours=1)
+        finish(s, "t", False, error="chunk '1/2': Blocked: GET https://x/", every_hours=1)
+        assert round(gap(s)) == 1  # the streak restarted
