@@ -413,3 +413,27 @@ def test_a_tier_table_stands_when_the_official_source_fails(monkeypatch):
     lst = Sanel({}).enrich(parse_page(url(name), html), html)
     (u,) = lst.units
     assert (u.unit_no, u.rent, [b.household for b in u.bands]) == (None, 2941.0, [1, 3])
+
+
+def test_for_unit_keeps_only_the_listings_own_unit():
+    from housing_watch.adapters.sanel import for_unit
+    from housing_watch.models import Listing, Unit
+
+    def lst(title, rent=None):
+        return Listing("sanel", "x", title, "u", units=[Unit("1br", rent)] if rent else [])
+
+    building = [
+        Unit("1br", 2593.0, 130, "20-07K"),
+        Unit("1br", 3094.0, 160, "10-14E"),
+        Unit("3br", 5037.0, 160, "40-25C"),
+    ]
+    assert for_unit(lst("Waterside Plaza #20-07K"), building) == [building[0]]  # Pronto answers for the building
+    assert for_unit(lst("Waterside Plaza #99-99Z"), building) is None  # named units, none of them this one
+    assert for_unit(lst("Waterside Plaza"), building) == building  # the listing is the building
+    tiers = [Unit("1br", 2593.0, 130), Unit("2br", 3100.0, 130)]
+    assert for_unit(lst("Waterside Plaza #20-07K"), tiers) == tiers  # tiers name no unit
+    repeated = [Unit("1br", 2244.0, 80, "002A"), Unit("2br", 2700.0, 80, "002A")]  # one number, two addresses
+    assert for_unit(lst("Eastchester Heights #002A", 2244.0), repeated) == [repeated[0]]
+    assert for_unit(lst("Eastchester Heights #002A"), repeated) is None  # no rent to tell them apart
+    same = [Unit("1br", 2244.0, 80, "002A"), Unit("1br", 2244.0, 80, "002A")]
+    assert for_unit(lst("Eastchester Heights #2A", 2244.0), same) == [same[0]]  # identical: either is this one

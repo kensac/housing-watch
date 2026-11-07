@@ -50,6 +50,7 @@ MAX_FAILED = 20  # more fetch failures than this in one run = something is wrong
 DOC_TTL_H = 24  # an official document (API answer, flyer, list) is re-read at most this often
 DOC_DROP_H = 7 * 24  # a document no listing has needed for this long leaves the cache
 UNIT_TITLE = re.compile(r"(.*?)\s*#\s*(\w+)\s*$")  # SANEL titles a single unit "<address> #<unit>"
+UNIT_NO = re.compile(r"#\s*([\w-]+)\s*$")  # the unit a title names, hyphens included ("Waterside Plaza #20-07K")
 # sources with nothing public beyond SANEL's summary
 NOT_PUBLISHED = {
     "St. Nicks Alliance": "St. Nicks' waitlist application lists no rents or income limits (HUD-assisted).",
@@ -109,6 +110,27 @@ def _in_table(u: Unit, rows: list[list[str]]) -> bool:
         ):
             return True
     return False
+
+
+def _norm(no: str | None) -> str:
+    return re.sub(r"[^0-9a-z]", "", (no or "").lower()).lstrip("0")  # "#2A" is unit 002A
+
+
+def for_unit(lst: Listing, units: list[Unit]) -> list[Unit] | None:
+    """The official units that are this listing's own, when its title names one unit: an official source can answer
+    for the whole building (Pronto's property API lists every unit), and a building can repeat a unit number across
+    its addresses (Eastchester Heights' 002A), so a repeated number is narrowed by SANEL's rent. None when the
+    official source names units but cannot say which is this one; units without numbers (tiers) pass through."""
+    m = UNIT_NO.search(lst.title)
+    if not m or not any(u.unit_no for u in units):
+        return units
+    mine = [u for u in units if _norm(u.unit_no) == _norm(m.group(1))]
+    if len(mine) > 1:
+        rents = {round(u.rent) for u in lst.units if u.rent}
+        mine = [u for u in mine if u.rent and round(u.rent) in rents]
+    if len({(u.size, u.rent, u.ami) for u in mine}) != 1:
+        return None
+    return mine[:1]
 
 
 def _unit(u: dict) -> Unit:
@@ -290,6 +312,10 @@ class Sanel(Adapter):
                 lst.units, lst.notes = kept.units, kept.notes
                 return lst
             units, note = None, "Official source unreadable this run; units are SANEL's summary."
+        if units:
+            units = for_unit(lst, units)
+            if units is None:
+                note = "The official source lists the whole building, not which unit this is."
         if tiered and not any(b.income_max for u in units or [] for b in u.bands):
             return lst  # the tier table says more than the official source
         if units:
