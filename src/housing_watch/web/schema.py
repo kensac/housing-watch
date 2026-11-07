@@ -352,7 +352,7 @@ class Query:
 
     @query
     def tracker(self, info: strawberry.Info) -> Tracker:
-        """Every tracker sheet row with its stage history and the listings matched to it."""
+        """Every tracker row with its stage history and the listings matched to it."""
         return queries.tracker_board(*_ctx(info))
 
     @query
@@ -393,7 +393,7 @@ class Mutation:
 
     @mutation("linkTracker")
     def link_tracker(self, info: strawberry.Info, input: LinkTrackerInput) -> TrackerLinkPayload:
-        """Link a listing to a sheet row, or mark it as in no row (row_key null)."""
+        """Link a listing to a tracker row, or mark it as in no row (row_key null)."""
         engine, p = _write(info)
         tracker.link(engine, input.listing_key, input.row_key)
         return queries.tracker_link(engine, input.listing_key, p)
@@ -407,7 +407,7 @@ class Mutation:
 
     @mutation("writeTracker")
     def write_tracker(self, info: strawberry.Info, input: WriteTrackerInput) -> TrackerWritePayload:
-        """Set a tracker row's Status and/or Notes in the sheet itself, then sync it."""
+        """Set a tracker row's Status (an application stage; empty clears it) and/or Notes."""
         engine, p = _write(info)
         kw = {k: getattr(input, k) for k in ("status", "notes") if getattr(input, k) is not strawberry.UNSET}
         tracker.write(engine, input.row_key, **kw)
@@ -415,7 +415,7 @@ class Mutation:
 
     @mutation("addTrackerRow")
     def add_tracker_row(self, info: strawberry.Info, input: AddTrackerRowInput) -> TrackerLinkPayload:
-        """Add a sheet row for a listing (named after it, linked to it), then sync and link the listing to it."""
+        """Add a tracker row for a listing, named after it and linked to it."""
         engine, p = _write(info)
         tracker.add_row(engine, input.listing_key, input.status, input.notes)
         return queries.tracker_link(engine, input.listing_key, p)

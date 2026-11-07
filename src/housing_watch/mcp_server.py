@@ -11,8 +11,8 @@ upstream tokens are kept encrypted under FASTMCP_HOME; losing them means reconne
 filters (the JSON tree of `filters`, as pydantic models in mcp_models.py) and return the same fields as the web
 API, minus the applicant's PDFs; every tool's parameters and output have a JSON Schema, sent with its `$defs` (not
 expanded, which would repeat the filter schema in every place it is used). The write tools are the web app's
-mutations, thin adapters over the same domain functions: saved views, tracker links and the sheet's Status/Notes
-and new rows (tracker.py), source controls and listing overrides (control.py), the profile (profiles.py). Each
+mutations, thin adapters over the same domain functions: saved views, tracker rows (Status/Notes, new rows) and
+links (tracker.py), source controls and listing overrides (control.py), the profile (profiles.py). Each
 write is logged at INFO with its caller (the OAuth subject).
 `graphql` runs read-only queries in-process against the web app's own schema (web/schema.py, `schema.graphql`);
 `graphql_mutation` runs mutations, with a context marked trusted (OAuth already decided who may call it), so they
@@ -229,9 +229,9 @@ def build(engine: Engine, p: Profile | None = None, auth=None):
             "NYC affordable-housing listings scraped hourly from ~48 sources, judged against one applicant's "
             "profile (`profile` reads it, `set_profile` changes it and re-judges everything). "
             "verdict is eligible / possible / excluded with a reason; commute is transit minutes to work; "
-            "application is the stage from the applicant's tracker sheet. Read with search/fetch, find_*, "
+            "application is the stage from the applicant's tracker. Read with search/fetch, find_*, "
             "recent_changes, overview, saved_views, tracker_board, profile or `graphql` (queries only). Write with "
-            "the view, tracker (links, and the sheet's Status/Notes), override (correct a listing; kept across "
+            "the view, tracker (rows' Status/Notes, new rows, links), override (correct a listing; kept across "
             "scrapes), source (run now, pause) and profile tools, or `graphql_mutation`. " + FILTERS
         ),
         auth=auth,
@@ -340,7 +340,7 @@ def build(engine: Engine, p: Profile | None = None, auth=None):
 
     @tool(READ)
     def tracker_board() -> M.TrackerModel:
-        """Every row of the applicant's tracker sheet, by stage: its stage history, cells and matched listings.
+        """Every row of the applicant's tracker, by stage: its stage history, cells and matched listings.
         `row_key` is what `link_tracker` takes."""
         return M.TrackerModel.model_validate(asdict(queries.tracker_board(engine, P())))
 
@@ -382,7 +382,7 @@ def build(engine: Engine, p: Profile | None = None, auth=None):
         listing_key: str,
         row_key: Annotated[str | None, Field(description="a `tracker_board` row; null: the listing is in no row")],
     ) -> M.TrackerLinkModel:
-        """Link a listing to a tracker sheet row by hand, overriding automatic matching, or mark it as in no row."""
+        """Link a listing to a tracker row by hand, overriding automatic matching, or mark it as in no row."""
         tracker.link(engine, listing_key, row_key)
         return M.TrackerLinkModel.model_validate(asdict(queries.tracker_link(engine, listing_key, P())))
 
@@ -399,17 +399,20 @@ def build(engine: Engine, p: Profile | None = None, auth=None):
             str | None, Field(description=f"one of {', '.join(tracker.STAGES)}; empty clears it; null: unchanged")
         ] = None,  # fmt: skip
         notes: Annotated[str | None, Field(description="the row's Notes; empty clears them; null: unchanged")] = None,
-    ) -> M.SheetWrite:
-        """Set a tracker row's Status and/or Notes in the Google Sheet itself, then sync it."""
+    ) -> M.TrackerWrite:
+        """Set a tracker row's Status (its application stage) and/or Notes."""
         kw = {k: v for k, v in (("status", status), ("notes", notes)) if v is not None}
-        return M.SheetWrite(row_key=row_key, rows=tracker.write(engine, row_key, **kw))
+        tracker.write(engine, row_key, **kw)
+        return _row(row_key)
 
     @tool(WRITE)
-    def add_tracker_row(listing_key: str, status: str | None = None, notes: str | None = None) -> M.SheetWrite:
-        """Add a row to the tracker sheet for a listing (Property: its title; Apply / Source: its link), then sync
-        and link the listing to it."""
-        key = tracker.add_row(engine, listing_key, status, notes)
-        return M.SheetWrite(row_key=key, rows=len(tracker.load(engine)[0]))
+    def add_tracker_row(listing_key: str, status: str | None = None, notes: str | None = None) -> M.TrackerWrite:
+        """Add a tracker row for a listing (Property: its title; Apply / Source: its link), linked to it."""
+        return _row(tracker.add_row(engine, listing_key, status, notes))
+
+    def _row(key: str) -> M.TrackerWrite:
+        r = next(r for r in tracker.load(engine)[0] if r.row_key == key)
+        return M.TrackerWrite(row_key=key, status=r.status, notes=r.notes)
 
     def _src(name: str) -> M.SourceState:
         st = control.state(engine, name)

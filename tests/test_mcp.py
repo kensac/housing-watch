@@ -323,7 +323,10 @@ def test_owner_write_tools(pg):
     with pytest.raises(ToolError, match="paused"):
         go("run_source", source="mgny")
     assert go("pause_source", source="mgny", paused=False)["paused"] is False
-    with pytest.raises(ToolError, match="not configured"):
+    row = go("add_tracker_row", listing_key="a:1", status="To Apply")
+    assert row["status"] == "To Apply"
+    assert go("write_tracker", row_key=row["row_key"], notes="called")["notes"] == "called"
+    with pytest.raises(ToolError, match="No such tracker row"):
         go("write_tracker", row_key="x", status="Applied")
     res = go("graphql_mutation", query='mutation { pauseSource(input: { source: "mgny", paused: true }) '
                                        "{ source { source paused } } }")  # fmt: skip

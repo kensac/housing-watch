@@ -13,8 +13,7 @@ The schema and write path are described in
 - The deletes that exist are scratch or owner-controlled, and are the only
   ones: `chunk_results` rows once their run is recorded or failed
   (`db.clear_chunks`); a run handed to another queue before it started
-  (`db.discard_run`); `tracker_rows`, replaced on each sync because the sheet
-  is the source of truth (its history is `tracker_events`); saved views, manual tracker links, listing overrides and the profile row
+  (`db.discard_run`); saved views, manual tracker links, listing overrides and the profile row
   the owner deletes; finished Procrastinate jobs
   (`fleet.tasks.cleanup`: successes after 2 days, failures after a week). Add a new
   one only with the owner's agreement.

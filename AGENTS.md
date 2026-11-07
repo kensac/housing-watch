@@ -54,7 +54,7 @@ is the design; the topic documents below are the rules for changing it.
 - `src/housing_watch/notify/`: change lines (`changes.py`) and the email
   (`digest.py`).
 - `src/housing_watch/tracker.py`, `commute.py`, `applications.py`,
-  `parse.py`: the tracker sheet sync, transit commutes, application PDF
+  `parse.py`: the application tracker, transit commutes, application PDF
   filling, shared parsing helpers.
 - `src/housing_watch/web/`: FastAPI app and Strawberry schema.
 - `src/housing_watch/mcp_server.py`, `mcp_models.py`: the MCP server.

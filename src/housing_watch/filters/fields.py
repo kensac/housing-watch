@@ -120,7 +120,7 @@ COMPUTED = [
     Field("eligible_units", "Eligible units", "Verdict", "number", "computed"),
     Field("unit_count", "Units", "Verdict", "number", "computed"),
     Field("commute", "Commute (min)", "Commute", "number", "computed"),  # transit to HW_COMMUTE_TO, eligible only
-    # the tracker sheet's Status as a stage: legacy statuses mapped, unknown ones as written
+    # the tracker row's Status as a stage: legacy statuses mapped, unknown ones as written
     Field("application", "Application stage", "Tracker", "text", "computed", order=tuple(T.STAGES)),
     Field("application_group", "Whose move", "Tracker", "enum", "computed", values=T.StageGroup),
     Field("application_notes", "Tracker notes", "Tracker", "text", "computed"),

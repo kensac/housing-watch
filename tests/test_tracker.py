@@ -1,7 +1,6 @@
 import dataclasses
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from urllib.parse import unquote
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,7 +15,7 @@ from housing_watch.web.app import create_app
 from seed import L, Session, add_listing, gql, gql_error, nodes, seed
 
 SAME = {"origin": "http://testserver"}
-TRACKER = """{ tracker { configured rows { property status stage group stage_since stage_since_baseline page_url
+TRACKER = """{ tracker { updated rows { property status stage group stage_since stage_since_baseline page_url
   cells { name value link } events { at stage_from stage_to group } listings { key tracker_match } } } }"""
 LINK = """mutation($k: ID!, $r: ID) {
   linkTracker(input: { listing_key: $k, row_key: $r }) { listing_key row_key } }"""
@@ -31,34 +30,13 @@ def application(c, key: str) -> str | None:
     return gql(c, APPLICATION, k=key)["data"]["listing"]["summary"]["application"]
 
 
-def cell(text, link=None, rich=None):
-    v = {"formattedValue": text}
-    if link:
-        v["hyperlink"] = link
-    if rich:
-        v["textFormatRuns"] = [{"startIndex": 0, "format": {"link": {"uri": rich}}}]
-    return v
-
-
-HEAD = ["Property", "Status", "Apply / Source", "Borough", "Notes", "Property Page"]
-SHEET = {"sheets": [{"data": [{"rowData": [
-    {"values": [cell(h) for h in HEAD]},
-    {"values": [cell("SVEN"), cell("Applied"), cell("NYS Housing Search", "https://example.org/portal/"),
-                cell("Queens"), cell("Log #8984."), cell("Official property", rich="https://svenlic.com/")]},
-    {"values": [cell("ONE LIC (42-10 27th St)"), cell("To Apply"), cell("iAfford", "https://iaffordny.com/re-rentals/1")]},
-    {"values": [cell("Ruby (241 West 28th Street)"), cell("Contacted"), cell("NYC Housing Partnership")]},
-    {"values": [cell("")]},
-    {"values": [cell("SVEN"), cell("Seen")]},
-]}]}]}  # fmt: skip
-
-
-def test_parse_reads_text_links_and_skips_blank_rows():
-    rows = T.parse(SHEET)
-    assert [r["Property"] for r in rows] == ["SVEN", "ONE LIC (42-10 27th St)", "Ruby (241 West 28th Street)", "SVEN"]
-    assert rows[0]["Apply / Source__link"] == "https://example.org/portal/" and rows[0]["_row"] == 2
-    assert rows[0]["Property Page__link"] == "https://svenlic.com/"  # a rich-text link
-    with pytest.raises(ValueError):
-        T.parse({"sheets": [{"data": [{"rowData": [{"values": [cell("Name")]}]}]}]})
+def imported(s, prop, status, position, notes=None, source_url=None, page_url=None, cells=None) -> None:
+    """A row as the import from the old sheet left it, with its first event."""
+    key = T.row_key(prop)
+    cells = cells or {"Property": prop, "Status": status}
+    s.add(TrackerRow(row_key=key, position=position, property=prop, status=status, notes=notes,
+                     source_url=source_url, page_url=page_url, cells=cells))  # fmt: skip
+    s.add(TrackerEventRow(row_key=key, status_from=None, status_to=status))
 
 
 def test_keys():
@@ -101,21 +79,22 @@ def test_match():
 
 
 @pytest.fixture
-def synced(pg, monkeypatch, tmp_path):
+def synced(pg):
     seed(pg)
     with Session(pg) as s, s.begin():
         add_listing(s, L("i", "1", "Queens", address="42-10 27th St, Queens, NY", status="open"))
-    key = tmp_path / "k.json"
-    key.write_text("{}")
-    monkeypatch.setattr(T, "SHEET", "sheet-id")
-    monkeypatch.setattr(T, "KEY_FILE", str(key))
-    monkeypatch.setattr(T, "_token", lambda: "tok")
-    monkeypatch.setattr(T.fetch, "get", lambda url, headers=None: SimpleNamespace(json=lambda: SHEET))
-    assert T.sync(pg) == 3  # the second SVEN row is a duplicate
+        imported(s, "SVEN", "Applied", 2, notes="Log #8984.", source_url="https://example.org/portal/",
+                 page_url="https://svenlic.com/",
+                 cells={"Property": "SVEN", "Status": "Applied", "Apply / Source": "NYS Housing Search",
+                        "Apply / Source__link": "https://example.org/portal/", "Borough": "Queens",
+                        "Notes": "Log #8984.", "Property Page": "Official property",
+                        "Property Page__link": "https://svenlic.com/"})  # fmt: skip
+        imported(s, "ONE LIC (42-10 27th St)", "To Apply", 3, source_url="https://iaffordny.com/re-rentals/1")
+        imported(s, "Ruby (241 West 28th Street)", "Contacted", 4)
     return pg
 
 
-def test_sync_and_read(synced):
+def test_rows_match_and_read(synced):
     (x,) = [x for x in Q.judged(synced) if x.key == "i:1"]
     assert (x.application, x.tracker_match, x.tracker_row) == ("To Apply", "address", "ONE LIC (42-10 27th St)")
     hits = Q.search_listings(
@@ -136,7 +115,7 @@ def test_tracker_api_and_manual_links(synced):
     c = TestClient(create_app(synced))
     t = gql(c, TRACKER)["data"]["tracker"]
     rows = {r["property"]: r for r in t["rows"]}
-    assert t["configured"] and [x["key"] for x in rows["ONE LIC (42-10 27th St)"]["listings"]] == ["i:1"]
+    assert t["updated"] and [x["key"] for x in rows["ONE LIC (42-10 27th St)"]["listings"]] == ["i:1"]
     assert rows["SVEN"]["listings"] == [] and rows["SVEN"]["page_url"] == "https://svenlic.com/"
     one = rows["ONE LIC (42-10 27th St)"]
     assert one["group"] == "your_move" and one["events"][0]["group"] == "your_move"
@@ -178,11 +157,6 @@ def test_link_and_unlink(synced, monkeypatch):
     assert (got.row_key, got.listing.tracker_match, len(calls)) == (sven, "manual", 1)  # one keyed lookup
     T.unlink(synced, "a:1")
     assert Q.tracker_link(synced, "a:1").row_key is None and Q.judged_listing(synced, "zz:9") is None
-
-
-def test_sync_is_off_unconfigured(pg, monkeypatch):
-    monkeypatch.setattr(T, "SHEET", "")
-    assert T.sync(pg) == 0
 
 
 def test_units():
@@ -241,26 +215,23 @@ def test_stages_and_legacy_statuses():
     assert ranked == ["To Apply", "Applied", "Offer", "Closed", "Waiting on landlord", None]
 
 
-def sheet_of(rows: list[tuple[str, str]]) -> dict:
-    head = {"values": [cell("Property"), cell("Status"), cell("Notes")]}
-    body = [{"values": [cell(p), cell(s), cell(f"Note for {p}.")]} for p, s in rows]
-    return {"sheets": [{"data": [{"rowData": [head, *body]}]}]}
-
-
 @pytest.fixture
-def sheet(pg, monkeypatch, tmp_path):
-    """Listings t:1..t:5 (invented addresses) and a sheet whose rows a test sets before each `sync()`."""
+def sheet(pg):
+    """Listings t:1..t:5 (invented addresses) and tracker rows a test sets with `put(rows)`."""
     with Session(pg) as s, s.begin():
         for n, addr in enumerate(["10 Elm St", "20 Oak Ave", "30 Pine Rd", "1 Nowhere Ln", "40 Cedar Pl"], start=1):
             add_listing(s, L("t", str(n), "Queens", address=f"{addr}, Queens, NY"))
-    key = tmp_path / "k.json"
-    key.write_text("{}")
-    monkeypatch.setattr(T, "SHEET", "sheet-id")
-    monkeypatch.setattr(T, "KEY_FILE", str(key))
-    monkeypatch.setattr(T, "_token", lambda: "tok")
-    box = SimpleNamespace(rows=[], engine=pg, sync=lambda: T.sync(pg))
-    monkeypatch.setattr(T.fetch, "get", lambda url, headers=None: SimpleNamespace(json=lambda: sheet_of(box.rows)))
-    return box
+
+    def put(rows: list[tuple[str, str]]) -> None:
+        with Session(pg) as s, s.begin():
+            have = {r.row_key for r in s.scalars(select(TrackerRow))}
+            for n, (prop, st) in enumerate(rows, start=2):
+                if T.row_key(prop) not in have:
+                    imported(s, prop, st, n, notes=f"Note for {prop}.")
+        for prop, st in rows:
+            T.write(pg, T.row_key(prop), status=st)
+
+    return SimpleNamespace(engine=pg, put=put)
 
 
 def tracker_events(pg) -> list[tuple]:
@@ -269,35 +240,29 @@ def tracker_events(pg) -> list[tuple]:
         return [(e.row_key, e.status_from, e.status_to, e.baseline) for e in s.scalars(q)]
 
 
-def test_sync_records_status_changes(sheet):
+def test_writes_record_status_changes(sheet):
     pg = sheet.engine
-    with Session(pg) as s, s.begin():  # a row synced before events existed
+    with Session(pg) as s, s.begin():  # imported with a baseline event: it was Contacted before tracking began
         s.add(TrackerRow(row_key="10 elm st", position=2, property="10 Elm St", status="Contacted", cells={}))
-    sheet.rows = [("10 Elm St", "Contacted"), ("20 Oak Ave", "To Apply")]
-    sheet.sync()
-    assert tracker_events(pg) == [("10 elm st", None, "Contacted", True), ("20 oak ave", None, "To Apply", False)]
-    sheet.sync()  # nothing changed: no event
-    assert len(tracker_events(pg)) == 2
-    sheet.rows = [("10 Elm St", "Form Requested"), ("20 Oak Ave", "Applied")]
-    sheet.sync()
-    assert tracker_events(pg)[2:] == [("10 elm st", "Contacted", "Form Requested", False),
-                                      ("20 oak ave", "To Apply", "Applied", False)]  # fmt: skip
+        s.add(TrackerEventRow(row_key="10 elm st", status_from=None, status_to="Contacted", baseline=True))
+    T.write(pg, "10 elm st", status="Form Requested")
+    T.write(pg, "10 elm st", notes="called")  # Notes only: no event
+    assert tracker_events(pg) == [
+        ("10 elm st", None, "Contacted", True),
+        ("10 elm st", "Contacted", "Form Requested", False),
+    ]
     hist = T.history(pg)  # Contacted -> Form Requested is a rename, not a new stage: the baseline still holds
     assert [(h.stage_from, h.stage_to, h.baseline) for h in hist["10 elm st"]] == [(None, "Form Requested", True)]
-    assert [(h.stage_from, h.stage_to) for h in hist["20 oak ave"]] == [(None, "To Apply"), ("To Apply", "Applied")]
-    sheet.rows = [("20 Oak Ave", "Applied")]  # a row removed from the sheet records nothing and keeps its events
-    sheet.sync()
-    assert len(tracker_events(pg)) == 4 and "10 elm st" in T.history(pg)
-    sheet.rows = [("20 Oak Ave", "Applied"), ("10 Elm St", "Form Requested")]  # back, unchanged: still nothing
-    sheet.sync()
-    assert len(tracker_events(pg)) == 4
+    T.write(pg, "10 elm st", status="Applied")
+    assert [(h.stage_from, h.stage_to) for h in T.history(pg)["10 elm st"]][-1] == ("Form Requested", "Applied")
 
 
 def test_stage_order_group_filter_and_api(sheet):
     pg = sheet.engine
-    sheet.rows = [("10 Elm St", "Rejected"), ("20 Oak Ave", "Action Needed"), ("30 Pine Rd", "Applied"),
-                  ("40 Cedar Pl", "Waiting on landlord"), ("50 Spruce St", "Applied")]  # fmt: skip
-    sheet.sync()
+    with Session(pg) as s, s.begin():  # imported statuses: one legacy, one unknown
+        imported(s, "10 Elm St", "Rejected", 2)
+        imported(s, "40 Cedar Pl", "Waiting on landlord", 5)
+    sheet.put([("20 Oak Ave", "Action Needed"), ("30 Pine Rd", "Applied"), ("50 Spruce St", "Applied")])
     with pg.begin() as c:  # Spruce has been Applied for longer than Pine
         c.execute(update(TrackerEventRow).where(TrackerEventRow.row_key == "50 spruce st")
                   .values(at=datetime(2026, 10, 1, tzinfo=UTC)))  # fmt: skip
@@ -334,77 +299,39 @@ def test_stage_order_group_filter_and_api(sheet):
     assert elm["stage_since"] == elm["events"][0]["at"] and elm["stage_since_baseline"] is False
 
 
-@pytest.fixture
-def sheet_api(synced, monkeypatch):
-    """The Sheets API for writes: values reads answer from SHEET's grid, POSTs are recorded."""
-    grid = [[v.get("formattedValue", "") for v in r["values"]] for r in SHEET["sheets"][0]["data"][0]["rowData"]]
-    posts = []
-
-    def get(url, headers=None):
-        if "/values/" not in url:
-            return SimpleNamespace(json=lambda: SHEET)
-        a1 = unquote(url.rsplit("/values/", 1)[1]).split("!", 1)[1]
-        if a1 == "1:1":
-            return SimpleNamespace(json=lambda: {"values": [grid[0]]})
-        col, row = ord(a1[0]) - 65, int(a1[1:])
-        return SimpleNamespace(json=lambda: {"values": [[grid[row - 1][col]]]})
-
-    monkeypatch.setattr(T.fetch, "get", get)
-    monkeypatch.setattr(T.fetch, "post_json", lambda url, body, headers=None: posts.append((url, body)) or {})
-    return posts
-
-
-def test_write_sets_status_and_notes_in_the_sheet(synced, sheet_api):
-    assert T.write(synced, T.row_key("ONE LIC (42-10 27th St)"), status="Applied", notes="sent 11/6") == 3
-    ((url, body),) = sheet_api
-    assert url.endswith("/values:batchUpdate") and body["valueInputOption"] == "USER_ENTERED"
-    assert body["data"] == [{"range": "'Properties'!B3", "values": [["Applied"]]},
-                            {"range": "'Properties'!E3", "values": [["sent 11/6"]]}]  # fmt: skip
+def test_write_sets_status_and_notes(synced):
     from housing_watch.models import Refused
 
+    one = T.row_key("ONE LIC (42-10 27th St)")
+    T.write(synced, one, status="Applied", notes="sent 11/6")
+    (x,) = [x for x in Q.judged(synced) if x.key == "i:1"]
+    assert (x.application, x.application_notes) == ("Applied", "sent 11/6")  # the read cache moved
+    row = next(r for r in T.load(synced)[0] if r.row_key == one)
+    assert (row.cells["Status"], row.cells["Notes"]) == ("Applied", "sent 11/6")
+    T.write(synced, one, status="")
+    assert next(r for r in T.load(synced)[0] if r.row_key == one).status is None
     with pytest.raises(Refused, match="not one of"):
-        T.write(synced, T.row_key("SVEN"), status="Maybe")
+        T.write(synced, one, status="Maybe")
     with pytest.raises(Refused, match="nothing to write"):
-        T.write(synced, T.row_key("SVEN"))
+        T.write(synced, one)
     with pytest.raises(NotFound):
         T.write(synced, "no such row", status="Applied")
 
 
-def test_write_refuses_a_row_that_moved(synced, sheet_api):
+def test_add_row_links_the_listing(synced):
     from housing_watch.models import Refused
 
-    with Session(synced) as s, s.begin():
-        s.execute(update(TrackerRow).where(TrackerRow.row_key == "sven").values(position=4))  # Ruby's row now
-    with pytest.raises(Refused, match="no longer on sheet row 4"):
-        T.write(synced, "sven", status="Offer")
-    assert sheet_api == []  # nothing written
-
-
-def test_add_row_appends_and_links(synced, sheet_api, monkeypatch):
-    added = {}
-    real_sync = T.sync
-
-    def sync(engine):
-        if added:  # the appended row, as the next read of the sheet shows it
-            SHEET["sheets"][0]["data"][0]["rowData"].append({"values": [cell(added["title"]), cell("To Apply")]})
-        try:
-            return real_sync(engine)
-        finally:
-            if added:
-                SHEET["sheets"][0]["data"][0]["rowData"].pop()
-
-    monkeypatch.setattr(T, "sync", sync)
     title = Q.judged_listing(synced, "a:1").title
-    added["title"] = title
     key = T.add_row(synced, "a:1", status="To Apply", notes="from the MCP")
-    ((url, body),) = sheet_api
-    assert ":append?valueInputOption=USER_ENTERED" in url
-    (row,) = body["values"]
-    assert row[:2] == [title, "To Apply"] and row[4] == "from the MCP" and row[2].startswith('=HYPERLINK("')
     assert key == T.row_key(title) and Q.tracker_link(synced, "a:1").row_key == key
-    from housing_watch.models import Refused
-
+    row = next(r for r in T.load(synced)[0] if r.row_key == key)
+    assert (row.status, row.notes, row.position) == ("To Apply", "from the MCP", 5)  # after the last row
+    assert row.source_url == Q.judged_listing(synced, "a:1").url
+    assert Q.judged_listing(synced, "a:1").application == "To Apply"
+    assert [(h.stage_from, h.stage_to) for h in T.history(synced)[key]] == [(None, "To Apply")]
     with Session(synced) as s, s.begin():
         add_listing(s, dataclasses.replace(L("j", "1", "Queens"), title="SVEN"))
     with pytest.raises(Refused, match="already has a row"):
         T.add_row(synced, "j:1")
+    with pytest.raises(NotFound):
+        T.add_row(synced, "zz:9")
