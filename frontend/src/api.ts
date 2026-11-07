@@ -79,7 +79,7 @@ export const ListingFieldsDoc = graphql(`
     key source title url address borough status kind deadline senior_only first_seen last_changed gone_since
     verdict reason units eligible_units sizes rent_min rent_max ami_min ami_max commute
     commute_route { lines walk_min transfers } application application_group application_since
-    application_since_baseline application_notes tracker_row tracker_match
+    application_since_baseline application_notes tracker_row tracker_match copy_of copies
   }
 `)
 
@@ -119,7 +119,8 @@ export const FilterFieldsDoc = graphql(`
     last_seen { ...TimeFilterFields } last_changed { ...TimeFilterFields } gone_since { ...TimeFilterFields }
     verdict { in not_in empty } reason { ...TextFilterFields } eligible_units { ...NumberFilterFields }
     unit_count { ...NumberFilterFields } commute { ...NumberFilterFields } application { ...TextFilterFields }
-    application_group { in not_in empty } application_notes { ...TextFilterFields } units { ...UnitFilterFields }
+    application_group { in not_in empty } application_notes { ...TextFilterFields } copy_of { ...TextFilterFields }
+    units { ...UnitFilterFields }
   }
   fragment EventFilterFields on EventFilter {
     at { ...TimeFilterFields } source { ...TextFilterFields } type { in not_in empty }

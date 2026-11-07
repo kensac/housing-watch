@@ -437,3 +437,12 @@ def test_for_unit_keeps_only_the_listings_own_unit():
     assert for_unit(lst("Eastchester Heights #002A"), repeated) is None  # no rent to tell them apart
     same = [Unit("1br", 2244.0, 80, "002A"), Unit("1br", 2244.0, 80, "002A")]
     assert for_unit(lst("Eastchester Heights #2A", 2244.0), same) == [same[0]]  # identical: either is this one
+
+
+def test_official_url_from_the_page_and_from_older_cached_notes():
+    from housing_watch.adapters.sanel import _official
+
+    name = "bronx__2140-matthews-ave-unit-4a-10ostm"
+    lst = parse_page(url(name), doc(name + ".html"))
+    assert lst.official_url == "https://residenewyork.com/property/2140-matthews-ave-apartment-unit-4a/"
+    assert Sanel.aggregator and _official(lst)[1] == lst.official_url  # a cached copy without the field has it

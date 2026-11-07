@@ -433,6 +433,7 @@ enum FilterFieldName {
   application
   application_group
   application_notes
+  copy_of
   at
   type
   summary
@@ -469,6 +470,7 @@ enum FilterFieldName {
   listing_application
   listing_application_group
   listing_application_notes
+  listing_copy_of
 }
 
 """An operator: a key of a field's filter object."""
@@ -667,6 +669,14 @@ type Listing {
 
   """How the row was matched to this listing"""
   tracker_match: TrackerMatch
+
+  """
+  An aggregator's copy of this live listing from the posting's own source
+  """
+  copy_of: ID
+
+  """Aggregator listings that copy this one"""
+  copies: [ID!]!
 }
 
 """What a `changed` event changed."""
@@ -804,6 +814,9 @@ type ListingFilter {
   """Tracker notes (Tracker)."""
   application_notes: TextFilter
 
+  """Copy of (Listing)."""
+  copy_of: TextFilter
+
   """
   A listing matches when one of its units meets every condition here together.
   """
@@ -874,6 +887,9 @@ input ListingFilterInput {
 
   """Tracker notes (Tracker)."""
   application_notes: TextFilterInput = null
+
+  """Copy of (Listing)."""
+  copy_of: TextFilterInput = null
 
   """
   A listing matches when one of its units meets every condition here together.

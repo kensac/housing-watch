@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 
 from sqlalchemy import func, select
@@ -16,6 +16,7 @@ from ..criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, Verdict, 
 from ..mapping import listing_from_row
 from ..models import Borough, Key, Kind, Listing, Serial, Size
 from ..orm import CommuteRow, ListingRow, TrackerEventRow, TrackerLinkRow, TrackerRow, UnitRow
+from ..parse import url_key
 from ._common import _SIZE_ORDER, STATUSES, Status, day, internal
 
 
@@ -55,6 +56,8 @@ class ListingSummary:
     application_notes: str | None = None
     tracker_row: str | None = None  # that row's Property
     tracker_match: T.Match | None = None  # how the row was matched to this listing
+    copy_of: Key | None = None  # an aggregator's copy of this live listing from the posting's own source
+    copies: list[Key] = field(default_factory=list)  # aggregator listings that copy this one
 
 
 def _load(s: Session, *where) -> list[ListingRow]:
@@ -205,6 +208,22 @@ def judged_listing(engine: Engine, key: str, p: Profile = PROFILE) -> ListingSum
     return _judged(engine, p).by_key.get(key)
 
 
+def _with_copies(out: list[ListingSummary], lsts: list[Listing]) -> list[ListingSummary]:
+    """An aggregator's listing whose official_url is a live listing of a direct source is a copy of that listing:
+    the real posting stands for both, and the copy stays out of lists, counts and the digest. When the real
+    listing is gone the copy is not one any more, so the aggregator still shows what it alone lists."""
+    direct: dict[str, Key] = {}
+    for x, lst in zip(out, lsts, strict=True):
+        if not lst.official_url and x.status != "gone":
+            direct.setdefault(url_key(x.url), x.key)
+    copy_of = {x.key: k for x, lst in zip(out, lsts, strict=True)
+               if lst.official_url and (k := direct.get(url_key(lst.official_url))) and k != x.key}  # fmt: skip
+    copies: dict[Key, list[Key]] = {}
+    for c, k in copy_of.items():
+        copies.setdefault(k, []).append(c)
+    return [replace(x, copy_of=copy_of.get(x.key), copies=sorted(copies.get(x.key, []))) for x in out]
+
+
 def _store_version(s: Session) -> tuple:
     """Moves whenever a judged listing could read differently: its listing, commute or tracker row changed."""
     parts = [
@@ -232,6 +251,7 @@ def _judged(engine: Engine, p: Profile) -> _Judged:
             out = [_summary(r, lst, p, commutes) for r, lst in zip(rows, lsts, strict=True)]
             refs = T.match(out, *T.load(engine), T.history(engine))  # the tracker's rows, matched to listings
             out = [_with_tracker(x, refs.get(x.key)) for x in out]
+            out = _with_copies(out, lsts)
             units = [u for r, lst, x in zip(rows, lsts, out, strict=True) for u in _units(r, lst, x, p)]
             j = _cache[ck] = (version, _Judged(out, units, {x.key: x for x in out}))
         return j[1]

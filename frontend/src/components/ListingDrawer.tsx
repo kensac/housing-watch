@@ -1,7 +1,8 @@
-import { Badge, Button, Code, Drawer, Group, Loader, SimpleGrid, Stack, Table, Text, Timeline, Title } from '@mantine/core'
+import { Anchor, Badge, Button, Code, Drawer, Group, Loader, SimpleGrid, Stack, Table, Text, Timeline, Title } from '@mantine/core'
 import { IconDownload, IconExternalLink } from '@tabler/icons-react'
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 
 import { BOROUGH, changes, KIND, request } from '../api'
 import { graphql } from '../gql'
@@ -125,6 +126,14 @@ export function ListingDrawer({ k, onClose }: { k: string | null; onClose: () =>
               <Badge variant="default" c="dimmed" translate="no">{x.source} · {KIND[x.kind]}</Badge>
               <Text size="sm" c="dimmed">{x.verdict === 'eligible' ? `${x.eligible_units} of ${x.units} units fit your profile` : x.reason}</Text>
             </Group>
+            {x.copy_of && (
+              <Text size="sm" c="dimmed">An aggregator’s copy of <Anchor component={Link} to={`?${new URLSearchParams({ open: x.copy_of })}`} inherit>the real posting</Anchor>, which stands for it in lists and the digest.</Text>
+            )}
+            {x.copies.length > 0 && (
+              <Text size="sm" c="dimmed">Also listed by {x.copies.map((k, i) => (
+                <span key={k}>{i > 0 && ', '}<Anchor component={Link} to={`?${new URLSearchParams({ open: k })}`} inherit translate="no">{k.split(':')[0]}</Anchor></span>
+              ))}.</Text>
+            )}
             {x.url && (
               <Group>
                 <Button size="xs" variant="default" component="a" href={x.url} target="_blank" rel="noopener noreferrer"

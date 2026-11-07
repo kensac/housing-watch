@@ -186,4 +186,5 @@ def parse_page(url: str, html: str) -> Listing:
         deadline=_date(f.get("Deadline")),
         senior_only=bool(SENIOR_RE.search(SENIOR_PREF_RE.sub(" ", desc + " " + flat))),
         notes=notes,
+        official_url=official or None,
     )

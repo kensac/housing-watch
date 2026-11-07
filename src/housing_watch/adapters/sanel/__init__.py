@@ -138,6 +138,7 @@ def _unit(u: dict) -> Unit:
 
 
 class Sanel(Adapter):
+    aggregator = True
     name = "sanel"
     title = "SANEL (aggregator)"
     url = "https://sanel.nyc/listings"
@@ -395,6 +396,8 @@ class Sanel(Adapter):
             out.append(lst)
         if len(failed) > MAX_FAILED // int(key.split("/")[1]):  # the run's allowance, shared by its chunks
             raise RuntimeError(f"{len(failed)} SANEL pages failed to fetch, e.g. {failed[:3]}")
+        for lst in out:  # a page cached before official_url existed: its notes carry the link
+            lst.official_url = lst.official_url or _official(lst)[1] or None
         return Result(listings=out)
 
     def fetch(self) -> Result:

@@ -44,7 +44,7 @@ OP_DOC: dict[Op, str] = {  # what each operator means, for the API docs
 
 # Internal columns nobody filters on, and labels that read better than the column name.
 HIDDEN = {
-    "listings": {"key", "fingerprint", "ext_id", "url", "updated"},
+    "listings": {"key", "fingerprint", "ext_id", "url", "updated", "official_url"},
     "units": {"id", "listing_key", "pos"},
     "bands": {"id", "unit_id"},
     "events": {"id", "key", "detail"},
@@ -124,6 +124,9 @@ COMPUTED = [
     Field("application", "Application stage", "Tracker", "text", "computed", order=tuple(T.STAGES)),
     Field("application_group", "Whose move", "Tracker", "enum", "computed", values=T.StageGroup),
     Field("application_notes", "Tracker notes", "Tracker", "text", "computed"),
+    # an aggregator's listing of a posting tracked from its own source: that listing's key; copies are hidden unless
+    # a filter names this field
+    Field("copy_of", "Copy of", "Listing", "text", "computed"),
 ]
 
 
