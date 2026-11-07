@@ -225,26 +225,29 @@ def _names_unit(x: ListingSummary, lst: Listing, no: str) -> bool:
 def _with_copies(out: list[ListingSummary], lsts: list[Listing]) -> list[ListingSummary]:
     """An aggregator's listing (one with an official_url) that is a live listing of a direct source is a copy of it:
     the real posting stands for both, and the copy stays out of lists, counts and the digest. The match is the
-    official_url itself, else the same site and street address (and unit, when the copy names one) with exactly
-    one such listing. When the real listing is gone the copy is not one any more, so the aggregator still shows
-    what it alone lists."""
+    official_url itself when one listing has that url, else the same site and street address (and unit, when the
+    copy names one) with exactly one such listing. When the real listing is gone the copy is not one any more, so
+    the aggregator still shows what it alone lists."""
     live = [(x, lst) for x, lst in zip(out, lsts, strict=True) if not lst.official_url and x.status != "gone"]
-    by_url: dict[str, Key] = {}
+    by_url: dict[str, list[Key]] = {}
     by_addr: dict[tuple[str, str], list[tuple[ListingSummary, Listing]]] = {}
     for x, lst in live:
-        by_url.setdefault(url_key(x.url), x.key)
+        by_url.setdefault(url_key(x.url), []).append(x.key)
         for k in addr_keys(" ".join(filter(None, (x.address, x.title)))):
             by_addr.setdefault((_host(x.url), k), []).append((x, lst))
     copy_of: dict[Key, Key] = {}
     for x, lst in zip(out, lsts, strict=True):
         if not lst.official_url:
             continue
-        if k := by_url.get(url_key(lst.official_url)):
-            copy_of[x.key] = k
+        same = by_url.get(url_key(lst.official_url), [])
+        if len(same) == 1:
+            copy_of[x.key] = same[0]
             continue
         host = _host(lst.official_url)
         cands = {c.key: (c, cl) for a in addr_keys(" ".join(filter(None, (x.address, x.title))))
                  for c, cl in by_addr.get((host, a), [])}  # fmt: skip
+        if same:  # one page lists several postings (Bronx Pro's /apartments): the address picks among them
+            cands = {k: v for k, v in cands.items() if k in same}
         if m := re.search(r"#\s*([\w-]+)\s*$", x.title):
             no = _unit_key(m.group(1))
             cands = {k: v for k, v in cands.items() if _names_unit(v[0], v[1], no)}

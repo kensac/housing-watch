@@ -84,3 +84,19 @@ def test_a_copy_matched_by_site_address_and_unit(pg):
     assert by["s:2"].copy_of == "h:2"  # the unit picks one of the two at 9 Oak St
     assert by["s:3"].copy_of is None  # two candidates, no unit to choose: not a copy
     assert by["s:4"].copy_of is None  # same street, another site: not the same posting
+
+
+def test_a_page_listing_several_postings_is_resolved_by_address(pg):
+    """Bronx Pro lists every building on /apartments: the shared url alone cannot say which one SANEL copies."""
+    page = "https://bronxprogroup.com/apartments"
+    direct = [("g", None, "General housing waitlist"), ("w", "1080 Washington Ave, Bronx, NY", "1080 Washington Ave"),
+              ("h", "1017 Home Street, Bronx, NY", "Crotona Park East – 1017 Home Street")]  # fmt: skip
+    copies = [("w", "1080 Washington Avenue, Bronx, NY 10456", "1080 Washington Avenue"),
+              ("h", "1017 Home Street, Bronx, NY", "1017 Home Street")]  # fmt: skip
+    with Session(pg) as s, s.begin():
+        for n, address, title in direct:
+            add_listing(s, dataclasses.replace(L("b", n, "Bronx"), url=page, address=address, title=title))
+        for n, address, title in copies:
+            add_listing(s, dataclasses.replace(L("s", n, "Bronx"), official_url=page, address=address, title=title))
+    by = Q.judged_by_key(pg)
+    assert (by["s:w"].copy_of, by["s:h"].copy_of) == ("b:w", "b:h")
