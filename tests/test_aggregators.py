@@ -1,16 +1,20 @@
 """An aggregator's listing of a posting tracked from its own source is a copy: one listing stands for both."""
 
 import dataclasses
+from pathlib import Path
 
 from sqlalchemy import update
 
 from housing_watch import filters as F
 from housing_watch import queries as Q
+from housing_watch.adapters import fifth_avenue
+from housing_watch.adapters.fifth_avenue import parse_page
 from housing_watch.models import Unit
 from housing_watch.notify import digest
 from housing_watch.orm import ListingRow
 from seed import L, Session, add_listing, event
 
+FIXTURES = Path(__file__).parent / "fixtures"
 REAL = "https://residenewyork.com/property/2140-matthews-ave-apartment-unit-4a/"
 
 
@@ -84,6 +88,24 @@ def test_a_copy_matched_by_site_address_and_unit(pg):
     assert by["s:2"].copy_of == "h:2"  # the unit picks one of the two at 9 Oak St
     assert by["s:3"].copy_of is None  # two candidates, no unit to choose: not a copy
     assert by["s:4"].copy_of is None  # same street, another site: not the same posting
+
+
+def test_sanel_unit_copies_link_to_fifth_avenue_buildings(pg):
+    """FAC's page names only the building; its street address and unit numbers pick which listing SANEL copies."""
+    fac = parse_page((FIXTURES / "fifth_avenue" / "page.html").read_text())
+    page = fifth_avenue.URL
+    copies = [("r3c", "6309 4th Avenue, Brooklyn, NY 11220", "Sunset Ridge Apartments #3C"),
+              ("p7h", "5108 4th Avenue, Brooklyn, NY 11220", "Sunset Park Apartments and Library #7H"),
+              ("p9z", "5108 4th Avenue, Brooklyn, NY 11220", "Sunset Park Apartments and Library #9Z")]  # fmt: skip
+    with Session(pg) as s, s.begin():
+        for lst in fac:
+            add_listing(s, lst)
+        for n, address, title in copies:
+            add_listing(s, dataclasses.replace(L("s", n, "Brooklyn"), official_url=page, address=address, title=title))
+    by = Q.judged_by_key(pg)
+    assert by["s:r3c"].copy_of == "fifth_avenue:sunset-ridge-apartments"
+    assert by["s:p7h"].copy_of == "fifth_avenue:sunset-park-apartments-and-library"
+    assert by["s:p9z"].copy_of is None  # a unit FAC does not list is not a copy of the building
 
 
 def test_a_page_listing_several_postings_is_resolved_by_address(pg):
