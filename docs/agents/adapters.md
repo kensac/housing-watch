@@ -26,6 +26,11 @@ design, including chunking and the Reside and SANEL specifics, is in
 - **Work with an empty cache.** `self.cache` is scratch that saves refetches
   (`fetch.conditional`, `adapters.by_content`, `pdf_cached`). Use
   `adapters.prune` to drop entries for things the source no longer lists.
+- **Aggregators point at the real posting.** An adapter that republishes other
+  sources' postings sets `aggregator = True` and, on each listing, `official_url`
+  to the posting on its own source. The read model then shows the real listing
+  in its place (ARCHITECTURE.md, "Aggregators"). Prefer adding the real source
+  as its own adapter over enriching the aggregator's copy.
 - **Rendering needs byparr.** `fetch.rendered()` and `fetch.browser()` raise
   `NeedsByparr` on a worker without `BYPARR_URL`; the fleet moves the job to
   hetzner. Prefer a plain request when the data is reachable without one.

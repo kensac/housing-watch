@@ -52,6 +52,7 @@ class ListingRow(Base):
     deadline: Mapped[str | None] = mapped_column(Text)
     senior_only: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    official_url: Mapped[str | None] = mapped_column(Text)  # an aggregator's link to the real posting
     fingerprint: Mapped[str] = mapped_column(Text)  # hash of the fields whose change is an event
     first_seen: Mapped[datetime] = mapped_column(TS)
     last_seen: Mapped[datetime] = mapped_column(TS)

@@ -69,8 +69,10 @@ def urgent(engine: Engine, p: Profile = PROFILE) -> bool:
         rows = s.scalars(
             select(EventRow).where(EventRow.notified.is_(None), EventRow.type.in_(("new", "reopened", "changed")))
         ).all()
-        lsts = queries.load_listings(s, {r.key for r in rows if not _noise(r)}).values()
-    return any(lst.status == "open" and listing_verdict(lst, p).verdict == ELIGIBLE for lst in lsts)
+        lsts = queries.load_listings(s, {r.key for r in rows if not _noise(r)})
+    judged = queries.judged_by_key(engine, p)
+    return any(lst.status == "open" and listing_verdict(lst, p).verdict == ELIGIBLE
+               for k, lst in lsts.items() if not (k in judged and judged[k].copy_of))  # fmt: skip
 
 
 def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int]] | None:
@@ -81,7 +83,10 @@ def build(engine: Engine, p: Profile = PROFILE) -> tuple[str, str, str, list[int
             return None
         listings = queries.load_listings(s, (r.key for r in rows if r.type in queries.LISTING_EVENTS))
     ids = [r.id for r in rows]
-    rows = [r for r in rows if not _noise(r)]
+    judged = queries.judged_by_key(engine, p)
+    # an aggregator's copy of a listing tracked from its own source: that listing's events tell it, so it is marked
+    # read and not mailed twice
+    rows = [r for r in rows if not _noise(r) and not (r.key in judged and judged[r.key].copy_of)]
     changed: dict[str, list[str]] = {}  # key -> what changed, over every pending change, oldest first
     for r in rows:
         if r.type == "changed" and not queries.is_baseline(r.detail):

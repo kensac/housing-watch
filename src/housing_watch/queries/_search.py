@@ -27,6 +27,7 @@ COMPUTED = {  # read-time values behind filters.COMPUTED
     "application": lambda x: x.application,
     "application_group": lambda x: x.application_group,
     "application_notes": lambda x: x.application_notes,
+    "copy_of": lambda x: x.copy_of,
 }
 
 
@@ -83,6 +84,11 @@ def hides_gone(conds: list[F.Cond]) -> bool:
     return not any(_name(c.field) == "gone_since" for c in conds)
 
 
+def hides_copies(conds: list[F.Cond]) -> bool:
+    """An aggregator's copies of listings tracked from their own source stay out unless a filter asks for them."""
+    return not any(_name(c.field) == "copy_of" for c in conds)
+
+
 def filter_listings(
     engine: Engine, conds: list[F.Cond], q: str = "", p: Profile = PROFILE, hide_gone: bool | None = None
 ) -> list[ListingSummary]:
@@ -94,12 +100,14 @@ def filter_listings(
             keys = set(s.scalars(select(ListingRow.key).where(*where)))
         allx = [x for x in allx if x.key in keys]
     hide = hides_gone(conds) if hide_gone is None else hide_gone
+    copies = hides_copies(conds)
     comp = [c for c in conds if c.field.scope == "computed"]
     words = q.strip().lower().split()
     return [
         x
         for x in allx
         if not (hide and x.gone_since)
+        and not (copies and x.copy_of)
         and all(F.match(c, COMPUTED[_name(c.field)](x)) for c in comp)
         and all(w in x.haystack for w in words)
     ]
@@ -162,6 +170,7 @@ UNIT_COMPUTED = {  # the same computed fields on the Units page: verdict and rea
     "application": lambda u, x: x.application,
     "application_group": lambda u, x: x.application_group,
     "application_notes": lambda u, x: x.application_notes,
+    "copy_of": lambda u, x: x.copy_of,
 }
 
 
@@ -179,12 +188,14 @@ def filter_units(
             )
         allu = [u for u in allu if u.id in ids]
     hide = hides_gone(conds) if hide_gone is None else hide_gone
+    copies = hides_copies(conds)
     comp = [c for c in conds if c.field.scope == "computed"]
     words = q.strip().lower().split()
     return [
         u
         for u in allu
         if not (hide and u.gone_since)
+        and not (copies and by_key[u.key].copy_of)
         and all(F.match(c, UNIT_COMPUTED[_name(c.field)](u, by_key[u.key])) for c in comp)
         and all(w in u.haystack for w in words)
     ]

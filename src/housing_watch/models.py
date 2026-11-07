@@ -71,6 +71,7 @@ class Listing:
     deadline: str | None = None  # ISO date when the source publishes one
     senior_only: bool = False
     notes: str | None = None  # free text kept for the digest (e.g. how to apply)
+    official_url: str | None = None  # an aggregator's link to the real posting (see Adapter.aggregator)
 
     def key(self) -> str:
         return f"{self.source}:{self.ext_id}"

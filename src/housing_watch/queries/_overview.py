@@ -48,7 +48,7 @@ def overview(engine: Engine, p: Profile = PROFILE) -> Overview:
     allx = judged(engine, p)
     counts = {(v, st): 0 for v in VERDICTS for st in values(PublishedStatus)}
     for x in allx:
-        if x.status != "gone":
+        if x.status != "gone" and not x.copy_of:  # a copy is counted once, as the listing it copies
             counts[x.verdict, x.status] += 1
     matrix = [MatrixCell(v, st, n) for (v, st), n in counts.items()]
     t = now()
@@ -80,7 +80,7 @@ def overview(engine: Engine, p: Profile = PROFILE) -> Overview:
         recent = [_event_view(e) for e in s.scalars(newest.where(~base))]
         if len(recent) < 12:  # top up with first-run inventory, e.g. right after the fleet starts
             recent = sorted(recent + [_event_view(e) for e in s.scalars(newest.where(base))], key=lambda e: -e.id)[:12]
-    live = [x for x in allx if x.verdict == ELIGIBLE and x.status in ("open", "waitlist", "upcoming")]
+    live = [x for x in allx if x.verdict == ELIGIBLE and x.status in ("open", "waitlist", "upcoming") and not x.copy_of]
     live.sort(key=lambda x: (x.status != "open", -x.last_changed.timestamp()))
     return Overview(
         matrix=matrix,
@@ -88,7 +88,7 @@ def overview(engine: Engine, p: Profile = PROFILE) -> Overview:
         eligible_live=len(live),
         eligible_now=live[:10],
         recent=_attach(engine, recent, p),
-        total=sum(1 for x in allx if x.status != "gone"),
+        total=sum(1 for x in allx if x.status != "gone" and not x.copy_of),
         n_sources=len(sources(engine, p)),
         **ov,
     )

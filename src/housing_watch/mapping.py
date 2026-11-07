@@ -29,6 +29,7 @@ def listing_from_row(r: ListingRow) -> Listing:
         deadline=r.deadline,
         senior_only=r.senior_only,
         notes=r.notes,
+        official_url=r.official_url,
         units=[
             Unit(
                 size=u.size,
@@ -51,7 +52,7 @@ def apply_listing(lst: Listing, r: ListingRow, units: bool = True) -> ListingRow
     r.key, r.source, r.ext_id = lst.key(), lst.source, lst.ext_id
     r.title, r.url, r.address, r.borough = lst.title, lst.url, lst.address, lst.borough
     r.status, r.kind, r.deadline = lst.status, lst.kind, lst.deadline
-    r.senior_only, r.notes = lst.senior_only, lst.notes
+    r.senior_only, r.notes, r.official_url = lst.senior_only, lst.notes, lst.official_url
     if not units:
         return r
     r.units = [

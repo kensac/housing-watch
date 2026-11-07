@@ -28,6 +28,9 @@ class Adapter:
     every_hours: ClassVar[float] = 1  # run cadence
     min_listings: ClassVar[int] = 0  # fewer results than this is treated as a broken adapter
     parallel: ClassVar[int] = 1  # how many of this source's chunks may run at once (each on a different worker)
+    # An aggregator republishes other sources' postings (SANEL). Its listings set official_url to the real posting
+    # where known; a listing whose official_url is a live listing of a direct source is read as a copy of it.
+    aggregator: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kw):
         super().__init_subclass__(**kw)
