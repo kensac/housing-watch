@@ -100,3 +100,47 @@ def test_a_page_listing_several_postings_is_resolved_by_address(pg):
             add_listing(s, dataclasses.replace(L("s", n, "Bronx"), official_url=page, address=address, title=title))
     by = Q.judged_by_key(pg)
     assert (by["s:w"].copy_of, by["s:h"].copy_of) == ("b:w", "b:h")
+
+
+def test_matching_by_source_site_building_rent_range_and_name(pg, monkeypatch):
+    from housing_watch.queries import _judging
+
+    sites = {"shf": "settlementhousingfund.org", "fifth": "fifthave.org", "tax": "sites.google.com",
+             "mg": "mickigarciarealty.com"}  # fmt: skip
+    monkeypatch.setattr(_judging, "_sites", lambda: sites)
+    shf = "https://www.settlementhousingfund.org/find-housing/"
+    fifth = "https://fifthave.org/re-rental-availabilities/"
+    tax = "https://sites.google.com/affordablelivingnyc.com/hpd/home"
+
+    def direct(src, n, title, address=None, url="https://forms.cloud.microsoft/x", units=None):
+        return dataclasses.replace(L(src, n, "Brooklyn", units=units or [Unit("1br", 2000.0, 80)]), title=title,
+                                   address=address, url=url)  # fmt: skip
+
+    def copy(n, title, address, official, rent=None):
+        lst = L("s", n, "Brooklyn", units=[Unit("1br", rent)] if rent else [])
+        return dataclasses.replace(lst, title=title, address=address, official_url=official)
+
+    with Session(pg) as s, s.begin():
+        add_listing(s, direct("shf", "kent", "30 Kent Street", "30 Kent Street"))  # its link is a Microsoft form
+        add_listing(s, direct("fifth", "ridge", "Sunset Ridge Apartments", url=fifth))  # no address, no unit numbers
+        add_listing(s, direct("tax", "r1", "19 Rockwell Place", "19 Rockwell Place, Brooklyn, NY", tax,
+                              [Unit("studio", 1500.0, 60)]))  # fmt: skip
+        add_listing(s, direct("tax", "r2", "19 Rockwell Place", "19 Rockwell Place, Brooklyn, NY", tax,
+                              [Unit("1br", 1900.0, 60)]))  # fmt: skip
+        add_listing(s, direct("mg", "140", "207 West 140th Street", "207 West 140th Street",
+                              "https://www.mickigarciarealty.com/nme3"))  # fmt: skip
+        add_listing(s, direct("tax", "q", "214-33 41st. Ave", "214-33 41st. Ave, Queens, NY", tax))
+        add_listing(s, copy("kent", "30 Kent Street #310", "30 Kent Street, Brooklyn, NY 11222", shf))
+        add_listing(s, copy("ridge", "Sunset Ridge Apartments #3C", "6309 4th Avenue, Brooklyn, NY 11220", fifth))
+        add_listing(s, copy("rock", "19 Rockwell Place", "19 Rockwell Place, Brooklyn, NY", tax, rent=1900.0))
+        add_listing(s, copy("140", "207-209 West 140th Street", "207-209 West 140th Street, New York, NY",
+                            "https://www.mickigarciarealty.com/"))  # fmt: skip
+        add_listing(s, copy("q", "214-33 41st. Ave", "214-33 41st. Ave, Queens, NY", tax))
+        add_listing(s, copy("q2", "214-34 41st. Ave", "214-34 41st. Ave, Queens, NY", tax))
+    by = Q.judged_by_key(pg)
+    assert by["s:kent"].copy_of == "shf:kent"  # off-site posting: the source's own site counts
+    assert by["s:ridge"].copy_of == "fifth:ridge"  # a building that numbers no units stands for its apartments
+    assert by["s:rock"].copy_of == "tax:r2"  # two at one address: the rent picks
+    assert by["s:140"].copy_of == "mg:140"  # 207-209 is a house-number range starting at 207
+    assert by["s:q"].copy_of == "tax:q"  # 214-33 is a Queens number, matched as written
+    assert by["s:q2"].copy_of is None  # not a range: 214-34 is another building
