@@ -37,14 +37,17 @@ def test_axel_6f_eligible():
 def test_sunset_ridge_senior_section8_excluded():
     lst = listings()["sunset-ridge-apartments"]
     assert lst.senior_only and lst.borough == "Brooklyn"
-    # the card names only the building; the street address is what SANEL's per-unit copies link by
-    assert (lst.title, lst.address) == ("Sunset Ridge Apartments", "6309 4th Avenue, Brooklyn, NY 11220")
+    # the card names only the building: no address is published
+    assert (lst.title, lst.address) == ("Sunset Ridge Apartments", None)
     assert [(u.unit_no, u.size, u.ami, u.set_aside) for u in lst.units] == [
         ("3J", "studio", 50, "senior"),
         ("8C", "studio", 50, "senior"),
         ("3C", "studio", 50, "senior"),
         ("1B", "studio", 50, "senior"),
     ]
+    # 1B prints "1-2 people ... Max Income: $76,350", which is the 2026 50% cap for 3 people (152,700 x 50%):
+    # ami.bands keeps each printed household at its own 50% cap, below that max
+    assert lst.units[3].bands == [Band(1, None, 59400), Band(2, None, 67850)]
     assert lst.units[0].bands == [Band(1, None, 59400), Band(2, None, 67850)]
     assert listing_verdict(lst).verdict == "excluded"
 
@@ -52,11 +55,7 @@ def test_sunset_ridge_senior_section8_excluded():
 def test_sunset_park_units_and_upcoming():
     by = listings()
     park = by["sunset-park-apartments-and-library"]
-    assert (park.title, park.address, park.borough) == (
-        "Sunset Park Apartments and Library",
-        "5108 4th Avenue, Brooklyn, NY 11220",
-        "Brooklyn",
-    )
+    assert (park.title, park.address, park.borough) == ("Sunset Park Apartments and Library", None, "Brooklyn")
     assert not park.senior_only
     assert [(u.unit_no, u.size, u.rent, u.ami, u.set_aside) for u in park.units] == [
         ("6G", "2br", 1045.0, 60, "mobility"),

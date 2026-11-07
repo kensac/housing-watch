@@ -91,7 +91,8 @@ def test_a_copy_matched_by_site_address_and_unit(pg):
 
 
 def test_sanel_unit_copies_link_to_fifth_avenue_buildings(pg):
-    """FAC's page names only the building; its street address and unit numbers pick which listing SANEL copies."""
+    """FAC's page names only the building and numbers its units: the name and the unit pick what SANEL copies,
+    and a unit FAC does not list is no copy of the building."""
     fac = parse_page((FIXTURES / "fifth_avenue" / "page.html").read_text())
     page = fifth_avenue.URL
     copies = [("r3c", "6309 4th Avenue, Brooklyn, NY 11220", "Sunset Ridge Apartments #3C"),

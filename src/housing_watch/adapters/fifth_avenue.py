@@ -2,10 +2,8 @@
 
 Each card (div.grid_section-col) is an <h3> building, an <h4> unit and <li> "Label: value" rows (size,
 household size, AMI, rent, min/max income), plus "**" notes (Section 8 / 62+ / mobility). The household range
-("1-2 people") carries one max income, the top size's cap, so per-size caps come from bands_from_row.
+("1-2 people") carries one max income, the top size's cap, so per-size caps come from ami.bands.
 Cards under "Upcoming Units" are not marketed yet. Applying is one general Salesforce form, not per unit.
-Some cards name only the building; KNOWN_ADDRESS supplies its street address so aggregator copies (SANEL's
-per-unit "#3C" listings) link to it by address and unit.
 """
 
 from __future__ import annotations
@@ -19,11 +17,8 @@ from . import Adapter
 
 URL = "https://fifthave.org/re-rental-availabilities/"
 APPLY = "https://fifthave.my.site.com/s/flow/public?var_flow=lottery"
-# FAC buildings the page names without an address (its own project pages give none either).
-KNOWN_ADDRESS = {
-    "sunset ridge apartments": "6309 4th Avenue, Brooklyn, NY 11220",
-    "sunset park apartments and library": "5108 4th Avenue, Brooklyn, NY 11220",
-}
+# FAC buildings named without an address on the page; all in Brooklyn (Sunset Park).
+KNOWN_BOROUGH = {"sunset ridge": "Brooklyn", "sunset park": "Brooklyn"}
 
 
 def _card(col) -> dict | None:
@@ -86,13 +81,13 @@ def parse_page(html: str) -> list[Listing]:
                 )
             )
         name, _, addr = building.partition(" -")
-        addr = addr.strip() or (building if re.match(r"\d", building) else KNOWN_ADDRESS.get(building.lower()))
-        borough = parse.borough(building, addr)
+        addr = addr.strip() or (building if re.match(r"\d", building) else None)
+        borough = parse.borough(building) or next((v for k, v in KNOWN_BOROUGH.items() if k in building.lower()), None)
         out.append(
             Listing(
                 source="fifth_avenue",
                 ext_id=parse.slug(name) + ("-upcoming" if upcoming else ""),
-                title=name.strip(),
+                title=name.strip() if addr else building,
                 url=URL,
                 address=addr,
                 borough=borough,
