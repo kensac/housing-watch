@@ -6,9 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from housing_watch import adapters
+from housing_watch import adapters, parse
 from housing_watch.adapters import PLAN, sanel
-from housing_watch.adapters.sanel import Sanel, parse_page, reside_buildings, reside_match
+from housing_watch.adapters.sanel import Sanel, parse_page, reside_buildings, reside_match, tier_units
 from housing_watch.eligibility import listing_verdict
 from housing_watch.fetch import FetchError
 from housing_watch.fleet import runner
@@ -387,5 +387,29 @@ def test_concurrent_chunks_keep_each_others_documents(monkeypatch):
     assert a.chunks() == ["1/3", "2/3", "3/3"] and "docs" not in a.cache and "doc:ml" not in a.cache
     res, cache = runner.fetch_all(Sanel())  # one page per chunk, each chunk on its own copy of the cache
     assert sorted(x.title for x in res.listings) == ["APEX PLACE APARTMENTS", "Aura", "DOMI"]
-    assert {k.split(":")[1] for k in cache if k.startswith("doc:")} == {"pronto", "hdc"}  # both chunks' documents
+    # every chunk's documents (tier-table pages read their official source too: "hc")
+    assert {k.split(":")[1] for k in cache if k.startswith("doc:")} == {"pronto", "hdc", "hc"}
     assert set(cache) - {PLAN} >= {url(n) for n in names}
+
+
+def test_official_units_beat_a_lossy_tier_table(monkeypatch):
+    """SANEL's tier table rounds the rent, drops the unit number and skips 2 people; Reside's unit page has all."""
+    name = "bronx__2140-matthews-ave-unit-4a-10ostm"
+    assert [b.household for b in tier_units(parse.soup(doc(name + ".html")))[0].bands] == [1, 3]
+    lst, _ = enriched(name, monkeypatch, **{"unit-4a": "reside-2140-matthews-unit-4a.html"})
+    (u,) = lst.units
+    assert (u.unit_no, u.rent, [b.household for b in u.bands]) == ("4A", 2941.02, [1, 2, 3])
+    assert "Unit details from Reside's page" in lst.notes
+
+
+def test_a_tier_table_stands_when_the_official_source_fails(monkeypatch):
+    name = "bronx__2140-matthews-ave-unit-4a-10ostm"
+    html = doc(name + ".html")
+
+    def down(u, **kw):
+        raise FetchError(f"GET {u}: 503")
+
+    monkeypatch.setattr(sanel.fetch, "html", down)
+    lst = Sanel({}).enrich(parse_page(url(name), html), html)
+    (u,) = lst.units
+    assert (u.unit_no, u.rent, [b.household for b in u.bands]) == (None, 2941.0, [1, 3])

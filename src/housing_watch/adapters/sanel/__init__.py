@@ -6,8 +6,8 @@ refreshed at least every MAX_AGE_H. A page missing from the sitemap keeps its la
 for MAX_AGE_H too, since the sitemap drops and re-adds pages between reads. The pages due are spread over chunks on
 different workers; every page and document is its own top-level cache key, so chunks' deltas never overlap. A page
 carries JSON-LD RealEstateListing (name, official source in `isBasedOn`, address), a facts block (Rent, Bedrooms,
-AMI, Household, Income, Deadline), links to the official page or flyer and, when the source publishes one, a tier
-table with one row per household size. Without a tier table the facts block only summarises every tier, so the
+AMI, Household, Income, Deadline), links to the official page or flyer and, sometimes, a tier table with one row per
+household size. Both round rents and drop unit numbers, and a tier table can skip household sizes, so the
 official data is read where it is public (Housing Connect's API, HDC's flyer PDF, Pronto's API, HPD's Mitchell-Lama
 list, Reside's unit page or its building table's row at the unit's rent, SHF's re-rental form, Tax Solute's page,
 St. Nicks' senior-housing list, HCR Housing Search), cached per document for DOC_TTL_H; otherwise `notes` says what
@@ -269,20 +269,29 @@ class Sanel(Adapter):
         return [u for sm in reside.SITEMAPS for u in re.findall(r"<loc>([^<]+)</loc>", fetch.html(sm))]
 
     def enrich(self, lst: Listing, html: str, prev: dict | None = None) -> Listing:
-        """A listing SANEL only summarises (no tier table) -> the official source's units, or a note why not.
-        `prev` is the page's cached listing: when the official source cannot be read, its units and note stand
-        (SANEL's summary units round rents and drop unit numbers, so swapping to them would flap every run)."""
-        if lst.status == "closed" or lst.kind == "homeownership" or tier_units(parse.soup(html)):
+        """A listing -> the official source's units, or a note why there are none.
+
+        SANEL's own units round rents to the dollar and drop unit numbers, and its tier table (when it has one) can
+        skip household sizes (2140 Matthews #4A lists 1 and 3 people, not 2), so the official source's units win
+        whenever they carry income limits. A tier table stands when the official source has none or cannot be
+        read. `prev` is the page's cached listing: without a tier table, when the official source cannot be read,
+        its units and note stand (swapping to SANEL's summary would flap every run)."""
+        if lst.status == "closed" or lst.kind == "homeownership":
             return lst
+        tiered = bool(tier_units(parse.soup(html)))
         try:
             units, note = self._official_units(lst, doc_links(html))
         except (FetchError, RuntimeError, ValueError, KeyError, OSError) as e:
             log.warning("sanel: official source for %s: %s", lst.url, e)
+            if tiered:
+                return lst
             if prev:
                 kept = cached_listing(prev)
                 lst.units, lst.notes = kept.units, kept.notes
                 return lst
             units, note = None, "Official source unreadable this run; units are SANEL's summary."
+        if tiered and not any(b.income_max for u in units or [] for b in u.bands):
+            return lst  # the tier table says more than the official source
         if units:
             old = old_chart_note(lst.units)
             for u in units:
