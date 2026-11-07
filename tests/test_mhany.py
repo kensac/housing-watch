@@ -1,7 +1,13 @@
 from pathlib import Path
 
 from helpers import bands
-from housing_watch.adapters.mhany import building_urls, closed_section, parse_building
+from housing_watch.adapters.mhany import (
+    building_urls,
+    closed_section,
+    parse_building,
+    parse_unlinked,
+    unlinked_buildings,
+)
 from housing_watch.eligibility import listing_verdict
 
 F = Path(__file__).parent / "fixtures" / "mhany"
@@ -72,3 +78,24 @@ def test_homeowner_page_is_homeownership():
     lst = building("ancp-washington-heights-co-op-1st-time-homeowner-opportunity")
     assert lst.kind == "homeownership"
     assert listing_verdict(lst).verdict == "excluded"
+
+
+def test_unlinked_tile_461_dean():
+    """461 Dean Street's tile links nowhere; its contact is on /avaliable-properties under "Now Leasing"."""
+    av = (F / "av.html").read_text()
+    assert unlinked_buildings((F / "rr.html").read_text()) == ["461 Dean Street"]
+    lst = parse_unlinked("461 Dean Street", av, CLOSED)
+    assert (lst.ext_id, lst.url, lst.address, lst.status, lst.kind) == (
+        "461-dean-street",
+        "https://www.mutualhousingny.org/avaliable-properties",
+        "461 Dean Street",
+        "open",
+        "re-rental",
+    )
+    assert lst.units == [] and lst.notes == "Apply: email 461dean@mutualhousingny.org"
+    assert listing_verdict(lst).verdict == "possible"
+
+
+def test_unlinked_tile_closed_when_recently_leased():
+    lst = parse_unlinked("700 Manida", (F / "av.html").read_text(), CLOSED)
+    assert lst.status == "closed"
