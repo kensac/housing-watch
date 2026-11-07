@@ -11,8 +11,9 @@ upstream tokens are kept encrypted under FASTMCP_HOME; losing them means reconne
 filters (the JSON tree of `filters`, as pydantic models in mcp_models.py) and return the same fields as the web
 API, minus the applicant's PDFs; every tool's parameters and output have a JSON Schema, sent with its `$defs` (not
 expanded, which would repeat the filter schema in every place it is used). The write tools are the web app's
-mutations, thin adapters over the same views.py / tracker.py functions: saved views (create, change, duplicate,
-delete) and manual tracker links (link, unlink). Each write is logged at INFO with its caller (the OAuth subject).
+mutations, thin adapters over the same domain functions: saved views, tracker links and the sheet's Status/Notes
+and new rows (tracker.py), source controls and listing overrides (control.py), the profile (profiles.py). Each
+write is logged at INFO with its caller (the OAuth subject).
 `graphql` runs read-only queries in-process against the web app's own schema (web/schema.py, `schema.graphql`);
 `graphql_mutation` runs mutations, with a context marked trusted (OAuth already decided who may call it), so they
 skip the browser's same-origin check. The web app's /graphql never sets it.
@@ -44,17 +45,17 @@ from pydantic import Field
 from sqlalchemy.engine import Engine
 from strawberry.types.graphql import OperationType as Op
 
+from . import control, profiles, queries, tracker, views
 from . import filters as F
 from . import mcp_models as M
-from . import queries, tracker, views
-from .eligibility import PROFILE, Profile
-from .models import NotFound
+from .eligibility import Profile
+from .models import NotFound, Refused
 from .notify import digest
 from .web.hosts import AllowedHosts
 from .web.schema import context, schema
 
 log = logging.getLogger("housing_watch")
-REFUSALS = (NotFound, views.ViewError, F.FilterError)  # the domain's refusals: the caller's to fix, not bugs
+REFUSALS = (NotFound, Refused, views.ViewError, F.FilterError)  # the domain's refusals: the caller's to fix, not bugs
 READ = {"readOnlyHint": True, "openWorldHint": False}
 WRITE = {"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
 DELETE = {"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
@@ -63,6 +64,15 @@ FILTERS = (
     '{"verdict": {"in": ["eligible"]}, "borough": {"in": ["Brooklyn", "Queens"]}, "units": {"rent": {"le": 3000}, '
     '"size": {"in": ["studio", "1br"]}}, "commute": {"le": 45}, "last_changed": {"last": {"amount": 7, "unit": '
     '"days"}}}. Unit conditions hold together on one unit. `filter_fields` lists every field and its operators.'
+)
+OVERRIDE_FIELDS = (
+    "published fields to set: title, url, address, borough, status (open/waitlist/upcoming/unknown/closed), kind "
+    "(re-rental/lottery/waitlist/homeownership), deadline (YYYY-MM-DD), senior_only, notes; null clears a "
+    "nullable one. Replaces the previous override's fields."
+)
+OVERRIDE_UNITS = (
+    "replaces the source's units outright: [{size, rent, ami, unit_no, set_aside, available, chart_year, bands: "
+    "[{household, income_min, income_max}]}]; null keeps the source's units"
 )
 GQL = (
     "Lists are Relay connections: `{ listings(filter: { verdict: { in: [eligible] }, units: { rent: { le: 3000 } } "
@@ -164,7 +174,12 @@ def _mutations_run(bound: dict) -> str:
     return f"mutations={','.join(names) or '?'} variables={brief(bound.get('variables') or {})}"
 
 
-def build(engine: Engine, p: Profile = PROFILE, auth=None):
+def build(engine: Engine, p: Profile | None = None, auth=None):
+    """The MCP server. `p` pins the profile (tests); by default each call reads the one in force (profiles.py)."""
+
+    def P() -> Profile:  # noqa: N802 - reads like the constant it replaces
+        return p if p is not None else profiles.current(engine)
+
     def tool(annotations: dict, args=None, more: str = ""):
         """mcp.tool, with the domain's refusals as clean tool errors, and every write logged with its caller.
         `args` summarizes the arguments for the log (default: brief() of each); `more` extends the docstring."""
@@ -212,11 +227,12 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         "housing-watch",
         instructions=(
             "NYC affordable-housing listings scraped hourly from ~48 sources, judged against one applicant's "
-            f"profile (household {p.household}, income ${p.income:,}, sizes {', '.join(sorted(p.sizes))}). "
+            "profile (`profile` reads it, `set_profile` changes it and re-judges everything). "
             "verdict is eligible / possible / excluded with a reason; commute is transit minutes to work; "
             "application is the stage from the applicant's tracker sheet. Read with search/fetch, find_*, "
-            "recent_changes, overview, saved_views, tracker_board or `graphql` (queries only); write with the view and "
-            "tracker tools or `graphql_mutation`. " + FILTERS
+            "recent_changes, overview, saved_views, tracker_board, profile or `graphql` (queries only). Write with "
+            "the view, tracker (links, and the sheet's Status/Notes), override (correct a listing; kept across "
+            "scrapes), source (run now, pause) and profile tools, or `graphql_mutation`. " + FILTERS
         ),
         auth=auth,
         mask_error_details=True,  # a bug's text stays in the log; refusals and bad arguments still say what
@@ -226,14 +242,14 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     @tool(READ)
     def search(query: str) -> M.SearchResults:
         """Search listings by building name, address, neighborhood, borough or notes. Returns ids for `fetch`."""
-        res = queries.search_listings(engine, queries.ListingQuery([], query, offset=0, limit=20), p)
+        res = queries.search_listings(engine, queries.ListingQuery([], query, offset=0, limit=20), P())
         return M.SearchResults(results=[M.SearchHit(id=x.key, title=f"{x.title} ({x.verdict})", url=x.url)
                                         for x in res.items])  # fmt: skip
 
     @tool(READ)
     def fetch(id: str) -> M.Document:
         """One listing by id (a `search` result or listing key): units, verdict, commute, tracker stage, history."""
-        d = queries.listing_detail(engine, id, p)
+        d = queries.listing_detail(engine, id, P())
         if d is None:
             raise NotFound(f"No such listing: {id}")
         body = asdict(d) | {"summary": _summary(d.summary).model_dump(mode="json"),
@@ -254,7 +270,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         """Listings matching a filter, one row per building/opportunity. Removed listings are hidden unless
         a condition asks about removal (gone_since)."""
         lq = queries.ListingQuery(views.conds("listings", M.tree(filter)), q, M.sorts("listings", sort), offset, limit)
-        res = queries.search_listings(engine, lq, p)
+        res = queries.search_listings(engine, lq, P())
         return M.ListingsPage(items=[_summary(x) for x in res.items], total=res.total, next_offset=res.next_offset,
                               verdict_counts=M.VerdictCounts(**res.verdict_counts))  # fmt: skip
 
@@ -269,7 +285,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         """Individual units or rent tiers (size, rent, AMI, income band) with their listing and verdict; unit
         conditions hold on the row's own unit."""
         uq = queries.ListingQuery(views.conds("units", M.tree(filter)), q, M.sorts("units", sort), offset, limit)
-        res = queries.search_units(engine, uq, p)
+        res = queries.search_units(engine, uq, P())
         return M.UnitsPage(items=[M.UnitModel.model_validate(queries.public(u)) for u in res.items],
                            total=res.total, next_offset=res.next_offset)  # fmt: skip
 
@@ -288,7 +304,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     ) -> M.Changes:
         """What happened, newest first: new, changed (with what changed), closed, removed, reopened listings,
         watched pages that changed, and sources failing or recovering."""
-        page = queries.events(engine, views.conds("events", M.tree(filter)), before=before, limit=100, p=p)
+        page = queries.events(engine, views.conds("events", M.tree(filter)), before=before, limit=100, p=P())
         items = [_event(e) for e in page.items]
         return M.Changes(items=[e for e in items if include_noise or not e.noise], total=page.total,
                          next_before=page.next_before)  # fmt: skip
@@ -297,8 +313,8 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     def overview() -> M.OverviewResult:
         """Counts by verdict and status, eligible listings open now, recent activity, failing sources, and the
         digest email that would go out next."""
-        o = queries.overview(engine, p)
-        built = digest.build(engine, p)
+        o = queries.overview(engine, P())
+        built = digest.build(engine, P())
         return M.OverviewResult.model_validate(asdict(o) | {
             "eligible_now": [_summary(x) for x in o.eligible_now],
             "recent": [_event(e) for e in o.recent],
@@ -308,7 +324,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     @tool(READ)
     def sources() -> list[M.SourceModel]:
         """Every source: last success, failures, listing counts, schedule."""
-        return [M.SourceModel.model_validate(asdict(x)) for x in queries.sources(engine, p)]
+        return [M.SourceModel.model_validate(asdict(x)) for x in queries.sources(engine, P())]
 
     @tool(READ)
     def filter_fields(page: views.Page = "listings") -> list[M.FieldInfo]:
@@ -320,13 +336,13 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     @tool(READ)
     def saved_views() -> list[M.ViewModel]:
         """Every saved view (named filter, search, sort and columns of a page) with its current match count."""
-        return [M.ViewModel.of(v) for v in views.with_counts(engine, p)]
+        return [M.ViewModel.of(v) for v in views.with_counts(engine, P())]
 
     @tool(READ)
     def tracker_board() -> M.TrackerModel:
         """Every row of the applicant's tracker sheet, by stage: its stage history, cells and matched listings.
         `row_key` is what `link_tracker` takes."""
-        return M.TrackerModel.model_validate(asdict(queries.tracker_board(engine, p)))
+        return M.TrackerModel.model_validate(asdict(queries.tracker_board(engine, P())))
 
     @tool(WRITE)
     def create_view(
@@ -335,7 +351,7 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
         is_default: Annotated[bool, Field(description="the page opens on it")] = False,
     ) -> M.ViewModel:
         """Save a view of a page."""
-        return M.ViewModel.of(views.create(engine, state.state(), name, is_default, p))
+        return M.ViewModel.of(views.create(engine, state.state(), name, is_default, P()))
 
     @tool(WRITE)
     def change_view(
@@ -347,13 +363,13 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     ) -> M.ViewModel:
         """Rename a view, replace its state, set or clear it as its page's default, or move it one place."""
         v = views.change(engine, id, name=name, state=state.state() if state else None, is_default=is_default,
-                         move=views.MOVES[move] if move else 0, p=p)  # fmt: skip
+                         move=views.MOVES[move] if move else 0, p=P())  # fmt: skip
         return M.ViewModel.of(v)
 
     @tool(WRITE)
     def duplicate_view(id: int) -> M.ViewModel:
         """A copy of a view, named "<name> (copy)" (the name shortened to fit)."""
-        return M.ViewModel.of(views.duplicate(engine, id, p))
+        return M.ViewModel.of(views.duplicate(engine, id, P()))
 
     @tool(DELETE)
     def delete_view(id: int) -> M.Deleted:
@@ -368,28 +384,110 @@ def build(engine: Engine, p: Profile = PROFILE, auth=None):
     ) -> M.TrackerLinkModel:
         """Link a listing to a tracker sheet row by hand, overriding automatic matching, or mark it as in no row."""
         tracker.link(engine, listing_key, row_key)
-        return M.TrackerLinkModel.model_validate(asdict(queries.tracker_link(engine, listing_key, p)))
+        return M.TrackerLinkModel.model_validate(asdict(queries.tracker_link(engine, listing_key, P())))
 
     @tool(WRITE | {"idempotentHint": True})
     def unlink_tracker(listing_key: str) -> M.TrackerLinkModel:
         """Drop a manual tracker link: the listing goes back to automatic matching."""
         tracker.unlink(engine, listing_key)
-        return M.TrackerLinkModel.model_validate(asdict(queries.tracker_link(engine, listing_key, p)))
+        return M.TrackerLinkModel.model_validate(asdict(queries.tracker_link(engine, listing_key, P())))
+
+    @tool(WRITE)
+    def write_tracker(
+        row_key: Annotated[str, Field(description="a `tracker_board` row")],
+        status: Annotated[
+            str | None, Field(description=f"one of {', '.join(tracker.STAGES)}; empty clears it; null: unchanged")
+        ] = None,  # fmt: skip
+        notes: Annotated[str | None, Field(description="the row's Notes; empty clears them; null: unchanged")] = None,
+    ) -> M.SheetWrite:
+        """Set a tracker row's Status and/or Notes in the Google Sheet itself, then sync it."""
+        kw = {k: v for k, v in (("status", status), ("notes", notes)) if v is not None}
+        return M.SheetWrite(row_key=row_key, rows=tracker.write(engine, row_key, **kw))
+
+    @tool(WRITE)
+    def add_tracker_row(listing_key: str, status: str | None = None, notes: str | None = None) -> M.SheetWrite:
+        """Add a row to the tracker sheet for a listing (Property: its title; Apply / Source: its link), then sync
+        and link the listing to it."""
+        key = tracker.add_row(engine, listing_key, status, notes)
+        return M.SheetWrite(row_key=key, rows=len(tracker.load(engine)[0]))
+
+    def _src(name: str) -> M.SourceState:
+        st = control.state(engine, name)
+        return M.SourceState(source=name, paused=st[0], next_due=st[1])
+
+    @tool(WRITE | {"idempotentHint": True})
+    def run_source(source: str) -> M.SourceState:
+        """Run a source at the next tick (within a minute), ending any refusal backoff. Refused while paused."""
+        control.run_now(engine, source)
+        return _src(source)
+
+    @tool(WRITE | {"idempotentHint": True})
+    def pause_source(
+        source: str, paused: Annotated[bool, Field(description="false resumes it, due at once")]
+    ) -> M.SourceState:
+        """Pause a source (no runs until resumed) or resume it."""
+        control.set_paused(engine, source, paused)
+        return _src(source)
+
+    def _listing(key: str) -> M.Document:
+        return fetch(id=key)
+
+    @tool(WRITE | {"idempotentHint": True})
+    def set_override(
+        listing_key: str,
+        fields: Annotated[dict | None, Field(description=OVERRIDE_FIELDS)] = None,
+        units: Annotated[list[dict] | None, Field(description=OVERRIDE_UNITS)] = None,
+        reason: str | None = None,
+    ) -> M.Document:
+        """Correct a listing: replace its override with these fields and/or units, kept over the source's values on
+        every scrape (the source's own values are kept beside it). Verdicts, filters and the digest see the
+        corrected listing at once. Returns the listing as `fetch` does; its `override` says what is set."""
+        control.set_override(engine, listing_key, fields, units, reason)
+        return _listing(listing_key)
+
+    @tool(DELETE)
+    def clear_override(listing_key: str) -> M.Document:
+        """Drop a listing's override: it reads as its source publishes it again."""
+        control.clear_override(engine, listing_key)
+        return _listing(listing_key)
+
+    @tool(READ)
+    def profile() -> M.ProfileModel:
+        """The applicant profile every verdict is judged against, and whether the owner set it (custom) or it is
+        the HW_* env vars'."""
+        return M.ProfileModel(**asdict(P()), custom=profiles.is_set(engine))
+
+    @tool(WRITE | {"idempotentHint": True})
+    def set_profile(
+        household: int | None = None,
+        income: Annotated[int | None, Field(description="annual household income, dollars")] = None,
+        sizes: list[M.SizeName] | None = None,
+        excluded_boroughs: list[M.BoroughName] | None = None,
+    ) -> M.ProfileModel:
+        """Change the applicant profile (fields left out keep their values); every verdict is re-judged at once."""
+        q = profiles.update(engine, household, income, sizes, excluded_boroughs)  # type: ignore[arg-type]
+        return M.ProfileModel(**asdict(q), custom=True)
+
+    @tool(WRITE | {"idempotentHint": True})
+    def reset_profile() -> M.ProfileModel:
+        """Go back to the HW_* env vars' profile."""
+        return M.ProfileModel(**asdict(profiles.reset(engine)), custom=False)
 
     @tool(READ, more=GQL)
     async def graphql(query: str, variables: dict | None = None) -> dict:
         """Run a read-only GraphQL query against the web app's schema (mutations: `graphql_mutation`). Introspect
         it first: `{ __schema { queryType { fields { name description } } } }`."""
         return await _execute(query, variables, Op.QUERY, "use graphql_mutation for mutations",
-                              context(engine, p))  # fmt: skip
+                              context(engine, P()))  # fmt: skip
 
     @tool(DELETE, args=_mutations_run, more=GQL)
     async def graphql_mutation(query: str, variables: dict | None = None) -> dict:
         """Run a GraphQL mutation against the web app's schema: createView, changeView, duplicateView, deleteView,
-        linkTracker, unlinkTracker (the same writes as the other tools). Introspect it with `graphql`:
+        linkTracker, unlinkTracker, writeTracker, addTrackerRow, runSource, pauseSource, setOverride, clearOverride,
+        setProfile, resetProfile (the same writes as the other tools). Introspect it with `graphql`:
         `{ __schema { mutationType { fields { name description } } } }`."""
         return await _execute(query, variables, Op.MUTATION, "use graphql for queries",
-                              context(engine, p, trusted=True))  # fmt: skip
+                              context(engine, P(), trusted=True))  # fmt: skip
 
     return mcp
 
@@ -414,7 +512,7 @@ def auth_from_env():
     )
 
 
-def app(engine: Engine, p: Profile = PROFILE):
+def app(engine: Engine, p: Profile | None = None):
     # FastMCP's own Host/Origin guard compares hostnames only, and its Origin check sees http behind Traefik's TLS,
     # so it would refuse the browser's https Origin on the OAuth consent POST. web/hosts.py checks the Host alone.
     return AllowedHosts(build(engine, p, auth_from_env()).http_app(path="/mcp"))

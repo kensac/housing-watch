@@ -43,7 +43,7 @@ tables), so the same input always gives the same output.
 | Var | Meaning |
 |---|---|
 | `HW_DATABASE_URL` | `postgresql+psycopg://user:pass@host:port/db` (required except for `show`) |
-| `HW_INCOME` | annual household income (required for `serve`, `digest`, `show`) |
+| `HW_INCOME` | annual household income (required for `serve`, `digest`, `show`); the profile until one is set in the app or MCP |
 | `HW_HOUSEHOLD` | household size (default 1) |
 | `HW_SIZES` | unit sizes wanted, e.g. `studio,1br` |
 | `HW_EXCLUDED_BOROUGHS` | e.g. `Bronx` |
@@ -61,7 +61,7 @@ tables), so the same input always gives the same output.
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` | STARTTLS SMTP |
 | `HW_APPLICANT_FILE` | applicant JSON for pre-filling known paper application forms (UI only; schema: `tests/fixtures/applications/applicant.example.json`). Signs (`signature_image`, else the name in a handwriting font) and dates the applicant's line; never the SSN |
 | `HW_COMMUTE_TO`, `GOOGLE_MAPS_API_KEY` | transit commute (weekday 8:30 AM) from eligible listings to this address, via Google's Routes API; both unset = off |
-| `HW_TRACKER_SHEET`, `HW_TRACKER_TAB`, `HW_SHEETS_KEY_FILE` | the application tracker Google Sheet (id, tab, default `Properties`) and a service-account key that can view it; synced read-only |
+| `HW_TRACKER_SHEET`, `HW_TRACKER_TAB`, `HW_SHEETS_KEY_FILE` | the application tracker Google Sheet (id, tab, default `Properties`) and a service-account key that can edit it (Status/Notes and new rows are written from the app or MCP) |
 | `BYPARR_URL` | FlareSolverr-compatible renderer for JS/Cloudflare pages |
 
 ## Running

@@ -29,7 +29,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-from .. import commute, db, tracker
+from .. import commute, db, profiles, tracker
 from ..adapters import load_all
 from ..fetch import NeedsByparr
 from ..orm import FleetWorkerRow
@@ -223,7 +223,7 @@ def digest(scheduled: bool = False) -> str:
     from .. import digest as dg
 
     eng = engine()
-    if not scheduled and not dg.urgent(eng):
+    if not scheduled and not dg.urgent(eng, profiles.current(eng)):
         return "nothing urgent"
     return dg.send(eng)
 

@@ -25,13 +25,14 @@ from sqlalchemy import Engine, create_engine, delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, selectinload
 
-from . import ami, changes
+from . import ami, changes, overrides
 from .mapping import apply_listing, listing_from_row
-from .models import EventType, Listing, Snapshot
+from .models import EventType, Listing, NotFound, Snapshot
 from .orm import (
     AdapterCacheRow,
     ChunkResultRow,
     EventRow,
+    ListingOverrideRow,
     ListingRow,
     RunRow,
     SnapshotRow,
@@ -152,10 +153,48 @@ def load_listing(s: Session, key: str) -> Listing | None:
     return listing_from_row(r) if r else None
 
 
+def _upsert(s: Session, source: str, lst: Listing, row: ListingRow | None, now: datetime, baseline: bool,
+            seen: bool = True, extra: dict | None = None) -> int:  # fmt: skip
+    """Write one listing to its row (a new row when None) with its event; returns the events written (0 or 1).
+    seen=False (an owner's override, not a scrape) leaves last_seen and gone_since alone."""
+    key = lst.key()
+    ami.stamp(lst.units)  # the chart year of printed caps, for adapters that do not set one
+    fp = _fp(lst)
+    if row is None:
+        row = ListingRow(fingerprint=fp, first_seen=now, last_seen=now, last_changed=now, updated=now)
+        row = apply_listing(lst, row)
+        row.source = source  # the run's source owns the row, as gone detection assumes
+        s.add(row)
+        _event(s, source, key, "new", lst.title, now=now, baseline=baseline)
+        return 1
+    typ = _change_type(row, lst, fp)
+    stored = listing_from_row(row)
+    detail = _changed_detail(s, key, stored, lst) if typ == "changed" else None
+    if detail is not None and extra:
+        detail |= extra
+    # chart_year is the one unit field outside the fingerprint: when only it moved, store it without an event
+    years_moved = [(u.key(), u.chart_year) for u in stored.units] != [(u.key(), u.chart_year) for u in lst.units]
+    apply_listing(lst, row, units=row.fingerprint != fp or years_moved)
+    row.source, row.fingerprint = source, fp
+    if seen:
+        row.gone_since = None
+    if s.is_modified(row):  # an event, a silent chart_year or title edit; not last_seen alone
+        row.updated = now
+    if seen:
+        row.last_seen = now
+    if typ:
+        row.last_changed = now
+        _event(s, source, key, typ, lst.title, detail=detail, now=now, baseline=baseline)
+        return 1
+    return 0
+
+
 def record_listings(
     s: Session, source: str, listings: list[Listing], now: datetime | None = None, baseline: bool = False
 ) -> int:
-    """Upsert a source's complete listing set; anything it no longer lists is marked gone. Returns events."""
+    """Upsert a source's complete listing set; anything it no longer lists is marked gone. Returns events.
+
+    A listing with an owner's override is stored with the patch applied; the override keeps the source's values."""
     now = now or utcnow()
     rows = {
         r.key: r
@@ -165,6 +204,7 @@ def record_listings(
             .options(selectinload(ListingRow.units).selectinload(UnitRow.bands))
         )
     }
+    ovs = {o.listing_key: o for o in s.scalars(select(ListingOverrideRow).where(ListingOverrideRow.source == source))}
     seen: set[str] = set()
     n = 0
     for lst in listings:
@@ -172,38 +212,56 @@ def record_listings(
         if key in seen:
             continue  # an adapter listing one thing twice must not flap
         seen.add(key)
-        ami.stamp(lst.units)  # the chart year of printed caps, for adapters that do not set one
-        fp = _fp(lst)
-        row = rows.get(key)
-        if row is None:
-            row = apply_listing(
-                lst, ListingRow(fingerprint=fp, first_seen=now, last_seen=now, last_changed=now, updated=now)
-            )
-            row.source = source  # the run's source owns the row, as gone detection assumes
-            s.add(row)
-            _event(s, source, key, "new", lst.title, now=now, baseline=baseline)
-            n += 1
-            continue
-        typ = _change_type(row, lst, fp)
-        stored = listing_from_row(row)
-        detail = _changed_detail(s, key, stored, lst) if typ == "changed" else None
-        # chart_year is the one unit field outside the fingerprint: when only it moved, store it without an event
-        years_moved = [(u.key(), u.chart_year) for u in stored.units] != [(u.key(), u.chart_year) for u in lst.units]
-        apply_listing(lst, row, units=row.fingerprint != fp or years_moved)
-        row.source, row.fingerprint, row.gone_since = source, fp, None
-        if s.is_modified(row):  # an event, a silent chart_year or title edit; not last_seen alone
-            row.updated = now
-        row.last_seen = now
-        if typ:
-            row.last_changed = now
-            _event(s, source, key, typ, lst.title, detail=detail, now=now, baseline=baseline)
-            n += 1
+        if (ov := ovs.get(key)) is not None:
+            ami.stamp(lst.units)
+            if ov.raw != (raw := overrides.to_json(lst)):
+                ov.raw = raw
+            lst = overrides.apply(lst, ov.patch)
+        n += _upsert(s, source, lst, rows.get(key), now, baseline)
     for key, row in rows.items():
         if key not in seen and row.gone_since is None:
             row.gone_since = row.updated = now
             _event(s, source, key, "gone", row.title, now=now, baseline=baseline)
             n += 1
     return n
+
+
+def _listing_row(s: Session, key: str) -> ListingRow:
+    row = s.scalar(
+        select(ListingRow)
+        .where(ListingRow.key == key)
+        .options(selectinload(ListingRow.units).selectinload(UnitRow.bands))
+        .with_for_update(of=ListingRow)
+    )
+    if row is None:
+        raise NotFound(f"No such listing: {key}")
+    return row
+
+
+def set_override(s: Session, key: str, patch: dict, reason: str | None = None) -> ListingOverrideRow:
+    """Replace a listing's override with `patch` (overrides.validate's form) and store the listing with it now.
+    A change to what the listing reads as is a `changed` event with detail.override."""
+    row = _listing_row(s, key)
+    now = utcnow()
+    ov = s.get(ListingOverrideRow, key, with_for_update=True)
+    if ov is None:  # the row is the source's own values until it is first overridden
+        ov = ListingOverrideRow(listing_key=key, source=row.source, raw=overrides.to_json(listing_from_row(row)))
+        s.add(ov)
+    ov.patch, ov.reason, ov.updated = patch, reason, now
+    lst = overrides.apply(overrides.from_json(ov.raw), patch)
+    _upsert(s, row.source, lst, row, now, baseline=False, seen=False, extra={"override": True})
+    return ov
+
+
+def clear_override(s: Session, key: str) -> None:
+    """Drop a listing's override and store the source's values again (a `changed` event when they differ)."""
+    row = _listing_row(s, key)
+    ov = s.get(ListingOverrideRow, key, with_for_update=True)
+    if ov is None:
+        raise NotFound(f"No override for {key}")
+    _upsert(s, row.source, overrides.from_json(ov.raw), row, utcnow(), baseline=False, seen=False,
+            extra={"override": "cleared"})  # fmt: skip
+    s.delete(ov)
 
 
 def record_snapshots(
@@ -263,10 +321,11 @@ def discard_run(s: Session, run_id: int) -> None:
         s.delete(run)
 
 
-def _state(s: Session, source: str) -> SourceStateRow:
+def source_state(s: Session, source: str) -> SourceStateRow:
+    """The source's state row, locked for update; created when the source has none yet."""
     st = s.get(SourceStateRow, source, with_for_update=True)
     if st is None:
-        st = SourceStateRow(source=source, consecutive_failures=0)
+        st = SourceStateRow(source=source, consecutive_failures=0, paused=False)
         s.add(st)
     return st
 
@@ -294,7 +353,7 @@ def finish_run(
     newer = select(RunRow.id).where(RunRow.source == source, RunRow.id > run_id, RunRow.finished.is_not(None))
     if s.scalar(newer.limit(1)) is not None:
         return  # e.g. abandoned after its retry succeeded: the newer run already set the source's state
-    st = _state(s, source)
+    st = source_state(s, source)
     st.last_attempt = now
     if every_hours is not None:
         st.next_due = now + timedelta(hours=every_hours) - DUE_SLACK
@@ -328,9 +387,9 @@ def claim_due(s: Session, every: dict[str, float], now: datetime | None = None) 
         if st is None:
             if s.get(SourceStateRow, source) is not None:
                 continue  # locked by a run finishing right now
-            st = SourceStateRow(source=source, consecutive_failures=0)
+            st = SourceStateRow(source=source, consecutive_failures=0, paused=False)
             s.add(st)
-        elif st.next_due is not None and st.next_due > now:
+        elif st.paused or (st.next_due is not None and st.next_due > now):
             continue
         st.next_due = now + timedelta(hours=hours)
         out.append((source, st.queue))
@@ -338,7 +397,7 @@ def claim_due(s: Session, every: dict[str, float], now: datetime | None = None) 
 
 
 def set_queue(s: Session, source: str, queue: str | None) -> None:
-    _state(s, source).queue = queue
+    source_state(s, source).queue = queue
 
 
 # ---- chunked runs ----------------------------------------------------------------------------------

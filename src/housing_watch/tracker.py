@@ -1,7 +1,8 @@
 """The owner's application tracker (a Google Sheet): synced read-only, matched to listings at read time.
 
 The sheet is the source of truth for application status and notes. `sync` copies its rows into
-`tracker_rows` (replacing them) through a service account that can only view the sheet; `match` pairs
+`tracker_rows` (replacing them) through a service account; `write` and `add_row` change the sheet itself
+(Status, Notes, a new row) and sync at once, so they need that account to be an editor of it. `match` pairs
 rows with listings deterministically: the row's Apply / Source link is the listing's URL, else a
 normalized street address matches, else the building name does. A manual link set in the UI
 (`tracker_links`) always wins, including "not this row".
@@ -27,14 +28,14 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from . import fetch
-from .models import NotFound, values
+from .models import NotFound, Refused, values
 from .orm import ListingRow, TrackerEventRow, TrackerLinkRow, TrackerRow
 from .parse import addr_keys, name_key, units, url_key
 
 SHEET = os.environ.get("HW_TRACKER_SHEET", "")
 TAB = os.environ.get("HW_TRACKER_TAB", "Properties")
 KEY_FILE = os.environ.get("HW_SHEETS_KEY_FILE", "")
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]  # read and write: see write()
 API = "https://sheets.googleapis.com/v4/spreadsheets/{id}"
 FIELDS = "sheets(data(rowData(values(formattedValue,hyperlink,textFormatRuns(format(link(uri)))))))"
 
@@ -328,3 +329,109 @@ def unlink(engine: Engine, listing_key: str) -> None:
     with Session(engine) as s, s.begin():
         if not s.execute(delete(TrackerLinkRow).where(TrackerLinkRow.listing_key == listing_key)).rowcount:
             raise NotFound("No manual link for that listing")
+
+
+# --- writing the sheet -----------------------------------------------------------------------------------
+
+_KEEP = object()  # write(): leave this cell as it is
+
+
+def _configured() -> None:
+    if not (SHEET and KEY_FILE and os.path.isfile(KEY_FILE)):
+        raise Refused("the tracker sheet is not configured (HW_TRACKER_SHEET, HW_SHEETS_KEY_FILE)")
+
+
+def _range(a1: str) -> str:
+    return quote("'" + TAB.replace("'", "''") + "'!" + a1, safe="")
+
+
+def _col(n: int) -> str:
+    """A1 column letters of the 0-based column n."""
+    out = ""
+    n += 1
+    while n:
+        n, r = divmod(n - 1, 26)
+        out = chr(65 + r) + out
+    return out
+
+
+def _values(a1: str, auth: dict) -> list[list[str]]:
+    return fetch.get(API.format(id=SHEET) + f"/values/{_range(a1)}", headers=auth).json().get("values") or []
+
+
+def _header(auth: dict) -> list[str]:
+    head = [h.strip() for h in (_values("1:1", auth) or [[]])[0]]
+    if "Property" not in head:
+        raise Refused(f"the tracker sheet's header has no Property column: {head}")
+    return head
+
+
+def _status(v: str | None) -> str:
+    st = " ".join((v or "").split())
+    if st and st not in STAGES:
+        raise Refused(f"status: {st!r} is not one of {', '.join(STAGES)} (or empty to clear)")
+    return st
+
+
+def write(engine: Engine, key: str, status=_KEEP, notes=_KEEP) -> int:
+    """Set a row's Status and/or Notes in the sheet, then sync; returns the rows synced. Refused when the row has
+    moved in the sheet since the last sync (sync, and try again)."""
+    _configured()
+    with Session(engine) as s:
+        row = s.get(TrackerRow, key)
+        if row is None:
+            raise NotFound("No such tracker row")
+        position, prop = row.position, row.property
+    want = {}
+    if status is not _KEEP:
+        want["Status"] = _status(status)
+    if notes is not _KEEP:
+        want["Notes"] = (notes or "").strip()
+    if not want:
+        raise Refused("nothing to write: give status and/or notes")
+    auth = {"Authorization": f"Bearer {_token()}"}
+    head = _header(auth)
+    if missing := [h for h in want if h not in head]:
+        raise Refused(f"the tracker sheet has no {', '.join(missing)} column")
+    pc = _col(head.index("Property"))
+    live = _values(f"{pc}{position}", auth)
+    if row_key(live[0][0] if live and live[0] else "") != key:
+        sync(engine)
+        raise Refused(f"{prop!r} is no longer on sheet row {position}; synced, try again")
+    data = [{"range": f"'{TAB}'!{_col(head.index(h))}{position}", "values": [[v]]} for h, v in want.items()]
+    fetch.post_json(API.format(id=SHEET) + "/values:batchUpdate",
+                    {"valueInputOption": "USER_ENTERED", "data": data}, headers=auth)  # fmt: skip
+    return sync(engine)
+
+
+def _link_formula(url: str, label: str) -> str:
+    q = lambda x: x.replace('"', '""')  # noqa: E731
+    return f'=HYPERLINK("{q(url)}","{q(label)}")'
+
+
+def add_row(engine: Engine, listing_key: str, status: str | None = None, notes: str | None = None) -> str:
+    """Append a sheet row for a listing (Property = its title, Apply / Source = its link), sync, and link the
+    listing to it; returns the row's key. Refused when a row of that name exists."""
+    _configured()
+    with Session(engine) as s:
+        lst = s.get(ListingRow, listing_key)
+        if lst is None:
+            raise NotFound("No such listing")
+        title, url = (lst.title or lst.address or listing_key).strip(), lst.url
+    key = row_key(title)
+    with Session(engine) as s:
+        if s.get(TrackerRow, key) is not None:
+            raise Refused(f"the sheet already has a row {title!r}; link the listing to it instead")
+    st = _status(status)
+    auth = {"Authorization": f"Bearer {_token()}"}
+    head = _header(auth)
+    cells = {"Property": title, "Status": st, "Notes": (notes or "").strip()}
+    if url and "Apply / Source" in head:
+        cells["Apply / Source"] = _link_formula(url, "Listing")
+    values_row = [cells.get(h, "") for h in head]
+    fetch.post_json(API.format(id=SHEET) + f"/values/{_range('A1')}:append"
+                    "?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS",
+                    {"values": [values_row]}, headers=auth)  # fmt: skip
+    sync(engine)
+    link(engine, listing_key, key)
+    return key

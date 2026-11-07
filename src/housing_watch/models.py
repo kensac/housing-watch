@@ -25,6 +25,10 @@ class NotFound(LookupError):
     """A write names something the store does not have. The message says what; the API and MCP show it."""
 
 
+class Refused(ValueError):
+    """A write the domain will not do as asked (a bad value, a paused source). The message says why."""
+
+
 @dataclass(frozen=True)
 class Band:
     """Income range for one household size."""

@@ -14,14 +14,16 @@ The schema and write path are described in
   ones: `chunk_results` rows once their run is recorded or failed
   (`db.clear_chunks`); a run handed to another queue before it started
   (`db.discard_run`); `tracker_rows`, replaced on each sync because the sheet
-  is the source of truth (its history is `tracker_events`); saved views and
-  manual tracker links the owner deletes; finished Procrastinate jobs
+  is the source of truth (its history is `tracker_events`); saved views, manual tracker links, listing overrides and the profile row
+  the owner deletes; finished Procrastinate jobs
   (`fleet.tasks.cleanup`: successes after 2 days, failures after a week). Add a new
   one only with the owner's agreement.
 - **Change detection lives only in `db.py`.** Event types are
   `models.EventType`. Do not emit events anywhere else.
 - **Store raw facts, no verdicts.** Eligibility is `eligibility/` at read time,
-  so a profile change re-judges everything without a write.
+  so a profile change re-judges everything without a write. The one exception
+  to raw facts is an owner's override: `record_listings` stores raw + patch,
+  and `listing_overrides.raw` keeps the source's values.
 - **One run, one transaction.** `fleet.runner.record` writes listings, snapshots,
   cache, `runs` and `source_state` together. `db.py` functions take a
   `Session` and never commit.

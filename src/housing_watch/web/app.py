@@ -26,15 +26,20 @@ from sqlalchemy.engine import Engine
 from starlette.requests import HTTPConnection
 from strawberry.fastapi import GraphQLRouter
 
-from .. import applications, queries
-from ..eligibility import PROFILE, Profile
+from .. import applications, profiles, queries
+from ..eligibility import Profile
 from .hosts import AllowedHosts
 from .schema import Code, Problem, context, schema
 
 DIST = Path(__file__).parent / "dist"
 
 
-def create_app(engine: Engine, profile: Profile = PROFILE, dist: Path = DIST) -> FastAPI:
+def create_app(engine: Engine, profile: Profile | None = None, dist: Path = DIST) -> FastAPI:
+    """The web app. `profile` pins the profile (tests); by default each request reads the one in force."""
+
+    def prof() -> Profile:
+        return profile if profile is not None else profiles.current(engine)
+
     app = FastAPI(title="housing-watch", docs_url=None, redoc_url=None, openapi_url=None)
     app.add_middleware(AllowedHosts)  # DNS rebinding (hosts.py)
 
@@ -49,7 +54,7 @@ def create_app(engine: Engine, profile: Profile = PROFILE, dist: Path = DIST) ->
     async def ctx(request: HTTPConnection) -> dict:
         if request.scope["type"] != "http":  # WebSockets skip CORS: any site could read through one
             raise WebSocketException(status.WS_1008_POLICY_VIOLATION, "GraphQL over WebSocket is not served")
-        return context(engine, profile, request)
+        return context(engine, prof(), request)
 
     # No subscriptions in the schema, so no subscription protocols either.
     app.include_router(GraphQLRouter(schema, context_getter=ctx, subscription_protocols=()), prefix="/graphql")
@@ -60,7 +65,7 @@ def create_app(engine: Engine, profile: Profile = PROFILE, dist: Path = DIST) ->
         a = applications.applicant()
         if a is None:
             raise Problem(Code.NOT_FOUND, "No applicant file is configured (HW_APPLICANT_FILE).")
-        d = queries.listing_detail(engine, key, profile)
+        d = queries.listing_detail(engine, key, prof())
         urls = applications.pdf_urls(d.notes) if d else []
         if not 0 <= n < len(urls):
             raise Problem(Code.NOT_FOUND, "This listing has no such application PDF.")
