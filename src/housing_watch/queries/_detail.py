@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..criteria import PROFILE, Profile, Verdict, unit_verdict
 from ..mapping import listing_from_row
 from ..models import Band, Size
-from ..orm import EventRow, ListingRow
+from ..orm import EventRow, ListingOverrideRow, ListingRow
 from ._events import EventView, _event_view
 from ._judging import ListingSummary, _load, _summary, judged_listing
 
@@ -32,6 +32,14 @@ class UnitView:
 
 
 @dataclass
+class OverrideInfo:
+    fields: list[str]  # the published fields the owner set
+    units: bool  # the owner replaced the unit list
+    reason: str | None
+    updated: datetime
+
+
+@dataclass
 class ListingDetail:
     summary: ListingSummary
     notes: str | None
@@ -40,6 +48,7 @@ class ListingDetail:
     units: list[UnitView]
     events: list[EventView]
     household: int
+    override: OverrideInfo | None = None  # the owner's correction, applied over the source's values
 
 
 def listing_detail(engine: Engine, key: str, p: Profile = PROFILE) -> ListingDetail | None:
@@ -63,6 +72,7 @@ def listing_detail(engine: Engine, key: str, p: Profile = PROFILE) -> ListingDet
             )
             for u in lst.units
         ]
+        ov = s.get(ListingOverrideRow, key)
         evs = s.scalars(select(EventRow).where(EventRow.key == key).order_by(EventRow.at.desc()).limit(50))
         return ListingDetail(
             summary=judged_listing(engine, key, p) or _summary(r, lst, p),  # with commute + tracker
@@ -72,4 +82,9 @@ def listing_detail(engine: Engine, key: str, p: Profile = PROFILE) -> ListingDet
             units=units,
             events=[_event_view(e) for e in evs],
             household=p.household,
+            override=OverrideInfo(
+                sorted(ov.patch.get("fields") or {}), ov.patch.get("units") is not None, ov.reason, ov.updated
+            )
+            if ov
+            else None,  # fmt: skip
         )

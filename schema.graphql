@@ -1,5 +1,11 @@
 directive @oneOf on INPUT_OBJECT
 
+input AddTrackerRowInput {
+  listing_key: ID!
+  status: String = null
+  notes: String = null
+}
+
 type ApplicationPdf {
   n: Int!
   url: String!
@@ -40,6 +46,12 @@ input BandFilterInput {
 
   """Income max."""
   income_max: NumberFilterInput = null
+}
+
+input BandInput {
+  household: Int!
+  income_min: Int = null
+  income_max: Int = null
 }
 
 type BoolFilter {
@@ -716,6 +728,9 @@ type ListingDetail {
   units: [DetailUnit!]!
   events: [Event!]!
   household: Int!
+
+  """The owner's correction, applied over the source's values"""
+  override: OverrideInfo
   pdfs: [String!]!
 }
 
@@ -866,6 +881,14 @@ input ListingFilterInput {
   units: UnitFilterInput = null
 }
 
+input ListingKeyInput {
+  listing_key: ID!
+}
+
+type ListingPayload {
+  listing: ListingDetail!
+}
+
 type ListingSort {
   field: ListingSortField!
   direction: SortDirection!
@@ -961,6 +984,40 @@ type Mutation {
 
   """Drop a manual link: the listing goes back to automatic matching."""
   unlinkTracker(input: UnlinkTrackerInput!): TrackerLinkPayload!
+
+  """
+  Set a tracker row's Status and/or Notes in the sheet itself, then sync it.
+  """
+  writeTracker(input: WriteTrackerInput!): TrackerWritePayload!
+
+  """
+  Add a sheet row for a listing (named after it, linked to it), then sync and link the listing to it.
+  """
+  addTrackerRow(input: AddTrackerRowInput!): TrackerLinkPayload!
+
+  """
+  Run a source at the next tick (within a minute), ending any refusal backoff.
+  """
+  runSource(input: SourceInput!): SourcePayload!
+
+  """Pause a source (no runs) or resume it (due at once)."""
+  pauseSource(input: PauseSourceInput!): SourcePayload!
+
+  """
+  Replace a listing's override: the fields and/or units given are kept over the source's on every run.
+  """
+  setOverride(input: SetOverrideInput!): ListingPayload!
+
+  """Drop a listing's override: it reads as its source publishes it again."""
+  clearOverride(input: ListingKeyInput!): ListingPayload!
+
+  """
+  Change the applicant profile; every verdict is re-judged against it at once.
+  """
+  setProfile(input: SetProfileInput!): ProfilePayload!
+
+  """Go back to the HW_* env vars' profile."""
+  resetProfile: ProfilePayload!
 }
 
 type NumberFilter {
@@ -1031,6 +1088,33 @@ type OpLabel {
   label: String!
 }
 
+"""
+Published fields to set; a field left out keeps the source's value, null clears it.
+"""
+input OverrideFieldsInput {
+  title: String
+  url: String
+  address: String
+  borough: Borough
+  status: PublishedStatus
+  kind: Kind
+
+  """ISO date (YYYY-MM-DD)."""
+  deadline: String
+  senior_only: Boolean
+  notes: String
+}
+
+type OverrideInfo {
+  """The published fields the owner set"""
+  fields: [String!]!
+
+  """The owner replaced the unit list"""
+  units: Boolean!
+  reason: String
+  updated: DateTime!
+}
+
 type Overview {
   """Listed listings by verdict and status (gone left out)"""
   matrix: [MatrixCell!]!
@@ -1090,6 +1174,13 @@ type Pages {
   events: EventsPageMeta!
 }
 
+input PauseSourceInput {
+  source: ID!
+
+  """true: no more runs; false: resume, due at once."""
+  paused: Boolean!
+}
+
 type Profile {
   household: Int!
 
@@ -1097,6 +1188,13 @@ type Profile {
   income: Int!
   sizes: [Size!]!
   excluded_boroughs: [Borough!]!
+}
+
+type ProfilePayload {
+  profile: Profile!
+
+  """Set by the owner; false: the HW_* env vars' profile."""
+  custom: Boolean!
 }
 
 enum PublishedStatus {
@@ -1132,6 +1230,11 @@ input PublishedStatusFilterInput {
 type Query {
   """The profile and the registries the app builds its pages from."""
   meta: Meta!
+
+  """
+  The applicant profile in force, and whether the owner set it (else it is the HW_* env vars').
+  """
+  profile: ProfilePayload!
 
   """
   Listings matching the filter and search, one per building or opportunity. `filter` has a field per filterable field, each holding its operators; `meta.pages` describes them.
@@ -1190,6 +1293,23 @@ type QueueCount {
   count: Int!
 }
 
+input SetOverrideInput {
+  listing_key: ID!
+  fields: OverrideFieldsInput = null
+
+  """Replaces the source's units outright; null keeps them."""
+  units: [UnitInput!] = null
+  reason: String = null
+}
+
+"""Profile fields to change; one left out keeps its value."""
+input SetProfileInput {
+  household: Int = null
+  income: Int = null
+  sizes: [Size!] = null
+  excluded_boroughs: [Borough!] = null
+}
+
 enum Size {
   studio
   sro
@@ -1237,6 +1357,9 @@ type Source {
 
   """Ok, failing, or never (no run has succeeded yet)"""
   health: Health!
+
+  """The owner paused it: no runs until resumed"""
+  paused: Boolean!
   last_ok: DateTime
   last_attempt: DateTime
   failing_since: DateTime
@@ -1263,6 +1386,14 @@ type SourceFailure {
 
   """Consecutive failures when it was recorded"""
   fails: Int
+}
+
+input SourceInput {
+  source: ID!
+}
+
+type SourcePayload {
+  source: Source!
 }
 
 enum StageGroup {
@@ -1478,6 +1609,10 @@ type TrackerRow {
   listings: [Listing!]!
 }
 
+type TrackerWritePayload {
+  tracker: Tracker!
+}
+
 """One unit with its listing's context: the row of the Units page."""
 type Unit {
   id: ID!
@@ -1620,6 +1755,17 @@ input UnitFilterInput {
   The unit matches when one of its income bands meets every condition here together.
   """
   bands: BandFilterInput = null
+}
+
+input UnitInput {
+  size: Size!
+  rent: Float = null
+  ami: Int = null
+  unit_no: String = null
+  bands: [BandInput!]! = []
+  set_aside: String = null
+  available: Boolean = null
+  chart_year: Int = null
 }
 
 type UnitSort {
@@ -1777,4 +1923,14 @@ input ViewStateInput @oneOf {
   listings: ListingsViewStateInput
   units: UnitsViewStateInput
   events: EventsViewStateInput
+}
+
+input WriteTrackerInput {
+  row_key: ID!
+
+  """An application stage, or empty to clear; left out: unchanged."""
+  status: String
+
+  """Left out: unchanged."""
+  notes: String
 }

@@ -1,5 +1,7 @@
+import dataclasses
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from urllib.parse import unquote
 
 import pytest
 from fastapi.testclient import TestClient
@@ -330,3 +332,79 @@ def test_stage_order_group_filter_and_api(sheet):
     assert (elm["status"], elm["stage"], elm["group"]) == ("Rejected", "Closed", "done")
     assert [(e["stage_from"], e["stage_to"]) for e in elm["events"]] == [(None, "Closed")]
     assert elm["stage_since"] == elm["events"][0]["at"] and elm["stage_since_baseline"] is False
+
+
+@pytest.fixture
+def sheet_api(synced, monkeypatch):
+    """The Sheets API for writes: values reads answer from SHEET's grid, POSTs are recorded."""
+    grid = [[v.get("formattedValue", "") for v in r["values"]] for r in SHEET["sheets"][0]["data"][0]["rowData"]]
+    posts = []
+
+    def get(url, headers=None):
+        if "/values/" not in url:
+            return SimpleNamespace(json=lambda: SHEET)
+        a1 = unquote(url.rsplit("/values/", 1)[1]).split("!", 1)[1]
+        if a1 == "1:1":
+            return SimpleNamespace(json=lambda: {"values": [grid[0]]})
+        col, row = ord(a1[0]) - 65, int(a1[1:])
+        return SimpleNamespace(json=lambda: {"values": [[grid[row - 1][col]]]})
+
+    monkeypatch.setattr(T.fetch, "get", get)
+    monkeypatch.setattr(T.fetch, "post_json", lambda url, body, headers=None: posts.append((url, body)) or {})
+    return posts
+
+
+def test_write_sets_status_and_notes_in_the_sheet(synced, sheet_api):
+    assert T.write(synced, T.row_key("ONE LIC (42-10 27th St)"), status="Applied", notes="sent 11/6") == 3
+    ((url, body),) = sheet_api
+    assert url.endswith("/values:batchUpdate") and body["valueInputOption"] == "USER_ENTERED"
+    assert body["data"] == [{"range": "'Properties'!B3", "values": [["Applied"]]},
+                            {"range": "'Properties'!E3", "values": [["sent 11/6"]]}]  # fmt: skip
+    from housing_watch.models import Refused
+
+    with pytest.raises(Refused, match="not one of"):
+        T.write(synced, T.row_key("SVEN"), status="Maybe")
+    with pytest.raises(Refused, match="nothing to write"):
+        T.write(synced, T.row_key("SVEN"))
+    with pytest.raises(NotFound):
+        T.write(synced, "no such row", status="Applied")
+
+
+def test_write_refuses_a_row_that_moved(synced, sheet_api):
+    from housing_watch.models import Refused
+
+    with Session(synced) as s, s.begin():
+        s.execute(update(TrackerRow).where(TrackerRow.row_key == "sven").values(position=4))  # Ruby's row now
+    with pytest.raises(Refused, match="no longer on sheet row 4"):
+        T.write(synced, "sven", status="Offer")
+    assert sheet_api == []  # nothing written
+
+
+def test_add_row_appends_and_links(synced, sheet_api, monkeypatch):
+    added = {}
+    real_sync = T.sync
+
+    def sync(engine):
+        if added:  # the appended row, as the next read of the sheet shows it
+            SHEET["sheets"][0]["data"][0]["rowData"].append({"values": [cell(added["title"]), cell("To Apply")]})
+        try:
+            return real_sync(engine)
+        finally:
+            if added:
+                SHEET["sheets"][0]["data"][0]["rowData"].pop()
+
+    monkeypatch.setattr(T, "sync", sync)
+    title = Q.judged_listing(synced, "a:1").title
+    added["title"] = title
+    key = T.add_row(synced, "a:1", status="To Apply", notes="from the MCP")
+    ((url, body),) = sheet_api
+    assert ":append?valueInputOption=USER_ENTERED" in url
+    (row,) = body["values"]
+    assert row[:2] == [title, "To Apply"] and row[4] == "from the MCP" and row[2].startswith('=HYPERLINK("')
+    assert key == T.row_key(title) and Q.tracker_link(synced, "a:1").row_key == key
+    from housing_watch.models import Refused
+
+    with Session(synced) as s, s.begin():
+        add_listing(s, dataclasses.replace(L("j", "1", "Queens"), title="SVEN"))
+    with pytest.raises(Refused, match="already has a row"):
+        T.add_row(synced, "j:1")

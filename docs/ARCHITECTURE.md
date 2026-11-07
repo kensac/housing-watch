@@ -52,14 +52,16 @@ moves in its contract in the same PR.
 ## Rules (eligibility)
 
 `eligibility.listing_verdict(listing, profile)` → eligible / possible / excluded with a reason. Pure
-function of a `models.Listing` and the `HW_*` profile; never stored, so changing the profile re-judges
-everything.
+function of a `models.Listing` and the profile in force (`profiles.current`: the `profile` row the owner set,
+else the `HW_*` env vars); verdicts are never stored, so changing the profile re-judges everything.
 
 ## Store (Postgres, SQLAlchemy 2.0, Alembic)
 
 - `orm.py` is the schema: `listings → units → bands`, `snapshots`, `events`, `runs`, `source_state`,
   `adapter_cache`, `chunk_results`, `fleet_workers`, `saved_views`, `commutes`, `tracker_rows`, `tracker_events`,
-  `tracker_links`. Alembic owns all DDL, Procrastinate's included (revision 0002 runs
+  `tracker_links`, `listing_overrides`, `profile`. A listing with an override is stored as the source's values with
+  the owner's patch over them (`overrides.py`); `listing_overrides.raw` keeps the source's own values, refreshed
+  by every run, so filters, verdicts, events and the digest all see the corrected listing. Alembic owns all DDL, Procrastinate's included (revision 0002 runs
   its `SchemaManager.get_schema()`). Workers run `alembic upgrade head` at start under a Postgres
   advisory lock, so any worker can migrate. A Procrastinate upgrade that ships SQL migrations needs a
   new revision that applies them; `tests/test_fleet.py::test_procrastinate_schema_is_current` fails
@@ -149,11 +151,12 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   operators and enum values; enums there are the data's own strings ("1br"), not GraphQL names. A saved view
   comes back with its state typed by page, in the shape `create_view` takes. Schemas go out with their
   `$defs` (`dereference_schemas=False`): expanded, the filter schema would repeat in every place it is used.
-  A test holds tools/list under 150 KB. An optional field is not required rather
+  A test holds tools/list under 165 KB. An optional field is not required rather
   than nullable, and unset fields are left out of results.
-  Its write tools are the web app's mutations (saved views; manual tracker links), annotated as writes. Both
-  are thin adapters over the same domain functions (`views.create/change/duplicate/delete`, `tracker.link/
-  unlink`, `queries.tracker_link`), which raise `models.NotFound`, `views.ViewError` or `filters.FilterError`;
+  Its write tools are the web app's mutations, annotated as writes: saved views; tracker links, and the sheet's
+  Status/Notes and new rows; source controls (run now, pause); listing overrides; the profile. Both are thin
+  adapters over the same domain functions (`views`, `tracker.link/unlink/write/add_row`, `control`, `profiles`),
+  which raise `models.NotFound`, `models.Refused`, `views.ViewError` or `filters.FilterError`;
   GraphQL maps those to codes in `Schema.process_errors`, MCP to tool errors in its `tool` wrapper. Any other
   exception is a bug: its text goes to the log only (GraphQL's INTERNAL, MCP's `mask_error_details`, the web app's
   catch-all handler). Each MCP
@@ -225,7 +228,9 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   Events. It is served by the hetzner worker container (`python -m housing_watch serve` = migrate +
   worker + web, the web started only when `HW_WEB_PORT` is set), reached only through Traefik. The tables it
   writes are `saved_views` (`views.py`: version 2 JSON, the filter tree + sort pairs + columns per page,
-  re-validated against the registries on load) and manual tracker links, through mutations that refuse anything not same-origin.
+  re-validated against the registries on load), manual tracker links, `listing_overrides`, `profile` and
+  `source_state.paused` / `next_due` (`control.py`), plus the tracker sheet itself, through mutations that refuse
+  anything not same-origin.
   Nothing is seeded.
 - `commute.py` routes eligible, listed listings to `HW_COMMUTE_TO` by transit (Google Routes API, weekday
   8:30 AM), each origin address once per destination (again after 60 days; a failed one after 10 minutes,
@@ -233,9 +238,11 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   `commute` task on the digest worker does it. `queries/` attaches the minutes and lines at read time
   (`commute` filter field, sort and column).
 - `tracker.py` copies the owner's application tracker sheet (the source of truth for application status
-  and notes) into `tracker_rows` every 5 minutes, read-only via a service account, and matches rows to
+  and notes) into `tracker_rows` every 5 minutes via a service account, and matches rows to
   listings at read time: the row's own source link (only when that link is one row's and one listing's),
   else a normalized street address, else the building name; a manual link in `tracker_links` wins.
+  `write` sets a row's Status/Notes and `add_row` appends one, in the sheet, then sync at once; the service
+  account must be an editor of the sheet. `write` refuses when the row's Property has moved since the last sync.
   A Status is read as one of the dropdown's nine stages (`tracker.STAGES`, each your move / their move /
   done; legacy statuses mapped, unknown ones kept as written). The sheet holds only the current Status, so
   each sync appends a `tracker_events` row when a row's Status differs from its last event; a row's first

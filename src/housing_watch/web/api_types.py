@@ -379,3 +379,112 @@ class DeleteViewPayload:
 
 
 TrackerLinkPayload = derive(queries.TrackerLink, "TrackerLinkPayload")
+
+
+# --- owner writes: sources, overrides, profile, the tracker sheet ---------------------------------------
+
+_Borough, _Size = enum_type(models.Borough), enum_type(models.Size)
+_PublishedStatus, _Kind = enum_type(models.PublishedStatus), enum_type(models.Kind)
+
+
+@strawberry.input
+class SourceInput:
+    source: strawberry.ID
+
+
+@strawberry.input
+class PauseSourceInput:
+    source: strawberry.ID
+    paused: bool = strawberry.field(description="true: no more runs; false: resume, due at once.")
+
+
+@strawberry.type
+class SourcePayload:
+    source: Source
+
+
+@strawberry.input(description="Published fields to set; a field left out keeps the source's value, null clears it.")
+class OverrideFieldsInput:
+    title: str | None = strawberry.UNSET
+    url: str | None = strawberry.UNSET
+    address: str | None = strawberry.UNSET
+    borough: _Borough | None = strawberry.UNSET  # pyright: ignore[reportInvalidTypeForm]
+    status: _PublishedStatus | None = strawberry.UNSET  # pyright: ignore[reportInvalidTypeForm]
+    kind: _Kind | None = strawberry.UNSET  # pyright: ignore[reportInvalidTypeForm]
+    deadline: str | None = strawberry.field(default=strawberry.UNSET, description="ISO date (YYYY-MM-DD).")
+    senior_only: bool | None = strawberry.UNSET
+    notes: str | None = strawberry.UNSET
+
+
+@strawberry.input
+class BandInput:
+    household: int
+    income_min: int | None = None
+    income_max: int | None = None
+
+
+@strawberry.input
+class UnitInput:
+    size: _Size  # pyright: ignore[reportInvalidTypeForm]
+    rent: float | None = None
+    ami: int | None = None
+    unit_no: str | None = None
+    bands: list[BandInput] = strawberry.field(default_factory=list)
+    set_aside: str | None = None
+    available: bool | None = None
+    chart_year: int | None = None
+
+
+@strawberry.input
+class SetOverrideInput:
+    listing_key: strawberry.ID
+    fields: OverrideFieldsInput | None = None
+    units: list[UnitInput] | None = strawberry.field(
+        default=None, description="Replaces the source's units outright; null keeps them."
+    )
+    reason: str | None = None
+
+
+@strawberry.input
+class ListingKeyInput:
+    listing_key: strawberry.ID
+
+
+@strawberry.type
+class ListingPayload:
+    listing: ListingDetail
+
+
+@strawberry.input(description="Profile fields to change; one left out keeps its value.")
+class SetProfileInput:
+    household: int | None = None
+    income: int | None = None
+    sizes: list[_Size] | None = None  # pyright: ignore[reportInvalidTypeForm]
+    excluded_boroughs: list[_Borough] | None = None  # pyright: ignore[reportInvalidTypeForm]
+
+
+@strawberry.type
+class ProfilePayload:
+    profile: Profile
+    custom: bool = strawberry.field(description="Set by the owner; false: the HW_* env vars' profile.")
+
+
+@strawberry.input
+class WriteTrackerInput:
+    row_key: strawberry.ID
+    status: str | None = strawberry.field(
+        default=strawberry.UNSET, description="An application stage, or empty to clear; left out: unchanged."
+    )
+    notes: str | None = strawberry.field(default=strawberry.UNSET, description="Left out: unchanged.")
+
+
+@strawberry.input
+class AddTrackerRowInput:
+    listing_key: strawberry.ID
+    status: str | None = None
+    notes: str | None = None
+
+
+@strawberry.type
+class TrackerWritePayload:
+    tracker: Tracker

@@ -131,7 +131,7 @@ def test_schemas_share_definitions(pg):
         assert "ListingFilter" in s["$defs"], name
         assert json.dumps(s).count('"Staten Island"') == 1, name  # BoroughFilter, once
     total = sum(len(x.model_dump_json(exclude_none=True)) for x in t.values())
-    assert total < 150_000, f"tools/list is {total} bytes"  # it was 325 KB with every $ref expanded
+    assert total < 165_000, f"tools/list is {total} bytes"  # it was 325 KB with every $ref expanded
     assert max(len(json.dumps(x.input_schema)) for x in t.values()) < 16_000
 
 
@@ -289,3 +289,42 @@ def test_never_runs_without_auth(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     with pytest.raises(RuntimeError, match="HW_MCP_BASE_URL"):
         mcp_server.auth_from_env()
+
+
+def test_owner_write_tools(pg):
+    from fastmcp.exceptions import ToolError
+
+    seed(pg)
+    eng = pg
+    srv = mcp_server.build(eng)  # the profile in force, not a pinned one
+
+    def go(tool, **args):
+        from fastmcp import Client
+
+        async def run():
+            async with Client(srv) as c:
+                return (await c.call_tool(tool, args)).structured_content
+
+        return asyncio.run(run())
+
+    assert go("profile")["custom"] is False
+    assert go("set_profile", income=900000)["income"] == 900000
+    assert go("find_listings", filter={"verdict": {"in": ["eligible"]}})["items"] == []  # re-judged at once
+    assert go("reset_profile")["custom"] is False
+
+    doc = go("set_override", listing_key="a:1", fields={"borough": "Bronx"}, reason="checked")
+    assert json.loads(doc["text"])["override"]["fields"] == ["borough"]
+    assert json.loads(go("fetch", id="a:1")["text"])["summary"]["borough"] == "Bronx"
+    assert json.loads(go("clear_override", listing_key="a:1")["text"])["override"] is None
+    with pytest.raises(ToolError, match="cannot override rent"):
+        go("set_override", listing_key="a:1", fields={"rent": 1})
+
+    assert go("pause_source", source="mgny", paused=True)["paused"] is True
+    with pytest.raises(ToolError, match="paused"):
+        go("run_source", source="mgny")
+    assert go("pause_source", source="mgny", paused=False)["paused"] is False
+    with pytest.raises(ToolError, match="not configured"):
+        go("write_tracker", row_key="x", status="Applied")
+    res = go("graphql_mutation", query='mutation { pauseSource(input: { source: "mgny", paused: true }) '
+                                       "{ source { source paused } } }")  # fmt: skip
+    assert res["data"]["pauseSource"]["source"] == {"source": "mgny", "paused": True} and res["errors"] == []

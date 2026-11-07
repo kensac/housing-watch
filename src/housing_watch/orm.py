@@ -169,6 +169,7 @@ class SourceStateRow(Base):
     consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
     next_due: Mapped[datetime | None] = mapped_column(TS)  # scheduler enqueues when now() >= next_due
     queue: Mapped[str | None] = mapped_column(Text)  # "byparr" once the source needed fetch.rendered()
+    paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))  # tick skips it
 
 
 class AdapterCacheRow(Base):
@@ -257,3 +258,32 @@ class TrackerLinkRow(Base):
     listing_key: Mapped[str] = mapped_column(Text, primary_key=True)
     row_key: Mapped[str | None] = mapped_column(Text)
     created: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
+class ListingOverrideRow(Base):
+    """The owner's correction of one listing: `patch` is applied over what the source publishes, on every run.
+
+    `raw` is the listing as the source last published it, so a changed or cleared override is re-applied to the
+    source's values, not to the previous correction. The listings row always holds raw + patch.
+    """
+
+    __tablename__ = "listing_overrides"
+    listing_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    source: Mapped[str] = mapped_column(Text, index=True)
+    patch: Mapped[dict] = mapped_column(JSONB)  # {"fields": {name: value}, "units": [Unit as JSON] | None}
+    raw: Mapped[dict] = mapped_column(JSONB)  # dataclasses.asdict(Listing) as published
+    reason: Mapped[str | None] = mapped_column(Text)
+    created: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    updated: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
+class ProfileRow(Base):
+    """The applicant profile set from the UI or MCP (one row, id 1); none means the HW_* env vars."""
+
+    __tablename__ = "profile"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    household: Mapped[int] = mapped_column(Integer)
+    income: Mapped[int] = mapped_column(Integer)
+    sizes: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    excluded_boroughs: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    updated: Mapped[datetime] = mapped_column(TS, server_default=func.now())

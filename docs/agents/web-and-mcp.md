@@ -10,9 +10,10 @@ The design of both surfaces is in
   capability goes in the domain function first, then both surfaces. Domain
   refusals raise `models.NotFound`, `views.ViewError` or `filters.FilterError`;
   any other exception is a bug and its text goes only to the log.
-- **Read-only except two tables.** The only writes are `saved_views` and
-  manual `tracker_links`. Add another written table only with the owner's
-  agreement.
+- **The owner's writes, and only these.** `saved_views`, manual
+  `tracker_links`, `listing_overrides`, `profile`, `source_state.paused` /
+  `next_due` (`control.py`), and the tracker sheet's Status, Notes and new rows.
+  Add another written table only with the owner's agreement.
 - **Web auth.** The app has no login: it is reached only through Traefik at
   `housing.kanishksachdev.com`, behind authentik forward-auth set up in
   `homelab-config`. No port is published to the tailnet. Mutations are refused
@@ -34,7 +35,7 @@ The design of both surfaces is in
   dataclass appears in the API through `web/derive.py`; a new `orm.py` column
   becomes a filter field through `filters/fields.py`. Do not hand-write a Strawberry
   type for a DTO.
-- `tests/test_mcp.py` holds `tools/list` under 150 KB. Keep schemas sent with
+- `tests/test_mcp.py` holds `tools/list` under 165 KB. Keep schemas sent with
   their `$defs`.
 
 ## After changing a dataclass, a column, a filter or the schema

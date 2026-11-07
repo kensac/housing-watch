@@ -23,6 +23,7 @@ class SourceHealth:
     url: str | None
     every_hours: float | None
     health: Health  # ok, failing, or never (no run has succeeded yet)
+    paused: bool  # the owner paused it: no runs until resumed
     last_ok: datetime | None
     last_attempt: datetime | None
     failing_since: datetime | None
@@ -81,6 +82,7 @@ def sources(engine: Engine, p: Profile = PROFILE) -> list[SourceHealth]:
                 url=getattr(ad, "url", None),
                 every_hours=getattr(ad, "every_hours", None),
                 health="failing" if fails else ("ok" if st and st.last_ok else "never"),
+                paused=bool(st and st.paused),
                 last_ok=st and st.last_ok,
                 last_attempt=st and st.last_attempt,
                 failing_since=st and st.failing_since,

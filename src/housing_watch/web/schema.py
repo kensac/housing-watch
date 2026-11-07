@@ -1,6 +1,7 @@
 # pyright: reportInvalidTypeForm=false
 # Annotations here name types built at import time from the registries, which a static checker cannot see.
-"""The GraphQL schema (Strawberry) over queries/, views.py and tracker.py: what the web app reads and writes.
+"""The GraphQL schema (Strawberry) over queries/, views.py, tracker.py, control.py and profiles.py: what the web app
+reads and writes.
 
 Its types are in api_types.py. Field names stay snake_case (auto_camel_case off).
 
@@ -8,10 +9,10 @@ Lists are Relay connections (`first`/`after`, opaque cursors). Filters, sorts an
 derived from the registries (filter_types.py); a filter that is well-typed but meaningless (an empty `in`, a blank
 `contains`) is refused with BAD_USER_INPUT. Closed value sets are enums, identifiers are `ID`. Errors carry
 `extensions.code` (NOT_FOUND, BAD_USER_INPUT, FORBIDDEN, INTERNAL); the domain's refusals (models.NotFound,
-views.ViewError, filters.FilterError) get theirs in Schema.process_errors, so resolvers stay thin. Resolvers are
-async and run the blocking store reads in a worker thread; mutations need the context's `request`, and refuse it
-unless same-origin, or a context marked `trusted` by a caller that authenticated the user itself (the MCP server's
-`graphql_mutation`, behind OAuth). The web app's /graphql never marks it.
+models.Refused, views.ViewError, filters.FilterError) get theirs in Schema.process_errors, so resolvers stay
+thin. Resolvers are async and run the blocking store reads in a worker thread; mutations need the context's
+`request`, and refuse it unless same-origin, or a context marked `trusted` by a caller that authenticated the
+user itself (the MCP server's `graphql_mutation`, behind OAuth). The web app's /graphql never marks it.
 """
 
 import base64
@@ -25,10 +26,11 @@ from strawberry.dataloader import DataLoader
 from strawberry.extensions import MaxAliasesLimiter, MaxTokensLimiter, QueryDepthLimiter
 from strawberry.schema.config import StrawberryConfig
 
-from .. import applications, models, queries, tracker, views
+from .. import applications, control, models, profiles, queries, tracker, views
 from .. import filters as F
 from . import filter_types as FT
 from .api_types import (
+    AddTrackerRowInput,
     ApplicationPdf,
     Applications,
     ChangeViewInput,
@@ -42,6 +44,8 @@ from .api_types import (
     LinkTrackerInput,
     ListingConnection,
     ListingDetail,
+    ListingKeyInput,
+    ListingPayload,
     ListingsPageMeta,
     Meta,
     OpLabel,
@@ -49,9 +53,16 @@ from .api_types import (
     PageFilterInput,
     PageInfo,
     Pages,
+    PauseSourceInput,
+    ProfilePayload,
+    SetOverrideInput,
+    SetProfileInput,
     Source,
+    SourceInput,
+    SourcePayload,
     Tracker,
     TrackerLinkPayload,
+    TrackerWritePayload,
     UnitConnection,
     UnitsPageMeta,
     UnlinkTrackerInput,
@@ -62,6 +73,7 @@ from .api_types import (
     ViewIdInput,
     ViewPayload,
     ViewStateInput,
+    WriteTrackerInput,
 )
 from .derive import gql_name
 
@@ -196,6 +208,34 @@ def _write(info: strawberry.Info):
     return _ctx(info)
 
 
+def _plain(obj) -> dict:
+    """A Strawberry input as a dict of the fields that were given, enums as their domain values."""
+    out = {}
+    for k, v in vars(obj).items():
+        if v is strawberry.UNSET:
+            continue
+        if isinstance(v, enum.Enum):
+            v = v.value
+        elif isinstance(v, list):
+            v = [x.value if isinstance(x, enum.Enum) else x for x in v]
+        out[k] = v
+    return out
+
+
+def _source(engine, name: str, p) -> queries.SourceHealth:
+    got = next((x for x in queries.sources(engine, p) if x.source == name), None)
+    if got is None:
+        raise models.NotFound(f"No such source: {name}")
+    return got
+
+
+def _detail(engine, key: str, p) -> queries.ListingDetail:
+    d = queries.listing_detail(engine, key, p)
+    if d is None:
+        raise models.NotFound(f"No such listing: {key}")
+    return d
+
+
 # --- schema ---------------------------------------------------------------------------------------------
 
 LIST = "`filter` has a field per filterable field, each holding its operators; `meta.pages` describes them."
@@ -223,6 +263,12 @@ class Query:
                       events=EventsPageMeta(**fields_and_columns("events")))  # fmt: skip
         return Meta(profile=_ctx(info)[1], statuses=list(queries.STATUSES), verdicts=list(queries.VERDICTS),
                     ops=[OpLabel(op=k, label=v) for k, v in F.OP_LABEL.items()], pages=pages)  # fmt: skip
+
+    @query
+    def profile(self, info: strawberry.Info) -> ProfilePayload:
+        """The applicant profile in force, and whether the owner set it (else it is the HW_* env vars')."""
+        engine, p = _ctx(info)
+        return ProfilePayload(profile=p, custom=profiles.is_set(engine))
 
     @query(description=f"Listings matching the filter and search, one per building or opportunity. {LIST}")
     def listings(self, info: strawberry.Info, filter: FT.ListingFilterInput | None = None, q: str = "",
@@ -359,6 +405,65 @@ class Mutation:
         tracker.unlink(engine, input.listing_key)
         return queries.tracker_link(engine, input.listing_key, p)
 
+    @mutation("writeTracker")
+    def write_tracker(self, info: strawberry.Info, input: WriteTrackerInput) -> TrackerWritePayload:
+        """Set a tracker row's Status and/or Notes in the sheet itself, then sync it."""
+        engine, p = _write(info)
+        kw = {k: getattr(input, k) for k in ("status", "notes") if getattr(input, k) is not strawberry.UNSET}
+        tracker.write(engine, input.row_key, **kw)
+        return TrackerWritePayload(tracker=queries.tracker_board(engine, p))
+
+    @mutation("addTrackerRow")
+    def add_tracker_row(self, info: strawberry.Info, input: AddTrackerRowInput) -> TrackerLinkPayload:
+        """Add a sheet row for a listing (named after it, linked to it), then sync and link the listing to it."""
+        engine, p = _write(info)
+        tracker.add_row(engine, input.listing_key, input.status, input.notes)
+        return queries.tracker_link(engine, input.listing_key, p)
+
+    @mutation("runSource")
+    def run_source(self, info: strawberry.Info, input: SourceInput) -> SourcePayload:
+        """Run a source at the next tick (within a minute), ending any refusal backoff."""
+        engine, p = _write(info)
+        control.run_now(engine, input.source)
+        return SourcePayload(source=_source(engine, input.source, p))
+
+    @mutation("pauseSource")
+    def pause_source(self, info: strawberry.Info, input: PauseSourceInput) -> SourcePayload:
+        """Pause a source (no runs) or resume it (due at once)."""
+        engine, p = _write(info)
+        control.set_paused(engine, input.source, input.paused)
+        return SourcePayload(source=_source(engine, input.source, p))
+
+    @mutation("setOverride")
+    def set_override(self, info: strawberry.Info, input: SetOverrideInput) -> ListingPayload:
+        """Replace a listing's override: the fields and/or units given are kept over the source's on every run."""
+        engine, p = _write(info)
+        units = [_plain(u) | {"bands": [_plain(b) for b in u.bands]} for u in input.units] if input.units else None
+        control.set_override(engine, input.listing_key, _plain(input.fields) if input.fields else {},
+                             units if input.units is not None else None, input.reason)  # fmt: skip
+        return ListingPayload(listing=_detail(engine, input.listing_key, p))
+
+    @mutation("clearOverride")
+    def clear_override(self, info: strawberry.Info, input: ListingKeyInput) -> ListingPayload:
+        """Drop a listing's override: it reads as its source publishes it again."""
+        engine, p = _write(info)
+        control.clear_override(engine, input.listing_key)
+        return ListingPayload(listing=_detail(engine, input.listing_key, p))
+
+    @mutation("setProfile")
+    def set_profile(self, info: strawberry.Info, input: SetProfileInput) -> ProfilePayload:
+        """Change the applicant profile; every verdict is re-judged against it at once."""
+        engine, _ = _write(info)
+        got = _plain(input)
+        p = profiles.update(engine, **{k: v for k, v in got.items() if v is not None})
+        return ProfilePayload(profile=p, custom=True)
+
+    @mutation("resetProfile")
+    def reset_profile(self, info: strawberry.Info) -> ProfilePayload:
+        """Go back to the HW_* env vars' profile."""
+        engine, _ = _write(info)
+        return ProfilePayload(profile=profiles.reset(engine), custom=False)
+
 
 class Loaders:
     """The request's DataLoaders: one batched read per kind, however many rows ask."""
@@ -389,7 +494,7 @@ class Schema(strawberry.Schema):
                 code = orig.code
             elif isinstance(orig, models.NotFound):
                 code = Code.NOT_FOUND
-            elif isinstance(orig, (views.ViewError, F.FilterError)):
+            elif isinstance(orig, (models.Refused, views.ViewError, F.FilterError)):
                 code = Code.BAD_USER_INPUT
             elif not e.path:  # not from a resolver: the document or its variables (syntax, validation, limits)
                 code = Code.BAD_USER_INPUT

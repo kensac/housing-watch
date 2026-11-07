@@ -19,7 +19,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from .. import queries
+from .. import profiles, queries
 from ..eligibility import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, listing_verdict, unit_verdict
 from ..models import Listing
 from ..orm import EventRow
@@ -195,7 +195,7 @@ def _render(subject: str, sections: dict[str, list[tuple[str, list[str]]]], tail
 
 
 def send(engine: Engine, dry_run: bool = False) -> str:
-    built = build(engine)
+    built = build(engine, profiles.current(engine))
     if built is None:
         return "no events"
     subject, plain, htm, ids = built

@@ -27,7 +27,7 @@ from ._common import (
     now,
     public,
 )
-from ._detail import ListingDetail, UnitView, listing_detail
+from ._detail import ListingDetail, OverrideInfo, UnitView, listing_detail
 from ._events import (
     Brief,
     BriefUnit,

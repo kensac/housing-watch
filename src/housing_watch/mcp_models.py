@@ -24,7 +24,7 @@ from pydantic.json_schema import SkipJsonSchema
 from . import filters as F
 from . import queries, views
 from .criteria import Verdict
-from .models import EventType
+from .models import Borough, EventType, Size
 from .web import filter_types as FT
 from .web.derive import comments, own_doc
 
@@ -327,3 +327,34 @@ TrackerModel = model_of(queries.TrackerBoard, "Tracker")
 
 
 TrackerLinkModel = model_of(queries.TrackerLink)
+
+
+# --- owner writes ------------------------------------------------------------------------------------------
+
+SizeName = Size
+BoroughName = Borough
+
+
+class ProfileModel(BaseModel):
+    """The applicant profile every verdict is judged against."""
+
+    household: int
+    income: int = Field(description="annual household income, dollars")
+    sizes: list[Size]
+    excluded_boroughs: list[Borough]
+    custom: bool = Field(description="set by the owner; false: the HW_* env vars' profile")
+
+
+class SheetWrite(BaseModel):
+    """A write to the tracker sheet, synced back."""
+
+    row_key: str = Field(description="the row written; `tracker_board` shows it")
+    rows: int = Field(description="rows in the sheet after the sync")
+
+
+class SourceState(BaseModel):
+    """A source's schedule after a control; `sources` has the rest."""
+
+    source: str
+    paused: bool
+    next_due: datetime | None = Field(None, description="the tick queues it once this has passed")
