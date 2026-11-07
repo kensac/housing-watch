@@ -145,8 +145,9 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
 - **Aggregators.** An adapter with `aggregator = True` (SANEL) republishes other sources' postings and sets each
   listing's `official_url` to the real posting where it knows it. At read time (`_judging._with_copies`) an
   aggregator listing is a copy of a live listing from a direct source (`copy_of`; the real one lists its
-  `copies`) when its `official_url` is that listing's URL, or else when exactly one listing on the same site shares
-  its street address (and its unit, when the copy names one). SANEL records the exact posting when it resolves one
+  `copies`) when its `official_url` is that listing's URL (and only that listing has it), or else when exactly one
+  listing on the same site (its URL's or its source's own) shares its street address or building name, narrowed by
+  the unit the copy names (a listing that numbers no units stands for its building's apartments) and then by rent. SANEL records the exact posting when it resolves one
   (HDC's flyer, Pronto's property page, HCR's public waitlist page, Reside's unit page), not the index page it links. Copies stay out of the lists, overview counts and the digest
   unless a filter names `copy_of`, so a posting is shown and mailed once, from its own source. An aggregator
   listing with no tracked real posting, or whose real one is gone, stands on its own, enriched from the official
