@@ -169,6 +169,7 @@ class Sanel(Adapter):
                 "Tiers from Housing Connect's ad." if units else "Housing Connect's ad lists no units.",
             )
         if flyer := next((u for u in links if re.search(r"nychdc\.com/.+\.pdf$", u, re.I)), None):
+            lst.official_url = flyer  # the posting is HDC's flyer, which the nychdc adapter lists by its url
             units = nychdc.parse_flyer(self._doc(f"hdc:{flyer}", lambda: fetch.pdf_text(flyer)))
             return units or None, f"Tiers from HDC's flyer {flyer}." if units else f"HDC's flyer {flyer} has no tiers."
         if src == "Pronto":
@@ -191,6 +192,7 @@ class Sanel(Adapter):
                 lst.senior_only = True
                 return None, "St. Nicks lists it under its HUD senior housing (elderly or disabled residents)."
         if m := re.search(r"nyshcr\.my\.site\.com/housing/s/waitlist/(\w+)", official):
+            lst.official_url = nys_housing_search.PUBLIC + m.group(1)  # the same waitlist on HCR's public site
             units = nys_housing_search.rule_units(self._doc(f"nys:{m.group(1)}", lambda: self._hcr_rules(m.group(1))))
             return (
                 units or None,
@@ -217,10 +219,12 @@ class Sanel(Adapter):
                 rows = parse.table_rows(self._doc(f"page:{b}", lambda b=b: fetch.html(b)))
                 tier = [u for u in self._reside_units(b) if u.rent and round(u.rent) in rents and _in_table(u, rows)]
                 if tier:
+                    lst.official_url = b
                     return tier, f"Tier at this unit's rent from Reside's building page {b}."
             return None, "Reside has no public page for this unit, only its Airtable form."
         if not any(b.income_max for u in units for b in u.bands) and all(u.size == "unknown" for u in units):
             return None, f"Reside's page {page} lists no sizes or income limits."
+        lst.official_url = page  # SANEL may link Reside's home page: the unit page is the posting
         return units, f"Unit details from Reside's page {page}."
 
     def _shf(self, lst: Listing) -> tuple[list[Unit] | None, str]:
@@ -265,6 +269,7 @@ class Sanel(Adapter):
             pid = self._doc("pronto", self._pronto_reg).get(reg)
             if pid is None:
                 return None, "Pronto has only an account sign-up for this waitlist: no sizes or income limits public."
+        lst.official_url = pronto.PAGE.format(pid)  # SANEL may link a registration page: the property is the posting
         lp = pronto.parse_property(self._doc(f"pronto:{pid}", lambda: fetch.json(pronto.DETAIL.format(pid))))
         units = lp.units if lp else []
         if lst.kind == "waitlist":  # named units are SANEL's separate re-rental listings
