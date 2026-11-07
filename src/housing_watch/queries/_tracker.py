@@ -15,12 +15,12 @@ from ._judging import ListingSummary, judged, judged_listing
 
 @dataclass
 class TrackerRowView:
-    """A tracker sheet row with its stage history and the listings matched to it."""
+    """A tracker row with its stage history and the listings matched to it."""
 
     row_key: Key
-    position: int  # the sheet row number
+    position: int  # order added (the old sheet's row number for imported rows)
     property: str
-    status: str | None  # as written in the sheet
+    status: str | None  # as written
     stage: str | None  # the stage that status means (tracker.stage)
     group: T.StageGroup | None  # whose move that stage is
     stage_since: datetime | None  # when the row entered its stage
@@ -29,15 +29,15 @@ class TrackerRowView:
     notes: str | None
     source_url: str | None
     page_url: str | None
-    cells: list[T.Cell]  # every column of the row, as the sheet has them
+    cells: list[T.Cell]  # every column of the row (the old sheet's columns, Status and Notes kept current)
     listings: list[ListingSummary]  # empty: unmatched, link one by hand
 
 
 @dataclass
 class TrackerBoard:
-    configured: bool  # HW_TRACKER_SHEET is set
-    synced: datetime | None  # when the sheet last changed (read every 5 minutes; an unchanged read keeps this)
+    updated: datetime | None  # when a row last changed
     rows: list[TrackerRowView]  # by stage, then longest in it
+    stages: list[str]  # the application stages a Status can be set to, in order
 
 
 def tracker_board(engine: Engine, p: Profile = PROFILE) -> TrackerBoard:
@@ -47,7 +47,7 @@ def tracker_board(engine: Engine, p: Profile = PROFILE) -> TrackerBoard:
     for x in judged(engine, p):
         if x.tracker_row:
             by_row.setdefault(T.row_key(x.tracker_row), []).append(x)
-    synced = max((r.synced for r in rows), default=None)
+    updated = max((r.synced for r in rows), default=None)
     out = []
     for r in rows:
         st, hist = T.stage(r.status), steps.get(r.row_key, [])
@@ -57,8 +57,8 @@ def tracker_board(engine: Engine, p: Profile = PROFILE) -> TrackerBoard:
             bool(since and since.baseline), hist, r.notes, r.source_url, r.page_url, T.cells(r.cells),
             by_row.get(r.row_key, []),
         ))  # fmt: skip
-    out.sort(key=lambda d: (T.rank(d.stage), d.stage_since is None, d.stage_since or synced, d.position))
-    return TrackerBoard(bool(T.SHEET), synced, out)
+    out.sort(key=lambda d: (T.rank(d.stage), d.stage_since is None, d.stage_since or updated, d.position))
+    return TrackerBoard(updated, out, list(T.STAGES))
 
 
 @dataclass

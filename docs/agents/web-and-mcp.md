@@ -12,7 +12,8 @@ The design of both surfaces is in
   any other exception is a bug and its text goes only to the log.
 - **The owner's writes, and only these.** `saved_views`, manual
   `tracker_links`, `listing_overrides`, `profile`, `source_state.paused` /
-  `next_due` (`control.py`), and the tracker sheet's Status, Notes and new rows.
+  `next_due` (`control.py`), and tracker rows (`tracker_rows`: Status, Notes,
+  new rows; their `tracker_events`).
   Add another written table only with the owner's agreement.
 - **Web auth.** The app has no login: it is reached only through Traefik at
   `housing.kanishksachdev.com`, behind authentik forward-auth set up in

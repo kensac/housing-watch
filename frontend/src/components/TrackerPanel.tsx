@@ -2,17 +2,18 @@ import { Button, Group, Select, Stack, Text, Timeline } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { useState } from 'react'
 
-import { errorMessage, LinkTrackerDoc, request, STAGE_GROUP, UnlinkTrackerDoc, type Listing, type StageStep } from '../api'
+import { AddTrackerRowDoc, errorMessage, LinkTrackerDoc, request, STAGE_GROUP, UnlinkTrackerDoc, type Listing, type StageStep } from '../api'
 import { when } from '../format'
 import { useTracker, useTrackerRefresh } from '../hooks'
 import { ApplicationBadge } from './Badges'
+import { NotesEditor, StageSelect } from './TrackerEdit'
 
 const HOW: Record<string, string> = {
   url: 'matched by its source link', address: 'matched by address', name: 'matched by building name',
   manual: 'linked by you',
 }
 
-/** A tracker row's stages as the syncs saw them change, oldest first. */
+/** A tracker row's stages as they changed, oldest first. */
 function StageTimeline({ steps }: { steps: StageStep[] }) {
   return (
     <Timeline aria-label="Stage history">
@@ -29,7 +30,7 @@ function StageTimeline({ steps }: { steps: StageStep[] }) {
   )
 }
 
-/** The listing's row in the application tracker sheet (stage, its history and notes), and ways to fix the match. */
+/** The listing's tracker row (stage, its history and notes, all editable), and ways to fix or make the match. */
 export function TrackerPanel({ x }: { x: Listing }) {
   const tracker = useTracker()
   const refresh = useTrackerRefresh()
@@ -49,7 +50,7 @@ export function TrackerPanel({ x }: { x: Listing }) {
   const link = (row: string | null) => run(() => request(LinkTrackerDoc, { listing_key: x.key, row_key: row }),
     row ? 'Linked to the tracker row' : 'Marked as not in the tracker')
   const reset = () => run(() => request(UnlinkTrackerDoc, { listing_key: x.key }), 'Back to automatic matching')
-  if (tracker.data && !tracker.data.configured) return <Text size="sm" c="dimmed">The tracker sheet isn’t connected.</Text>
+  const add = () => run(() => request(AddTrackerRowDoc, { listing_key: x.key, status: 'To Apply' }), 'Added to the tracker')
   const rows = tracker.data?.rows ?? []
   const row = rows.find((r) => r.property === x.tracker_row)
   return (
@@ -61,10 +62,20 @@ export function TrackerPanel({ x }: { x: Listing }) {
             <ApplicationBadge s={x.application} group={x.application_group} since={x.application_since} baseline={x.application_since_baseline} />
             <Text size="xs" c="dimmed">{[x.application_group && STAGE_GROUP[x.application_group], HOW[x.tracker_match ?? '']].filter(Boolean).join(' · ')}</Text>
           </Group>
-          {x.application_notes && <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x.application_notes}</Text>}
+          {row ? (
+            <>
+              <StageSelect row={row} label="Stage" />
+              <NotesEditor key={`${row.row_key}:${row.notes ?? ''}`} row={row} />
+            </>
+          ) : x.application_notes && <Text size="sm" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{x.application_notes}</Text>}
           {row && row.events.length > 0 && <StageTimeline steps={row.events} />}
         </>
-      ) : <Text size="sm" c="dimmed">Not in your tracker sheet.</Text>}
+      ) : (
+        <Group gap="xs">
+          <Text size="sm" c="dimmed">Not in your tracker.</Text>
+          <Button size="xs" disabled={busy} onClick={add}>Add to Tracker</Button>
+        </Group>
+      )}
       <Group gap="xs" align="flex-end">
         <Select size="xs" w={300} label="Link to a tracker row" placeholder="Pick a row" searchable disabled={busy || !rows.length}
           data={rows.map((r) => ({ value: r.row_key, label: `${r.property}${r.stage ? ` · ${r.stage}` : ''}` }))}

@@ -10,12 +10,13 @@ import { ApplicationBadge, VerdictBadge } from '../components/Badges'
 import { ListingDrawer } from '../components/ListingDrawer'
 import { PageHeader } from '../components/PageHeader'
 import { Loading, LoadError } from '../components/State'
+import { StageSelect } from '../components/TrackerEdit'
 import { ago, minutes, num, when } from '../format'
 import { useTitle, useTracker, useTrackerRefresh } from '../hooks'
 
 const borough = (r: TrackerRow) => r.cells.find((c) => c.name === 'Borough')?.value
 
-/** Search listings by text and link the chosen one to this sheet row. */
+/** Search listings by text and link the chosen one to this tracker row. */
 function LinkListing({ row }: { row: TrackerRow }) {
   const [search, setSearch] = useState('')
   const [q] = useDebouncedValue(search, 250)
@@ -43,7 +44,7 @@ function LinkListing({ row }: { row: TrackerRow }) {
   )
 }
 
-/** Every row of the tracker sheet with the listings it matched; unmatched rows can be linked by hand. */
+/** Every tracker row with the listings it matched; stages are set here, unmatched rows linked by hand. */
 export function TrackerPage() {
   useTitle('Tracker')
   const q = useTracker()
@@ -57,9 +58,7 @@ export function TrackerPage() {
   const theirs = t.rows.filter((r) => r.group === 'their_move').length
   return (
     <Stack gap="lg">
-      <PageHeader title="Tracker" description={t.configured
-        ? <>Your Apartment Search Tracker sheet, read-only, synced every 5 minutes (last changed <span title={when(t.synced)}>{ago(t.synced)}</span>) · {num(t.rows.length)} rows by stage, longest waiting first · {num(yours)} your move · {num(theirs)} their move · {num(unmatched)} not matched to a listing</>
-        : 'The tracker sheet isn’t connected (HW_TRACKER_SHEET).'} />
+      <PageHeader title="Tracker" description={<>Your application tracker (last changed <span title={when(t.updated)}>{ago(t.updated)}</span>) · {num(t.rows.length)} rows by stage, longest waiting first · {num(yours)} your move · {num(theirs)} their move · {num(unmatched)} not matched to a listing · add a listing from its page</>} />
       <Table.ScrollContainer minWidth={1000}>
         <Table highlightOnHover fz="sm" aria-label="Tracker rows">
           <Table.Thead>
@@ -67,7 +66,7 @@ export function TrackerPage() {
           </Table.Thead>
           <Table.Tbody>
             {t.rows.length === 0 && (
-              <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed" ta="center" py="xl">The sheet has no rows yet.</Text></Table.Td></Table.Tr>
+              <Table.Tr><Table.Td colSpan={5}><Text size="sm" c="dimmed" ta="center" py="xl">No rows yet: add a listing from its page.</Text></Table.Td></Table.Tr>
             )}
             {t.rows.map((r) => (
               <Table.Tr key={r.row_key}>
@@ -77,9 +76,12 @@ export function TrackerPage() {
                   {borough(r) && <Text size="xs" c="dimmed">{borough(r)}</Text>}
                 </Table.Td>
                 <Table.Td>
-                  <ApplicationBadge s={r.stage} group={r.group} since={r.stage_since} baseline={r.stage_since_baseline} />
-                  {r.group && <Text size="xs" c="dimmed" mt={2}>{STAGE_GROUP[r.group]}</Text>}
-                  {r.status && r.status !== r.stage && <Text size="xs" c="dimmed">sheet: {r.status}</Text>}
+                  <StageSelect row={r} />
+                  <Group gap={6} mt={4}>
+                    <ApplicationBadge s={r.stage} group={r.group} since={r.stage_since} baseline={r.stage_since_baseline} />
+                    {r.group && <Text size="xs" c="dimmed">{STAGE_GROUP[r.group]}</Text>}
+                  </Group>
+                  {r.status && r.status !== r.stage && <Text size="xs" c="dimmed">written as: {r.status}</Text>}
                 </Table.Td>
                 <Table.Td maw={340}>
                   {r.listings.length ? (

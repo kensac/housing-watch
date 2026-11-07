@@ -187,7 +187,7 @@ export const ListingsDoc = graphql(`
 export const TrackerDoc = graphql(`
   query Tracker {
     tracker {
-      configured synced
+      updated stages
       rows {
         row_key position property status stage group stage_since stage_since_baseline notes source_url page_url
         events { at stage_from stage_to group baseline } cells { name value }
@@ -200,6 +200,18 @@ export const TrackerDoc = graphql(`
 export const LinkTrackerDoc = graphql(`
   mutation LinkTracker($listing_key: ID!, $row_key: ID) {
     linkTracker(input: { listing_key: $listing_key, row_key: $row_key }) { listing_key row_key }
+  }
+`)
+
+export const WriteTrackerDoc = graphql(`
+  mutation WriteTracker($row_key: ID!, $status: String, $notes: String) {
+    writeTracker(input: { row_key: $row_key, status: $status, notes: $notes }) { tracker { updated } }
+  }
+`)
+
+export const AddTrackerRowDoc = graphql(`
+  mutation AddTrackerRow($listing_key: ID!, $status: String) {
+    addTrackerRow(input: { listing_key: $listing_key, status: $status }) { listing_key row_key }
   }
 `)
 

@@ -153,8 +153,8 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   `$defs` (`dereference_schemas=False`): expanded, the filter schema would repeat in every place it is used.
   A test holds tools/list under 165 KB. An optional field is not required rather
   than nullable, and unset fields are left out of results.
-  Its write tools are the web app's mutations, annotated as writes: saved views; tracker links, and the sheet's
-  Status/Notes and new rows; source controls (run now, pause); listing overrides; the profile. Both are thin
+  Its write tools are the web app's mutations, annotated as writes: saved views; tracker rows (Status/Notes, new
+  rows) and links; source controls (run now, pause); listing overrides; the profile. Both are thin
   adapters over the same domain functions (`views`, `tracker.link/unlink/write/add_row`, `control`, `profiles`),
   which raise `models.NotFound`, `models.Refused`, `views.ViewError` or `filters.FilterError`;
   GraphQL maps those to codes in `Schema.process_errors`, MCP to tool errors in its `tool` wrapper. Any other
@@ -195,7 +195,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
     a GraphQL name gets one ("your move" is `your_move`, "1br" is `_1br`, "Staten Island" is
     `Staten_Island`). The `Key`/`Serial` aliases are `ID`; a deadline is a `Date`. Open text stays String:
     titles, addresses, notes, set-asides, sources (history keeps retired ones), application stages (unknown
-    sheet statuses are kept as written), queue and task names. An event's detail is the `EventDetail` union
+    imported statuses are kept as written), queue and task names. An event's detail is the `EventDetail` union
     (ListingChange, PageChange, SourceFailure); a failed job's `args` is `JobArgs`, every parameter a task
     takes. Only envelopes (connections, inputs, payloads, meta) are declared, in `web/api_types.py` with the
     derived types; filter, sort and column types in `web/filter_types.py`. `web/schema.py` is the resolvers.
@@ -229,7 +229,7 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   worker + web, the web started only when `HW_WEB_PORT` is set), reached only through Traefik. The tables it
   writes are `saved_views` (`views.py`: version 2 JSON, the filter tree + sort pairs + columns per page,
   re-validated against the registries on load), manual tracker links, `listing_overrides`, `profile` and
-  `source_state.paused` / `next_due` (`control.py`), plus the tracker sheet itself, through mutations that refuse
+  `source_state.paused` / `next_due` (`control.py`) and `tracker_rows` / `tracker_events`, through mutations that refuse
   anything not same-origin.
   Nothing is seeded.
 - `commute.py` routes eligible, listed listings to `HW_COMMUTE_TO` by transit (Google Routes API, weekday
@@ -237,19 +237,19 @@ serialization, retries and worker heartbeats. Its tables (`procrastinate_*`) are
   doubling with each failure in a row up to ~21 h), into `commutes`; a periodic
   `commute` task on the digest worker does it. `queries/` attaches the minutes and lines at read time
   (`commute` filter field, sort and column).
-- `tracker.py` copies the owner's application tracker sheet (the source of truth for application status
-  and notes) into `tracker_rows` every 5 minutes via a service account, and matches rows to
+- `tracker.py` keeps the owner's application tracker in `tracker_rows`; the app is its source of truth (the
+  rows began as an import of an old Google Sheet, which nothing reads now). Rows are added (`add_row`, from a
+  listing, linked to it) and edited (`write`: Status and Notes) from the UI or MCP, and matched to
   listings at read time: the row's own source link (only when that link is one row's and one listing's),
   else a normalized street address, else the building name; a manual link in `tracker_links` wins.
-  `write` sets a row's Status/Notes and `add_row` appends one, in the sheet, then sync at once; the service
-  account must be an editor of the sheet. `write` refuses when the row's Property has moved since the last sync.
-  A Status is read as one of the dropdown's nine stages (`tracker.STAGES`, each your move / their move /
-  done; legacy statuses mapped, unknown ones kept as written). The sheet holds only the current Status, so
-  each sync appends a `tracker_events` row when a row's Status differs from its last event; a row's first
-  event is a baseline when it predates tracking, so the UI says "since <date>" rather than inventing a start.
+  A Status is read as one of the nine stages (`tracker.STAGES`, each your move / their move /
+  done; legacy statuses mapped, unknown ones kept as written; a write takes a stage only). A row holds only its
+  current Status, so each change appends a `tracker_events` row; an imported row's first event is a baseline
+  when it predated tracking, so the UI says "since <date>" rather than inventing a start.
   The UI shows stage, whose move and days in stage on listings and units (`application` and
   `application_group` filter fields, `application` column sorted by stage order) and the stage history in
-  the drawer; the Tracker page lists rows by stage, longest waiting first, and links unmatched ones.
+  the drawer, where stage and notes are edited and a listing is added; the Tracker page lists rows by stage,
+  longest waiting first, sets stages, and links unmatched ones.
 - `applications.py` recognises known paper application forms by their fillable field names (today HPD's
   HC2.0 application) and fills them from the applicant file (`HW_APPLICANT_FILE`, private, host-only;
   signs and dates the applicant's line; never the SSN). The drawer checks a listing's linked PDFs lazily; a download is built

@@ -345,11 +345,12 @@ class ProfileModel(BaseModel):
     custom: bool = Field(description="set by the owner; false: the HW_* env vars' profile")
 
 
-class SheetWrite(BaseModel):
-    """A write to the tracker sheet, synced back."""
+class TrackerWrite(BaseModel):
+    """A tracker row as written."""
 
-    row_key: str = Field(description="the row written; `tracker_board` shows it")
-    rows: int = Field(description="rows in the sheet after the sync")
+    row_key: str = Field(description="the row; `tracker_board` shows it")
+    status: str | None = None
+    notes: str | None = None
 
 
 class SourceState(BaseModel):

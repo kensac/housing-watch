@@ -1,50 +1,39 @@
-"""The owner's application tracker (a Google Sheet): synced read-only, matched to listings at read time.
+"""The owner's application tracker: rows in `tracker_rows`, owned by the app, matched to listings at read time.
 
-The sheet is the source of truth for application status and notes. `sync` copies its rows into
-`tracker_rows` (replacing them) through a service account; `write` and `add_row` change the sheet itself
-(Status, Notes, a new row) and sync at once, so they need that account to be an editor of it. `match` pairs
-rows with listings deterministically: the row's Apply / Source link is the listing's URL, else a
-normalized street address matches, else the building name does. A manual link set in the UI
-(`tracker_links`) always wins, including "not this row".
+Each row is one building or opportunity being pursued, with its Status (an application stage) and Notes. The
+app is the source of truth: rows are added and edited from the web UI or the MCP (`add_row`, `write`), and every
+Status change is recorded in `tracker_events`, so a row's stage history, and how long it has been in its stage,
+come from there. The rows began as an import of the owner's old Google Sheet, which nothing reads any more; its
+columns are kept in `tracker_rows.cells`.
 
-The sheet holds only each row's current Status, so `sync` records every change it sees in
-`tracker_events`; a row's stage history, and how long it has been in its stage, come from there.
+`match` pairs rows with listings deterministically: the row's Apply / Source link is the listing's URL, else a
+normalized street address matches, else the building name does. A manual link (`tracker_links`) always wins,
+including "not this row"; `add_row` makes one for the listing it was added from.
 """
 
 from __future__ import annotations
 
 import builtins
-import os
 import re
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
-from urllib.parse import quote
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
-from . import fetch
 from .models import NotFound, Refused, values
 from .orm import ListingRow, TrackerEventRow, TrackerLinkRow, TrackerRow
 from .parse import addr_keys, name_key, units, url_key
-
-SHEET = os.environ.get("HW_TRACKER_SHEET", "")
-TAB = os.environ.get("HW_TRACKER_TAB", "Properties")
-KEY_FILE = os.environ.get("HW_SHEETS_KEY_FILE", "")
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]  # read and write: see write()
-API = "https://sheets.googleapis.com/v4/spreadsheets/{id}"
-FIELDS = "sheets(data(rowData(values(formattedValue,hyperlink,textFormatRuns(format(link(uri)))))))"
-
 
 # --- application stages -----------------------------------------------------------------------------------
 
 type StageGroup = Literal["your move", "their move", "done"]  # whose move an application stage is
 YOU, THEM, DONE = values(StageGroup)
-# The sheet's Status dropdown, in order, with whose move it is. A blank Status means not pursuing (yet).
+# The application stages, in order, with whose move it is. A blank Status means not pursuing (yet).
 STAGES = {
     "To Apply": YOU, "Ready to Send": YOU, "Action Needed": YOU,
     "Form Requested": THEM, "Applied": THEM, "Tour Scheduled": THEM, "In Processing": THEM,
@@ -73,57 +62,16 @@ def group(st: str | None) -> StageGroup | None:
 
 
 def rank(st: str | None) -> int:
-    """Sort order: the stages in sheet order, then unknown statuses, then no stage."""
+    """Sort order: the stages in order, then unknown statuses, then no stage."""
     return _RANK.get(st, len(STAGES)) if st else len(STAGES) + 1
 
 
-# --- reading the sheet -----------------------------------------------------------------------------------
-
-
-def _token() -> str:
-    from google.auth.transport.requests import Request
-    from google.oauth2 import service_account
-
-    creds = service_account.Credentials.from_service_account_file(KEY_FILE, scopes=SCOPES)
-    creds.refresh(Request())
-    return creds.token
-
-
-def _cell(v: dict) -> tuple[str, str | None]:
-    """(text, link) of one cell; the link from HYPERLINK() or from rich-text runs."""
-    link = v.get("hyperlink") or next(
-        (r["format"]["link"]["uri"] for r in v.get("textFormatRuns") or [] if r.get("format", {}).get("link")), None
-    )
-    return (v.get("formattedValue") or "").strip(), link
-
-
-def parse(data: dict) -> list[dict]:
-    """The sheet's rows as dicts: header -> text, plus `<header>__link` for linked cells and `_row`."""
-    rows = [r.get("values") or [] for s in data.get("sheets") or [] for d in s.get("data") or []
-            for r in d.get("rowData") or []]  # fmt: skip
-    if not rows:
-        return []
-    head = [_cell(v)[0] for v in rows[0]]
-    if "Property" not in head:
-        raise ValueError(f"tracker sheet header has no Property column: {head}")
-    out = []
-    for n, r in enumerate(rows[1:], start=2):
-        d: dict = {"_row": n}
-        for h, v in zip(head, r, strict=False):
-            if not h:
-                continue
-            text, link = _cell(v)
-            d[h] = text
-            if link:
-                d[f"{h}__link"] = link
-        if d.get("Property"):
-            out.append(d)
-    return out
+# --- rows ------------------------------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class Cell:
-    """One column of a sheet row."""
+    """One column of a tracker row."""
 
     name: str  # the column header
     value: str
@@ -131,58 +79,13 @@ class Cell:
 
 
 def cells(d: dict | None) -> list[Cell]:
-    """A stored row's cells (header -> text, `<header>__link` -> link) as Cells, in sheet order."""
+    """A stored row's cells (header -> text, `<header>__link` -> link) as Cells, in column order."""
     d = d or {}
     return [Cell(k, v or "", d.get(f"{k}__link")) for k, v in d.items() if not k.endswith("__link")]
 
 
 def row_key(prop: str) -> str:
     return " ".join(prop.lower().split())
-
-
-def sync(engine: Engine) -> int:
-    """Replace tracker_rows with the sheet's current rows; returns how many. Off unless configured."""
-    if not (SHEET and KEY_FILE and os.path.isfile(KEY_FILE)):
-        return 0
-    url = API.format(id=SHEET) + f"?ranges={quote(TAB)}&fields={quote(FIELDS)}"
-    rows = parse(fetch.get(url, headers={"Authorization": f"Bearer {_token()}"}).json())
-    now = datetime.now(UTC)
-    seen: dict[str, TrackerRow] = {}
-    for d in rows:
-        k = row_key(d["Property"])
-        if k in seen:  # the same building twice: keep the first row, as the sheet reads top-down
-            continue
-        seen[k] = TrackerRow(
-            row_key=k, position=d["_row"], property=d["Property"], status=d.get("Status") or None,
-            notes=d.get("Notes") or None, source_url=d.get("Apply / Source__link"),
-            page_url=d.get("Property Page__link"), cells={h: v for h, v in d.items() if not h.startswith("_")},
-            synced=now,
-        )  # fmt: skip
-
-    def facts(r: TrackerRow) -> tuple:
-        return (r.row_key, r.position, r.property, r.status, r.notes, r.source_url, r.page_url, r.cells)
-
-    with Session(engine) as s, s.begin():
-        stored = list(s.scalars(select(TrackerRow)))
-        if sorted(facts(r) for r in stored) != sorted(facts(r) for r in seen.values()):  # else keep the read cache
-            s.execute(delete(TrackerRow))
-            s.add_all(seen.values())
-        s.add_all(_events(s, seen, {r.row_key for r in stored}, now))
-    return len(seen)
-
-
-def _events(s: Session, rows: dict[str, TrackerRow], stored: set[str], now: datetime) -> list[TrackerEventRow]:
-    """An event for each row whose Status differs from its last event, or that has none yet. A row stored
-    before it had any event predates tracking (the first sync after deploy), so its event is a baseline.
-    A removed row records nothing and keeps its events, in case it comes back."""
-    q = select(TrackerEventRow.row_key, TrackerEventRow.status_to).order_by(TrackerEventRow.id)
-    last = dict(s.execute(q).all())  # each row's newest event wins
-    return [
-        TrackerEventRow(row_key=k, status_from=last.get(k), status_to=r.status, baseline=k not in last and k in stored,
-                        at=now)
-        for k, r in rows.items()
-        if k not in last or last[k] != r.status
-    ]  # fmt: skip
 
 
 # --- stage history -----------------------------------------------------------------------------------------
@@ -233,7 +136,7 @@ MATCHES = values(Match)
 class Ref:
     row_key: str
     property: str
-    status: str | None  # as written in the sheet
+    status: str | None  # as written
     notes: str | None
     how: Match
     stage: str | None = None
@@ -331,107 +234,62 @@ def unlink(engine: Engine, listing_key: str) -> None:
             raise NotFound("No manual link for that listing")
 
 
-# --- writing the sheet -----------------------------------------------------------------------------------
+# --- writing -----------------------------------------------------------------------------------------------
 
-_KEEP = object()  # write(): leave this cell as it is
-
-
-def _configured() -> None:
-    if not (SHEET and KEY_FILE and os.path.isfile(KEY_FILE)):
-        raise Refused("the tracker sheet is not configured (HW_TRACKER_SHEET, HW_SHEETS_KEY_FILE)")
+_KEEP = object()  # write(): leave this field as it is
 
 
-def _range(a1: str) -> str:
-    return quote("'" + TAB.replace("'", "''") + "'!" + a1, safe="")
-
-
-def _col(n: int) -> str:
-    """A1 column letters of the 0-based column n."""
-    out = ""
-    n += 1
-    while n:
-        n, r = divmod(n - 1, 26)
-        out = chr(65 + r) + out
-    return out
-
-
-def _values(a1: str, auth: dict) -> list[list[str]]:
-    return fetch.get(API.format(id=SHEET) + f"/values/{_range(a1)}", headers=auth).json().get("values") or []
-
-
-def _header(auth: dict) -> list[str]:
-    head = [h.strip() for h in (_values("1:1", auth) or [[]])[0]]
-    if "Property" not in head:
-        raise Refused(f"the tracker sheet's header has no Property column: {head}")
-    return head
-
-
-def _status(v: str | None) -> str:
+def _status(v: str | None) -> str | None:
     st = " ".join((v or "").split())
     if st and st not in STAGES:
         raise Refused(f"status: {st!r} is not one of {', '.join(STAGES)} (or empty to clear)")
-    return st
+    return st or None
 
 
-def write(engine: Engine, key: str, status=_KEEP, notes=_KEEP) -> int:
-    """Set a row's Status and/or Notes in the sheet, then sync; returns the rows synced. Refused when the row has
-    moved in the sheet since the last sync (sync, and try again)."""
-    _configured()
-    with Session(engine) as s:
-        row = s.get(TrackerRow, key)
-        if row is None:
-            raise NotFound("No such tracker row")
-        position, prop = row.position, row.property
-    want = {}
-    if status is not _KEEP:
-        want["Status"] = _status(status)
-    if notes is not _KEEP:
-        want["Notes"] = (notes or "").strip()
+def _event(s: Session, key: str, before: str | None, after: str | None, now: datetime, first: bool = False) -> None:
+    if first or before != after:
+        s.add(TrackerEventRow(row_key=key, status_from=None if first else before, status_to=after, at=now))
+
+
+def write(engine: Engine, key: str, status=_KEEP, notes=_KEEP) -> None:
+    """Set a row's Status (an application stage; empty clears it) and/or Notes. A Status change is an event."""
+    want = {k: v for k, v in (("Status", status), ("Notes", notes)) if v is not _KEEP}
     if not want:
         raise Refused("nothing to write: give status and/or notes")
-    auth = {"Authorization": f"Bearer {_token()}"}
-    head = _header(auth)
-    if missing := [h for h in want if h not in head]:
-        raise Refused(f"the tracker sheet has no {', '.join(missing)} column")
-    pc = _col(head.index("Property"))
-    live = _values(f"{pc}{position}", auth)
-    if row_key(live[0][0] if live and live[0] else "") != key:
-        sync(engine)
-        raise Refused(f"{prop!r} is no longer on sheet row {position}; synced, try again")
-    data = [{"range": f"'{TAB}'!{_col(head.index(h))}{position}", "values": [[v]]} for h, v in want.items()]
-    fetch.post_json(API.format(id=SHEET) + "/values:batchUpdate",
-                    {"valueInputOption": "USER_ENTERED", "data": data}, headers=auth)  # fmt: skip
-    return sync(engine)
-
-
-def _link_formula(url: str, label: str) -> str:
-    q = lambda x: x.replace('"', '""')  # noqa: E731
-    return f'=HYPERLINK("{q(url)}","{q(label)}")'
+    now = datetime.now(UTC)
+    with Session(engine) as s, s.begin():
+        row = s.get(TrackerRow, key, with_for_update=True)
+        if row is None:
+            raise NotFound("No such tracker row")
+        if "Status" in want:
+            st = _status(want["Status"])
+            _event(s, key, row.status, st, now)
+            row.status = st
+        if "Notes" in want:
+            row.notes = (want["Notes"] or "").strip() or None
+        row.cells = {**(row.cells or {}), "Status": row.status or "", "Notes": row.notes or ""}
+        row.synced = now  # last changed: the read cache's key
 
 
 def add_row(engine: Engine, listing_key: str, status: str | None = None, notes: str | None = None) -> str:
-    """Append a sheet row for a listing (Property = its title, Apply / Source = its link), sync, and link the
-    listing to it; returns the row's key. Refused when a row of that name exists."""
-    _configured()
-    with Session(engine) as s:
+    """Add a row for a listing (Property: its title; Apply / Source: its link), linked to it; returns its key.
+    Refused when a row of that name exists."""
+    st, now = _status(status), datetime.now(UTC)
+    with Session(engine) as s, s.begin():
         lst = s.get(ListingRow, listing_key)
         if lst is None:
             raise NotFound("No such listing")
-        title, url = (lst.title or lst.address or listing_key).strip(), lst.url
-    key = row_key(title)
-    with Session(engine) as s:
+        prop = (lst.title or lst.address or listing_key).strip()
+        key = row_key(prop)
         if s.get(TrackerRow, key) is not None:
-            raise Refused(f"the sheet already has a row {title!r}; link the listing to it instead")
-    st = _status(status)
-    auth = {"Authorization": f"Bearer {_token()}"}
-    head = _header(auth)
-    cells = {"Property": title, "Status": st, "Notes": (notes or "").strip()}
-    if url and "Apply / Source" in head:
-        cells["Apply / Source"] = _link_formula(url, "Listing")
-    values_row = [cells.get(h, "") for h in head]
-    fetch.post_json(API.format(id=SHEET) + f"/values/{_range('A1')}:append"
-                    "?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS",
-                    {"values": [values_row]}, headers=auth)  # fmt: skip
-    sync(engine)
-    link(engine, listing_key, key)
+            raise Refused(f"the tracker already has a row {prop!r}; link the listing to it instead")
+        note = (notes or "").strip() or None
+        cells = {"Property": prop, "Status": st or "", "Apply / Source": "Listing", "Apply / Source__link": lst.url,
+                 "Notes": note or ""}  # fmt: skip
+        pos = (s.scalar(select(func.max(TrackerRow.position))) or 1) + 1
+        s.add(TrackerRow(row_key=key, position=pos, property=prop, status=st, notes=note, source_url=lst.url,
+                         cells=cells, synced=now))  # fmt: skip
+        _event(s, key, None, st, now, first=True)
+        link_row = pg_insert(TrackerLinkRow).values(listing_key=listing_key, row_key=key)
+        s.execute(link_row.on_conflict_do_update(index_elements=["listing_key"], set_={"row_key": key}))
     return key

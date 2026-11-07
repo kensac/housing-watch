@@ -381,7 +381,7 @@ class DeleteViewPayload:
 TrackerLinkPayload = derive(queries.TrackerLink, "TrackerLinkPayload")
 
 
-# --- owner writes: sources, overrides, profile, the tracker sheet ---------------------------------------
+# --- owner writes: sources, overrides, profile, tracker rows ------------------------------------------
 
 _Borough, _Size = enum_type(models.Borough), enum_type(models.Size)
 _PublishedStatus, _Kind = enum_type(models.PublishedStatus), enum_type(models.Kind)

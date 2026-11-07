@@ -225,22 +225,22 @@ class CommuteRow(Base):
 
 
 class TrackerRow(Base):
-    """One row of the owner's application tracker sheet, as last synced (the sheet is the source of truth)."""
+    """One row of the owner's application tracker (the app is the source of truth; see tracker.py)."""
 
     __tablename__ = "tracker_rows"
     row_key: Mapped[str] = mapped_column(Text, primary_key=True)  # tracker.row_key(property)
-    position: Mapped[int] = mapped_column(Integer)  # sheet row number
+    position: Mapped[int] = mapped_column(Integer)  # order added (the old sheet's row number for imported rows)
     property: Mapped[str] = mapped_column(Text)
     status: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
     source_url: Mapped[str | None] = mapped_column(Text)  # the Apply / Source cell's link
     page_url: Mapped[str | None] = mapped_column(Text)
     cells: Mapped[dict] = mapped_column(JSONB, default=dict)  # every column by its header
-    synced: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    synced: Mapped[datetime] = mapped_column(TS, server_default=func.now())  # last changed: the read cache's key
 
 
 class TrackerEventRow(Base):
-    """A tracker row's Status as first seen or changed between syncs (the sheet keeps only the current one)."""
+    """A tracker row's Status when it was added or changed (the row keeps only the current one)."""
 
     __tablename__ = "tracker_events"
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -252,7 +252,7 @@ class TrackerEventRow(Base):
 
 
 class TrackerLinkRow(Base):
-    """A manual match the owner set in the UI: this listing is (row_key) or is not (None) that sheet row."""
+    """A manual match the owner set in the UI: this listing is (row_key) or is not (None) that tracker row."""
 
     __tablename__ = "tracker_links"
     listing_key: Mapped[str] = mapped_column(Text, primary_key=True)

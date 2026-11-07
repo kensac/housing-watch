@@ -168,7 +168,7 @@ def bands_from_row(hh_text: str, income_text: str, ami_pct: int | None):
     return _ami.bands(sizes, lo, hi, ami_pct)[0] if sizes else []
 
 
-# --- matching the same building or unit across sources (tracker sheet, Reside's application form) ---------------
+# --- matching the same building or unit across sources (tracker rows, Reside's application form) ----------------
 
 _STREET = {
     "street": "st", "avenue": "ave", "av": "ave", "boulevard": "blvd", "road": "rd", "place": "pl",

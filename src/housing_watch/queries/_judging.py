@@ -230,7 +230,7 @@ def _judged(engine: Engine, p: Profile) -> _Judged:
             rows = _load(s)
             lsts = [listing_from_row(r) for r in rows]
             out = [_summary(r, lst, p, commutes) for r, lst in zip(rows, lsts, strict=True)]
-            refs = T.match(out, *T.load(engine), T.history(engine))  # the tracker sheet's rows, matched to listings
+            refs = T.match(out, *T.load(engine), T.history(engine))  # the tracker's rows, matched to listings
             out = [_with_tracker(x, refs.get(x.key)) for x in out]
             units = [u for r, lst, x in zip(rows, lsts, out, strict=True) for u in _units(r, lst, x, p)]
             j = _cache[ck] = (version, _Judged(out, units, {x.key: x for x in out}))

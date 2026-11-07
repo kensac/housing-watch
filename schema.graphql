@@ -979,20 +979,20 @@ type Mutation {
   duplicateView(input: ViewIdInput!): ViewPayload!
   deleteView(input: ViewIdInput!): DeleteViewPayload!
 
-  """Link a listing to a sheet row, or mark it as in no row (row_key null)."""
+  """
+  Link a listing to a tracker row, or mark it as in no row (row_key null).
+  """
   linkTracker(input: LinkTrackerInput!): TrackerLinkPayload!
 
   """Drop a manual link: the listing goes back to automatic matching."""
   unlinkTracker(input: UnlinkTrackerInput!): TrackerLinkPayload!
 
   """
-  Set a tracker row's Status and/or Notes in the sheet itself, then sync it.
+  Set a tracker row's Status (an application stage; empty clears it) and/or Notes.
   """
   writeTracker(input: WriteTrackerInput!): TrackerWritePayload!
 
-  """
-  Add a sheet row for a listing (named after it, linked to it), then sync and link the listing to it.
-  """
+  """Add a tracker row for a listing, named after it and linked to it."""
   addTrackerRow(input: AddTrackerRowInput!): TrackerLinkPayload!
 
   """
@@ -1279,7 +1279,7 @@ type Query {
   fleet: Fleet!
 
   """
-  Every tracker sheet row with its stage history and the listings matched to it.
+  Every tracker row with its stage history and the listings matched to it.
   """
   tracker: Tracker!
 
@@ -1530,19 +1530,17 @@ input TimeFilterInput {
 }
 
 type Tracker {
-  """HW_TRACKER_SHEET is set"""
-  configured: Boolean!
-
-  """
-  When the sheet last changed (read every 5 minutes; an unchanged read keeps this)
-  """
-  synced: DateTime
+  """When a row last changed"""
+  updated: DateTime
 
   """By stage, then longest in it"""
   rows: [TrackerRow!]!
+
+  """The application stages a Status can be set to, in order"""
+  stages: [String!]!
 }
 
-"""One column of a sheet row."""
+"""One column of a tracker row."""
 type TrackerCell {
   """The column header"""
   name: String!
@@ -1571,17 +1569,15 @@ enum TrackerMatch {
   manual
 }
 
-"""
-A tracker sheet row with its stage history and the listings matched to it.
-"""
+"""A tracker row with its stage history and the listings matched to it."""
 type TrackerRow {
   row_key: ID!
 
-  """The sheet row number"""
+  """Order added (the old sheet's row number for imported rows)"""
   position: Int!
   property: String!
 
-  """As written in the sheet"""
+  """As written"""
   status: String
 
   """The stage that status means (tracker.stage)"""
@@ -1602,7 +1598,9 @@ type TrackerRow {
   source_url: String
   page_url: String
 
-  """Every column of the row, as the sheet has them"""
+  """
+  Every column of the row (the old sheet's columns, Status and Notes kept current)
+  """
   cells: [TrackerCell!]!
 
   """Empty: unmatched, link one by hand"""
