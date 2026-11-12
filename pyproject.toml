@@ -17,7 +17,7 @@ dependencies = [
     "pypdf==7.0.0",
     "reportlab==5.1.0",
     "playwright==1.65.0",
-    "fastmcp==4.1.6",
+    "fastmcp==4.1.7",
     "strawberry-graphql==0.341.2",
 ]
 
