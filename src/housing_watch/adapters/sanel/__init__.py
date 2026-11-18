@@ -294,7 +294,7 @@ class Sanel(Adapter):
         return {d.ext_id: {"units": [asdict(u) for u in d.units], "senior_only": d.senior_only} for d in devs}
 
     def _reside_urls(self) -> list[str]:
-        return [u for sm in reside.SITEMAPS for u in re.findall(r"<loc>([^<]+)</loc>", fetch.html(sm))]
+        return [u for u, _ in reside.sitemap_entries()]
 
     def enrich(self, lst: Listing, html: str, prev: dict | None = None) -> Listing:
         """A listing -> the official source's units, or a note why there are none.

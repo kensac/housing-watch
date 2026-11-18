@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import pytest
@@ -128,17 +129,37 @@ def test_status_from_article_terms():
 
 
 FIX = sorted(p.stem for p in F.glob("*.html"))
+SITEMAPS = [f"https://residenewyork.com/property-sitemap{i}.xml" for i in (1, 2)]
+
+
+def test_sitemap_index_lists_every_property_sitemap():
+    sms = reside.property_sitemaps((F / "sitemap_index.xml").read_text())
+    assert len(sms) >= 12 and all(re.fullmatch(r"https://residenewyork\.com/property-sitemap\d+\.xml", u) for u in sms)
+
+
+def test_sitemap_entries_once_each(monkeypatch):
+    xml = (F / "property-sitemap1.xml").read_text()
+    index = "".join(f"<loc>{u}</loc>" for u in SITEMAPS)
+    monkeypatch.setattr(reside.fetch, "html", lambda u, **kw: index if u == reside.INDEX else xml)
+    assert len(reside.sitemap_entries()) == 3  # both sitemaps list the same three pages
+
+
+def test_sitemap_entries_skip_the_listings_archive():
+    entries = reside.property_entries((F / "property-sitemap1.xml").read_text())
+    assert len(entries) == 3 and all("/property/" in u and lm.startswith("20") for u, lm in entries)
 
 
 @pytest.fixture
 def site(monkeypatch):
-    """A fake Reside of 40 pages (the fixtures, repeated) over its two sitemaps: (url -> lastmod, fetched urls)."""
+    """A fake Reside of 40 pages (the fixtures, repeated) over two sitemaps: (url -> lastmod, fetched urls)."""
     pages = {f"https://residenewyork.com/property/p{i}-{FIX[i % len(FIX)]}/": "2026-10-01" for i in range(40)}
     calls: list[str] = []
 
     def html(u, **kw):
-        if u in reside.SITEMAPS:
-            items = list(pages.items())[::2] if u == reside.SITEMAPS[0] else list(pages.items())[1::2]
+        if u == reside.INDEX:
+            return "".join(f"<sitemap><loc>{x}</loc></sitemap>" for x in SITEMAPS)
+        if u in SITEMAPS:
+            items = list(pages.items())[::2] if u == SITEMAPS[0] else list(pages.items())[1::2]
             return "".join(f"<url><loc>{x}</loc><lastmod>{lm}</lastmod></url>" for x, lm in items)
         calls.append(u)
         return (F / f"{u.rstrip('/').rsplit('/', 1)[-1].split('-', 1)[1]}.html").read_text()

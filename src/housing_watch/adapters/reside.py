@@ -1,4 +1,4 @@
-"""Reside New York: ~2,100 WordPress property pages, listed with lastmod in two sitemaps.
+"""Reside New York: ~2,100 WordPress property pages, listed with lastmod in Yoast sitemaps of 200 each.
 
 Only pages whose lastmod moved (or parsed by an older PARSER) are re-fetched, spread over chunks on different
 workers (cache: one top-level key per page url -> {lastmod, v, listing}, so chunks' deltas never overlap).
@@ -20,7 +20,7 @@ from . import PLAN, Adapter, cached_listing, spread
 
 log = logging.getLogger("housing_watch")
 
-SITEMAPS = [f"https://residenewyork.com/wp-sitemap-posts-property-{i}.xml" for i in (1, 2)]
+INDEX = "https://residenewyork.com/sitemap_index.xml"  # Yoast: property-sitemap1.xml ... one per 200 pages
 APPLY = "https://airtable.com/appsseXTOVx59HC0W/pagcVengefPFQvMZC/form"
 FORM = "_form"  # cache: {"at": epoch s, "units": [picker labels]}: the units Reside's form accepts
 FORM_MAX_AGE = 12 * 3600  # an older list is not used to judge status
@@ -330,6 +330,25 @@ def with_form(lst: Listing, options: list[Option]) -> Listing:
     return lst
 
 
+def property_sitemaps(index: str) -> list[str]:
+    """The property sitemaps a Yoast sitemap index lists."""
+    return re.findall(r"<loc>\s*(https://residenewyork\.com/property-sitemap\d*\.xml)\s*</loc>", index)
+
+
+def property_entries(xml: str) -> list[tuple[str, str]]:
+    """(url, lastmod) of a sitemap's property pages; the /property-listings/ archive Yoast puts first is not one."""
+    found = re.findall(r"<loc>([^<]+)</loc>\s*(?:<lastmod>([^<]+)</lastmod>)?", xml)
+    return [(u, lm) for u, lm in found if "/property/" in u]
+
+
+def sitemap_entries() -> list[tuple[str, str]]:
+    """(url, lastmod) of every property page, once each: Yoast repeats some pages across its sitemaps."""
+    sitemaps = property_sitemaps(fetch.html(INDEX))
+    if not sitemaps:
+        raise RuntimeError("sitemap index lists no property sitemaps")
+    return list(dict(e for sm in sitemaps for e in property_entries(fetch.html(sm))).items())
+
+
 class Reside(Adapter):
     name = "reside"
     title = "Reside New York"
@@ -340,10 +359,7 @@ class Reside(Adapter):
 
     def chunks(self) -> list[str]:
         """Read the sitemaps and plan: pages new, with a moved lastmod or an older PARSER are spread over chunks."""
-        entries = []
-        for sm in SITEMAPS:
-            xml = fetch.html(sm)
-            entries += re.findall(r"<loc>([^<]+)</loc>\s*(?:<lastmod>([^<]+)</lastmod>)?", xml)
+        entries = sitemap_entries()
         if len(entries) < self.min_listings:
             raise RuntimeError(f"sitemaps list only {len(entries)} properties")
         c = self.cache
