@@ -285,10 +285,10 @@ def test_reside_spreads_changed_pages_over_chunks_and_merges(fleet, pg, monkeypa
     calls: list[str] = []
 
     def html(u, **kw):
-        if u in reside.SITEMAPS:
-            return "".join(f"<loc>{x}</loc><lastmod>{lm}</lastmod>" for x, lm in pages.items()) * (
-                u == reside.SITEMAPS[0]
-            )
+        if u == reside.INDEX:
+            return "<loc>https://residenewyork.com/property-sitemap1.xml</loc>"
+        if u == "https://residenewyork.com/property-sitemap1.xml":
+            return "".join(f"<loc>{x}</loc><lastmod>{lm}</lastmod>" for x, lm in pages.items())
         calls.append(u)
         return page
 
