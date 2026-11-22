@@ -21,8 +21,8 @@ from housing_watch.fleet import metrics, runner, tasks
 from housing_watch.models import Listing, Result, Unit
 from housing_watch.orm import ChunkResultRow, EventRow, ListingRow, RunRow, SourceStateRow
 
-# Procrastinate's schema is applied by alembic 0002 as of this migration file; bump with a new revision.
-PROCRASTINATE_SCHEMA_AT = "03.04.00_50_post_add_retry_failed_job_procedure.sql"
+# Procrastinate's schema is applied by alembic 0002, then 0014, as of this migration file; bump with a new revision.
+PROCRASTINATE_SCHEMA_AT = "03.12.00_51_post_drop_id_lock_index.sql"
 
 
 def L(ext_id: str, source: str) -> Listing:
