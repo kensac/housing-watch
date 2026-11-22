@@ -212,6 +212,7 @@ def test_hdc_flyer_replaces_summary(monkeypatch):
     lst, a = enriched("queens__apex-place-apartments-lsp339", monkeypatch, nychdc="hdc-apex-flyer.txt")
     assert [(u.size, u.rent, u.ami) for u in lst.units] == [("1br", 2206, 110), ("2br", 2550, 110), ("1br", 2618, 140)]
     assert listing_verdict(lst).verdict == "eligible" and "HDC's flyer" in lst.notes
+    assert lst.official_url and lst.official_url.lower().endswith(".pdf")  # the flyer is the real posting
     assert any(k.startswith("doc:hdc:") for k in a.cache)  # cached: the next run does not re-read it
 
 
@@ -261,6 +262,7 @@ def test_pronto_registration_link_and_stamped_caps(monkeypatch):
     top = next(u for u in lst.units if u.bands[-1].income_max == 210600)
     assert [b.income_max for b in top.bands] == [147420, 168480, 189540, 210600] and top.chart_year == 2025
     assert listing_verdict(lst).verdict == "eligible" and "2025 chart" in lst.notes  # 2026's 1-person 130% fits
+    assert lst.official_url == "https://prontohousingrentals.com/listings/property/4934"  # not the registration page
 
 
 def test_mitchell_lama_from_hpd(monkeypatch):
@@ -291,6 +293,7 @@ def test_reside_root_link_matched_by_unit(monkeypatch):
         "queens__36-10-31st-street-unit-3a-1qm2xf", monkeypatch, **{"unit-3a": "reside-36-10-31-unit-3a.html"}
     )
     assert lst.units[0].bands[0] == Band(1, 120011, 154440) and listing_verdict(lst).verdict == "eligible"
+    assert lst.official_url == urls[1]  # SANEL linked Reside's home page; the unit page is the posting
 
 
 def test_reside_unit_page_newer_than_cached_list(monkeypatch):

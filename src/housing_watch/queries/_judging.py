@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
@@ -16,7 +17,7 @@ from ..criteria import ELIGIBLE, EXCLUDED, POSSIBLE, PROFILE, Profile, Verdict, 
 from ..mapping import listing_from_row
 from ..models import Borough, Key, Kind, Listing, Serial, Size
 from ..orm import CommuteRow, ListingRow, TrackerEventRow, TrackerLinkRow, TrackerRow, UnitRow
-from ..parse import url_key
+from ..parse import addr_keys, name_key, url_key
 from ._common import _SIZE_ORDER, STATUSES, Status, day, internal
 
 
@@ -208,16 +209,85 @@ def judged_listing(engine: Engine, key: str, p: Profile = PROFILE) -> ListingSum
     return _judged(engine, p).by_key.get(key)
 
 
+def _host(url: str | None) -> str:
+    m = re.match(r"https?://(?:www\.)?([^/?#]+)", url or "", re.I)
+    return m.group(1).lower() if m else ""
+
+
+def _unit_key(no: str | None) -> str:
+    return re.sub(r"[^0-9a-z]", "", (no or "").lower()).lstrip("0")
+
+
+def _names_unit(x: ListingSummary, lst: Listing, no: str) -> bool:
+    return any(_unit_key(u.unit_no) == no for u in lst.units) or no in {_unit_key(w) for w in x.title.split()}
+
+
+def _sites() -> dict[str, str]:
+    """Each source's own site (host of its adapter's url): a posting can live off-site (SHF links Microsoft Forms)."""
+    try:
+        from ..adapters import load_all
+
+        return {name: _host(cls.url) for name, cls in load_all().items()}
+    except Exception:  # noqa: BLE001 - matching copies must not break the read model
+        return {}
+
+
+def _keys(x: ListingSummary) -> set[str]:
+    """Street keys of a listing, a house-number range also under its first number ('207-209 W 140th St' is 207);
+    a Queens number (214-33) is no range. And its building name, so a listing without an address still matches."""
+    text = " ".join(filter(None, (x.address, x.title)))
+    keys = set(addr_keys(text))
+    for m in re.finditer(r"\b(\d+)-(\d+)(\s+\S.*)", text):
+        a, b = m.group(1), m.group(2)
+        if len(a) == len(b) and int(b) > int(a):
+            keys |= addr_keys(a + m.group(3))
+    if n := name_key(x.title):
+        keys.add("name:" + n)
+    return keys
+
+
+def _rents(lst: Listing) -> set[int]:
+    return {round(u.rent) for u in lst.units if u.rent}
+
+
 def _with_copies(out: list[ListingSummary], lsts: list[Listing]) -> list[ListingSummary]:
-    """An aggregator's listing whose official_url is a live listing of a direct source is a copy of that listing:
-    the real posting stands for both, and the copy stays out of lists, counts and the digest. When the real
-    listing is gone the copy is not one any more, so the aggregator still shows what it alone lists."""
-    direct: dict[str, Key] = {}
+    """An aggregator's listing (one with an official_url) that is a live listing of a direct source is a copy of it:
+    the real posting stands for both, and the copy stays out of lists, counts and the digest. The match is the
+    official_url itself when one listing has that url; else a listing on the same site (its url's or its source's)
+    with the same street address, or name when it has none, narrowed by the unit the copy names (a listing that
+    numbers no units stands for its building's apartments) and then by rent, when exactly one remains. When the
+    real listing is gone the copy is not one any more, so the aggregator still shows what it alone lists."""
+    sites = _sites()
+    live = [(x, lst) for x, lst in zip(out, lsts, strict=True) if not lst.official_url and x.status != "gone"]
+    by_url: dict[str, list[Key]] = {}
+    by_key: dict[tuple[str, str], list[tuple[ListingSummary, Listing]]] = {}
+    for x, lst in live:
+        by_url.setdefault(url_key(x.url), []).append(x.key)
+        for host in {_host(x.url), sites.get(x.source, "")} - {""}:
+            for k in _keys(x):
+                by_key.setdefault((host, k), []).append((x, lst))
+    copy_of: dict[Key, Key] = {}
     for x, lst in zip(out, lsts, strict=True):
-        if not lst.official_url and x.status != "gone":
-            direct.setdefault(url_key(x.url), x.key)
-    copy_of = {x.key: k for x, lst in zip(out, lsts, strict=True)
-               if lst.official_url and (k := direct.get(url_key(lst.official_url))) and k != x.key}  # fmt: skip
+        if not lst.official_url:
+            continue
+        same = by_url.get(url_key(lst.official_url), [])
+        if len(same) == 1:
+            copy_of[x.key] = same[0]
+            continue
+        host = _host(lst.official_url)
+        cands = {c.key: (c, cl) for k in _keys(x) for c, cl in by_key.get((host, k), [])}
+        if same:  # one page lists several postings (Bronx Pro's /apartments): the address picks among them
+            cands = {k: v for k, v in cands.items() if k in same}
+        if m := re.search(r"#\s*([\w-]+)\s*$", x.title):
+            no = _unit_key(m.group(1))
+            named = {k: v for k, v in cands.items() if _names_unit(v[0], v[1], no)}
+            numbered = any(u.unit_no for _, cl in cands.values() for u in cl.units)
+            cands = named if named or numbered else cands  # no unit numbers: the building's listing stands for it
+        if len(cands) > 1 and (rents := _rents(lst)):
+            cands = {k: v for k, v in cands.items() if rents & _rents(v[1])} or cands
+        if len(cands) == 1:
+            copy_of[x.key] = next(iter(cands))
+    copy_of = {c: k for c, k in copy_of.items() if k != c}
     copies: dict[Key, list[Key]] = {}
     for c, k in copy_of.items():
         copies.setdefault(k, []).append(c)

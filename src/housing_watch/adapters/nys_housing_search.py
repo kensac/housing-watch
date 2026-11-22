@@ -15,6 +15,10 @@ Cloudflare). Per run:
    household and income range, per-size Open/Closed), ListingRuleController.getWaitlistRules otherwise
    (per size x household x AMI: income range, rent; a rule with no income figures gets HUD's cap for
    its AMI category). Batched into a few POSTs.
+4. Per NYC record that is not Mitchell-Lama, its Building Address(es) table: MCCWaitlistBuildingsController.getBuildings
+   (street, city, zip per building), in the same POSTs. The card's Cities is often empty, and the read model matches
+   aggregator copies by street address. Mitchell-Lama pages show their address through an OmniStudio card instead, and
+   getBuildings returns nothing for them, so they keep the card's city and county.
 
 Caveats: an ML row's income range spans every unit of that size ("1 to 2, $50,488 to $204,983"), so $150k
 fits only the pricier units, and co-ops need an equity payment and wait years. When a record has no
@@ -142,7 +146,19 @@ def rule_units(rows: list[dict]) -> list[Unit]:
     return merge_units(out)
 
 
-def to_listing(rec: dict, rules: list[dict] | None) -> Listing:
+def address(rec: dict, buildings: list[dict] | None) -> str | None:
+    """'2520 Jerome Avenue, Bronx, NY 10468' per building ('; ' between them), else the card's city and county."""
+    out = []
+    for b in buildings or []:
+        street = (b.get("street") or "").strip()
+        if street:
+            city = (b.get("city") or "").strip() or borough(rec.get("County") or "") or ""
+            tail = " ".join(x for x in ((b.get("state") or "NY").strip(), (b.get("zip") or "").strip()) if x)
+            out.append(", ".join(x for x in (street, city, tail) if x))
+    return "; ".join(out) or ", ".join(x for x in (rec.get("Cities"), rec.get("County")) if x) or None
+
+
+def to_listing(rec: dict, rules: list[dict] | None, buildings: list[dict] | None = None) -> Listing:
     ml = bool(rec.get("IsMitchellLama"))
     units = (ml_units(rules) if ml else rule_units(rules)) if rules else []
     lo, hi = parse.whole(rec.get("MinimumIncome")), parse.whole(rec.get("MaximumIncome"))
@@ -167,7 +183,7 @@ def to_listing(rec: dict, rules: list[dict] | None) -> Listing:
         ext_id=rec["Id"],
         title=rec.get("ProjectName") or rec["Id"],
         url=PUBLIC + rec["Id"],
-        address=", ".join(x for x in (rec.get("Cities"), rec.get("County")) if x) or None,
+        address=address(rec, buildings),
         borough=borough(rec.get("County") or ""),
         status="closed" if closed else ("open" if typ == "Lottery" else "waitlist"),
         kind="lottery" if typ == "Lottery" else "waitlist",
@@ -248,19 +264,26 @@ class NysHousingSearch(Adapter):
         if not records or len(records) < 50:
             raise RuntimeError(f"search returned only {len(records or [])} records statewide")
         nyc = [r for r in records if borough(r.get("County") or "")]
-        want = [r for r in nyc if (r.get("Status") or "").lower() != "closed"]
+        want = {r["Id"] for r in nyc if (r.get("Status") or "").lower() != "closed"}
         rules: dict[str, list] = {}
-        for i in range(0, len(want), BATCH):
-            chunk = want[i : i + BATCH]
-            calls = [
-                ("WaitlistRuleControllerML", "getWaitlistRulesMLForTable", {"waitlistId": r["Id"]})
-                if r.get("IsMitchellLama")
-                else ("ListingRuleController", "getWaitlistRules", {"waitlistId": r["Id"]})
-                for r in chunk
-            ]
-            for r, rv in zip(chunk, aura.call(calls), strict=True):
-                rules[r["Id"]] = rv or []
-        listings = [to_listing(r, rules.get(r["Id"])) for r in nyc]
+        buildings: dict[str, list] = {}
+        for i in range(0, len(nyc), BATCH):
+            chunk = nyc[i : i + BATCH]
+            calls, into = [], []
+            for r in chunk:
+                if r["Id"] in want:
+                    calls.append(
+                        ("WaitlistRuleControllerML", "getWaitlistRulesMLForTable", {"waitlistId": r["Id"]})
+                        if r.get("IsMitchellLama")
+                        else ("ListingRuleController", "getWaitlistRules", {"waitlistId": r["Id"]})
+                    )
+                    into.append((rules, r["Id"]))
+                if not r.get("IsMitchellLama"):
+                    calls.append(("MCCWaitlistBuildingsController", "getBuildings", {"waitlistId": r["Id"]}))
+                    into.append((buildings, r["Id"]))
+            for (d, k), rv in zip(into, aura.call(calls) if calls else [], strict=True):
+                d[k] = rv or []
+        listings = [to_listing(r, rules.get(r["Id"]), buildings.get(r["Id"])) for r in nyc]
         if len(listings) < self.min_listings:
             raise RuntimeError(f"only {len(listings)} NYC records")
         return Result(listings=listings)

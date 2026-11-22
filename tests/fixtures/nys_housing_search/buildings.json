@@ -1,0 +1,175 @@
+{
+ "a0Ycs00000iE3RTEA0": [
+  {
+   "county": "Richmond (Staten Island)",
+   "id": "a0Vcs00000KVYGeEAP",
+   "state": "NY",
+   "street": "101 Myrtle Avenue",
+   "zip": "10310"
+  }
+ ],
+ "a0Ycs00000iE3RZEA0": [
+  {
+   "county": "Kings (Brooklyn)",
+   "id": "a0Vcs00000KVYGkEAP",
+   "state": "NY",
+   "street": "50 Nevins Street",
+   "zip": "11217"
+  }
+ ],
+ "a0Ycs00000iE3RcEAK": [
+  {
+   "county": "Bronx",
+   "id": "a0Vcs00000KVYGlEAP",
+   "state": "NY",
+   "street": "2520 Jerome Avenue",
+   "zip": "10468"
+  }
+ ],
+ "a0Ycs00000iE3ReEAK": [
+  {
+   "county": "Queens",
+   "id": "a0Vcs00000KVYGpEAP",
+   "state": "NY",
+   "street": "137-47 45th Avenue",
+   "zip": "11355"
+  },
+  {
+   "county": "Queens",
+   "id": "a0Vcs00000KVYGoEAP",
+   "state": "NY",
+   "street": "45-25 Kissena Boulevard",
+   "zip": "11355"
+  }
+ ],
+ "a0Ycs00000iE3RfEAK": [
+  {
+   "county": "Kings (Brooklyn)",
+   "id": "a0Vcs00000KVYGqEAP",
+   "state": "NY",
+   "street": "523 East 98th Street",
+   "zip": "11212"
+  }
+ ],
+ "a0Ycs00000iQZosEAG": [
+  {
+   "county": "Bronx",
+   "id": "a0Vcs00000KcXh0EAF",
+   "state": "NY",
+   "street": "4519 White Plains Road",
+   "zip": "10470"
+  }
+ ],
+ "a0Ycs00000iSiMYEA0": [
+  {
+   "city": "Brooklyn",
+   "county": "Kings (Brooklyn)",
+   "id": "a0Vcs00000KdRRREA3",
+   "state": "NY",
+   "street": "1366 East New York Avenue",
+   "zip": "11212"
+  }
+ ],
+ "a0Ycs00000lkASmEAM": [
+  {
+   "city": "New York",
+   "county": "New York (Manhattan)",
+   "id": "a0Vcs00000MtXgEEAV",
+   "state": "NY",
+   "street": "405 West 206th Street",
+   "zip": "10034"
+  },
+  {
+   "city": "New York",
+   "county": "New York (Manhattan)",
+   "id": "a0Vcs00000MtXgDEAV",
+   "state": "NY",
+   "street": "407 West 206th Street",
+   "zip": "10034"
+  }
+ ],
+ "a0Ycs00001OZipREAT": [
+  {
+   "city": "Bronx",
+   "county": "Bronx",
+   "id": "a0Vcs00000fj8bJEAQ",
+   "state": "NY",
+   "street": "1559 Boone Avenue",
+   "zip": "10460"
+  }
+ ],
+ "a0Ycs00001UzwGcEAJ": [
+  {
+   "city": "PECK SLIP",
+   "county": "New York (Manhattan)",
+   "id": "a0Vcs00000j0UkAEAU",
+   "state": "NY",
+   "street": "217 Front Street",
+   "zip": "10038"
+  },
+  {
+   "city": "New York",
+   "county": "New York (Manhattan)",
+   "id": "a0Vcs00000j0Uk9EAE",
+   "state": "NY",
+   "street": "220 Front Street",
+   "zip": "10038"
+  },
+  {
+   "city": "New York",
+   "county": "New York (Manhattan)",
+   "id": "a0Vcs00000j0UkBEAU",
+   "state": "NY",
+   "street": "225 Front Street",
+   "zip": "10038"
+  },
+  {
+   "city": "New York",
+   "county": "New York (Manhattan)",
+   "id": "a0Vcs00000j0UkCEAU",
+   "state": "NY",
+   "street": "229 Front Street",
+   "zip": "10038"
+  }
+ ],
+ "a0Ycs00001gK9MbEAK": [
+  {
+   "city": "Brooklyn",
+   "county": "Kings (Brooklyn)",
+   "id": "a0Vcs00000oSe0vEAC",
+   "state": "NY",
+   "street": "548 Utica Avenue",
+   "zip": "11203"
+  }
+ ],
+ "a0Ycs00001kWz8bEAC": [
+  {
+   "city": "Bronx",
+   "county": "Bronx",
+   "id": "a0Vcs00000qHLWjEAO",
+   "state": "NY",
+   "street": "1182 Woodycrest Avenue",
+   "zip": "10452"
+  }
+ ],
+ "a0Ycs000028W6CjEAK": [
+  {
+   "city": "Brooklyn",
+   "county": "Kings (Brooklyn)",
+   "id": "a0Vcs000012GZPxEAO",
+   "state": "NY",
+   "street": "3027 West 21st Street",
+   "zip": "11224"
+  }
+ ],
+ "a0Ycs00002Lif0lEAB": [
+  {
+   "city": "Bronx",
+   "county": "Bronx",
+   "id": "a0Vcs00001BHufCEAT",
+   "state": "NY",
+   "street": "411 East 178th Street",
+   "zip": "10457"
+  }
+ ]
+}

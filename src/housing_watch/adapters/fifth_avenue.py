@@ -1,8 +1,8 @@
 """Fifth Avenue Committee re-rentals: one WordPress page of unit cards, grouped here into one listing per building.
 
 Each card (div.grid_section-col) is an <h3> building, an <h4> unit and <li> "Label: value" rows (size,
-household size, AMI, rent, min/max income), plus "**" notes (Section 8 / 62+). The household range
-("1-2 people") carries one max income, the top size's cap, so per-size caps come from bands_from_row.
+household size, AMI, rent, min/max income), plus "**" notes (Section 8 / 62+ / mobility). The household range
+("1-2 people") carries one max income, the top size's cap, so per-size caps come from ami.bands.
 Cards under "Upcoming Units" are not marketed yet. Applying is one general Salesforce form, not per unit.
 """
 
@@ -69,6 +69,7 @@ def parse_page(html: str) -> list[Listing]:
             senior = bool(re.search(r"62 years|senior", c["notes"], re.I))
             seniors.append(senior)
             sec8 = bool(re.search(r"section 8|qualify for", c["notes"], re.I))
+            mobility = bool(re.search(r"mobility", c["notes"], re.I))
             units.append(
                 Unit(
                     size=parse.size(f.get("unit size")),
@@ -76,7 +77,7 @@ def parse_page(html: str) -> list[Listing]:
                     ami=a,
                     unit_no=c["unit"],
                     bands=bands,
-                    set_aside="senior" if senior else ("section 8" if sec8 else None),
+                    set_aside="senior" if senior else "mobility" if mobility else "section 8" if sec8 else None,
                 )
             )
         name, _, addr = building.partition(" -")

@@ -1,7 +1,9 @@
 """MHANY Management: one Duda sub-page per re-rental building, each with HTML income tables.
 
 The re-rental page's gallery links each building page ("View" / "View Details"). Closed buildings stay
-linked; their status is the "Recently Leased Properties" section of /avaliable-properties. Tables have one
+linked; their status is the "Recently Leased Properties" section of /avaliable-properties. A gallery tile
+whose button links nowhere (461 Dean Street) has no page of its own: it is listed from its tile title and
+its contact lines on /avaliable-properties, with no units. Tables have one
 row per household size (continuation rows leave the size/AMI/rent cells empty). A "62+" heading above a
 table = senior units. Without an AMI column, the AMI is the "60% AREA MEDIAN INCOME" heading above the
 table; without a size column, sizes are unknown (never guessed from household counts).
@@ -31,6 +33,44 @@ def building_urls(html: str) -> list[str]:
         if a.get_text(strip=True).lower().startswith("view") and a["href"].startswith("/")
     ]
     return [urljoin(BASE, h) for h in dict.fromkeys(out)]
+
+
+def _dead(href: str) -> bool:
+    return href.strip() in ("", "/", "#")
+
+
+def unlinked_buildings(html: str) -> list[str]:
+    """Titles of gallery tiles whose "View" button links nowhere (the building has no page yet)."""
+    out = []
+    for tile in parse.soup(html).select(".photoGalleryThumbs"):
+        title, button = tile.select_one(".caption-title"), tile.select_one("a.caption-button")
+        if (
+            title
+            and button
+            and button.get_text(strip=True).lower().startswith("view")
+            and _dead(button.get("href", ""))
+        ):
+            out.append(title.get_text(" ", strip=True))
+    return list(dict.fromkeys(out))
+
+
+def parse_unlinked(title: str, available: str, closed: str) -> Listing:
+    """A tile without a page: its address is the title when the title is one, its contact the lines that follow
+    the title on /avaliable-properties (then the listing's url) up to the first email."""
+    t = parse.text(available)
+    i = t.find(title)
+    contact = re.search(r"[\w.+-]+@[\w.-]+\.\w+", t[i : i + 300]) if i >= 0 else None
+    is_addr = re.match(r"\d{1,5}(-\d+)?\s+\S", title) is not None
+    return Listing(
+        source="mhany",
+        ext_id=parse.slug(title),
+        title=title,
+        url=AVAILABLE if i >= 0 else RERENTALS,
+        address=title if is_addr else None,
+        borough=parse.borough(title),
+        status="closed" if closed and title.upper() in closed.upper() else "open",
+        notes=f"Apply: email {contact.group(0)}" if contact else None,
+    )
 
 
 def closed_section(html: str) -> str:
@@ -109,7 +149,7 @@ def parse_building(url: str, html: str, closed: str) -> Listing:
     apps = [
         urljoin(url, a["href"])
         for a in s.find_all("a", href=True)
-        if a.get_text(strip=True).upper().startswith("DOWNLOAD APPLICATION") and a["href"].strip() not in ("", "/", "#")
+        if a.get_text(strip=True).upper().startswith("DOWNLOAD APPLICATION") and not _dead(a["href"])
     ]
     t = parse.text(s)
     i = t.find("DONATE")
@@ -174,4 +214,6 @@ class Mhany(PageAdapter):
         if not urls:
             raise RuntimeError("no building pages linked from the re-rental page")
         closed = closed_section(available)
-        return Result(listings=[parse_building(u, fetch.html(u), closed) for u in urls], snapshots=snaps)
+        listings = [parse_building(u, fetch.html(u), closed) for u in urls]
+        listings += [parse_unlinked(t, available, closed) for t in unlinked_buildings(rerentals)]
+        return Result(listings=listings, snapshots=snaps)

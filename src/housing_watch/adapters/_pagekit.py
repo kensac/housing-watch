@@ -5,7 +5,8 @@ Neighborhood Housing, the Riverton placeholder).
 GoDaddy sites render their text server-side, so a plain GET already has everything a headless browser
 shows; rendering only adds GoDaddy's rotating "Airo" promo banner. Their flyers are images on
 img1.wsimg.com, lazy-loaded (the <img> src is a placeholder), so image URLs are taken from the raw HTML
-and stripped of their per-viewport resize suffix ("/:/rs=w:600,...").
+and stripped of their per-viewport resize suffix ("/:/rs=w:600,..."). A custom-HTML block is an
+<iframe srcdoc>, so its text is not in the page's visible text: LARRIS's postings are such blocks.
 """
 
 from __future__ import annotations

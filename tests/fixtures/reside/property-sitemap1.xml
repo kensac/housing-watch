@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type="text/xsl" href="//residenewyork.com/main-sitemap.xsl"?>
+<urlset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1" xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd http://www.google.com/schemas/sitemap-image/1.1 http://www.google.com/schemas/sitemap-image/1.1/sitemap-image.xsd" xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+	<url>
+		<loc>https://residenewyork.com/property-listings/</loc>
+		<lastmod>2026-11-17T22:09:33+00:00</lastmod>
+	</url>
+	<url>
+		<loc>https://residenewyork.com/property/66-rockwell-unit-13k/</loc>
+		<lastmod>2026-11-17T22:09:33+00:00</lastmod>
+	</url>
+	<url>
+		<loc>https://residenewyork.com/property/21-west-end-unit-2907/</loc>
+		<lastmod>2026-11-17T22:00:20+00:00</lastmod>
+	</url>
+	<url>
+		<loc>https://residenewyork.com/property/2180-walton-avenue-apartment-unit-7j/</loc>
+		<lastmod>2026-11-17T20:55:36+00:00</lastmod>
+	</url>
+</urlset>
