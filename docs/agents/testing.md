@@ -14,10 +14,10 @@
 **Without `HW_TEST_DATABASE_URL` the Postgres tests skip.** The run prints a
 red SKIPPED line naming them and passes locally; under `CI` any skip fails the
 run (`pytest_sessionfinish` in `tests/conftest.py`). A local run that skipped
-them verified only the adapters. Any disposable Postgres 18 works:
+them verified only the adapters. Any disposable Postgres 19 works:
 
 ```bash
-docker run -d --name hw-test-pg -e POSTGRES_PASSWORD=pg -p 5432:5432 postgres:18-alpine
+docker run -d --name hw-test-pg -e POSTGRES_PASSWORD=pg -p 5432:5432 postgres:19-alpine
 export HW_TEST_DATABASE_URL=postgresql+psycopg://postgres:pg@127.0.0.1:5432/postgres
 ```
 
