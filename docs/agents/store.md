@@ -39,6 +39,10 @@ The schema and write path are described in
   a working `downgrade()`.
 - A Procrastinate upgrade that ships SQL migrations needs a revision that
   applies them; `test_procrastinate_schema_is_current` fails until it exists.
+  It runs the `pre` files; `post` files drop what the previous image still
+  calls, so they wait for a later revision. It skips a database whose 0002
+  already ran the new schema, and drops `CONCURRENTLY`, since migrations run
+  in one transaction (see `0014`).
 - Every worker runs `alembic upgrade head` at start under an advisory lock.
   Hosts are pinned to images independently (see [fleet.md](fleet.md)), so
   workers on the previous image keep running against the migrated schema.
