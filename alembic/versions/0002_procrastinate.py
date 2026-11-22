@@ -38,4 +38,8 @@ def downgrade() -> None:
     op.execute(
         "DROP TABLE procrastinate_events, procrastinate_periodic_defers, procrastinate_jobs, procrastinate_workers"
     )
-    op.execute("DROP TYPE procrastinate_job_to_defer_v1, procrastinate_job_event_type, procrastinate_job_status")
+    # Which composite types exist depends on the Procrastinate that created the schema (see 0014).
+    op.execute(
+        "DROP TYPE IF EXISTS procrastinate_job_to_defer_v1, procrastinate_job_to_defer_v2, procrastinate_lock_mode"
+    )
+    op.execute("DROP TYPE procrastinate_job_event_type, procrastinate_job_status")
