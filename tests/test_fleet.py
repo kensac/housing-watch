@@ -21,7 +21,7 @@ from housing_watch.fleet import metrics, runner, tasks
 from housing_watch.models import Listing, Result, Unit
 from housing_watch.orm import ChunkResultRow, EventRow, ListingRow, RunRow, SourceStateRow
 
-# Procrastinate's schema is applied by alembic 0002, then 0014, as of this migration file; bump with a new revision.
+# Procrastinate's schema is applied by alembic 0002, then 0014 and 0015, as of this file; bump with a new revision.
 PROCRASTINATE_SCHEMA_AT = "03.12.00_51_post_drop_id_lock_index.sql"
 
 
@@ -374,6 +374,52 @@ def test_migrations_downgrade_and_upgrade_again(pg_url):
         db.migrate(eng)
         with eng.connect() as c:
             assert c.execute(text("SELECT to_regclass('chunk_results')")).scalar()
+    finally:
+        eng.dispose()
+        with admin.connect() as c:
+            c.execute(text(f'DROP DATABASE "{name}" WITH (FORCE)'))
+        admin.dispose()
+
+
+PROCRASTINATE_OBJECTS = """
+    SELECT 'f ' || p.oid::regprocedure::text FROM pg_proc p WHERE p.proname LIKE 'procrastinate%'
+    UNION ALL SELECT 'i ' || indexname || ' ' || indexdef FROM pg_indexes WHERE tablename LIKE 'procrastinate%'
+    UNION ALL SELECT 't ' || typname FROM pg_type WHERE typname LIKE 'procrastinate%' AND typtype IN ('c', 'e')
+"""
+
+
+def test_procrastinate_post_migrations_reach_the_current_schema(pg_url):
+    """0015 drops what a pre-3.12 schema kept after 0014, leaving exactly the schema 0002 builds today."""
+    from alembic import command
+    from alembic.config import Config
+
+    base = os.environ["HW_TEST_DATABASE_URL"]
+    name = f"hw_mig_{uuid.uuid4().hex[:8]}"
+    admin = create_engine(base, isolation_level="AUTOCOMMIT")
+    with admin.connect() as c:
+        c.execute(text(f'CREATE DATABASE "{name}"'))
+    eng = create_engine(make_url(base).set(database=name).render_as_string(hide_password=False))
+    mig = Path(procrastinate.__file__).parent / "sql" / "migrations"
+    try:
+        db.migrate(eng)
+        with eng.connect() as c:
+            fresh = set(c.execute(text(PROCRASTINATE_OBJECTS)).scalars())
+        cfg = Config()
+        cfg.set_main_option("script_location", str(Path(db.__file__).resolve().parents[2] / "alembic"))
+        with eng.begin() as conn:
+            cfg.attributes["connection"] = conn
+            command.downgrade(cfg, "0014")
+            # What a database migrated from 3.10 still has after 0014.
+            conn.connection.dbapi_connection.execute((mig / "03.02.00_01_pre_batch_defer_jobs.sql").read_text())
+            conn.execute(text(
+                "CREATE INDEX procrastinate_jobs_id_lock_idx_v1 ON procrastinate_jobs (id, lock)"
+                " WHERE status = ANY (ARRAY['todo'::procrastinate_job_status, 'doing'::procrastinate_job_status])"
+            ))  # fmt: skip
+        with eng.connect() as c:
+            assert set(c.execute(text(PROCRASTINATE_OBJECTS)).scalars()) > fresh
+        db.migrate(eng)
+        with eng.connect() as c:
+            assert set(c.execute(text(PROCRASTINATE_OBJECTS)).scalars()) == fresh
     finally:
         eng.dispose()
         with admin.connect() as c:
